@@ -1,0 +1,9 @@
+# Golden-test project: expected/*.wav are checked renders. After an intended rendering change, listen/look,
+# then regenerate with SEGAN_UPDATE_GOLDEN=1 pytest tests/test_golden.py
+mode = "strict"
+default_kit = "golden"
+
+[mix]
+room = 0.2
+sample_rate = 22050
+music_channels = "mono"

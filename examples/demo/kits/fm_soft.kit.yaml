@@ -1,0 +1,17 @@
+name: fm_soft
+description: "Soft two-operator FM: electric piano, bell, round bass and a warm pad; gentle drums."
+instruments:
+  e: { name: epiano, osc: fm, fm: { ratio: 1, index: 1.8, env: [0.002, 0.6, 0.15, 0.3] }, env: [0.003, 1.2, 0.3, 0.35], gain: -6, voices: 4, range: [C3, C6] }
+  l: { name: bell, osc: fm, fm: { ratio: 3.5, index: 2.5, env: [0.001, 0.9, 0.0, 0.4] }, env: [0.001, 1.5, 0.0, 0.8], gain: -10, voices: 3, range: [C4, C7] }
+  f: { name: flute, osc: sine, env: [0.06, 0.1, 0.85, 0.15], vibrato: [5.0, 0.18, 0.25], gain: -6, range: [C4, C7] }
+  a: { name: fm_bass, osc: fm, fm: { ratio: 1, index: 1.2, env: [0.001, 0.25, 0.3, 0.1] }, env: [0.002, 0.3, 0.7, 0.08], gain: -3, range: [E1, C4] }
+  w: { name: warm_pad, osc: saw, unison: 3, detune: 9, env: [0.4, 0.5, 0.8, 0.9], filter: { type: lp, cutoff: 1400, resonance: 0.1 }, gain: -14, voices: 4, range: [C3, C6] }
+  k: { name: soft_kick, drum: kick, tune: 55, decay: 0.3, punch: 18, click: 0.15, gain: -3 }
+  s: { name: brush, drum: snare, tune: 210, noise: 0.85, decay: 0.2, tone: 2200, gain: -9 }
+  h: { name: soft_hat, drum: hat, decay: 0.05, tone: 6500, gain: -16 }
+  t: { name: tom, drum: tom, tune: 120, decay: 0.35, gain: -6 }
+groups:
+  keys: [e, l, f]
+  bass: [a]
+  pads: [w]
+  drums: [k, s, h, t]

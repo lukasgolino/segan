@@ -1,0 +1,17 @@
+name: chip
+description: "Chiptune starter kit: two pulse leads, triangle bass, noise drums (edit freely)."
+instruments:
+  p: { name: pulse_lead, osc: pulse, duty: 0.25, env: [0.004, 0.08, 0.65, 0.09], gain: -7, range: [C4, C7] }
+  q: { name: pulse_soft, osc: pulse, duty: 0.5, env: [0.02, 0.2, 0.5, 0.2], gain: -10, vibrato: [5.5, 0.12, 0.15], range: [C3, C6] }
+  r: { name: pulse_thin, osc: pulse, duty: 0.125, env: [0.002, 0.06, 0.4, 0.06], gain: -10, range: [C4, C7] }
+  b: { name: tri_bass, osc: triangle, env: [0.002, 0.05, 0.95, 0.04], gain: -2, range: [E1, C4] }
+  n: { name: crunch, osc: bitnoise, env: [0.001, 0.3, 0.0, 0.05], gain: -12 }
+  k: { name: kick, drum: kick, tune: 50, decay: 0.22, gain: -2 }
+  s: { name: snare, drum: snare, tune: 190, noise: 0.7, decay: 0.14, gain: -5 }
+  h: { name: hat, drum: hat, decay: 0.035, gain: -13 }
+  o: { name: open_hat, drum: hat, decay: 0.22, gain: -15 }
+  c: { name: crash, drum: cymbal, decay: 1.2, gain: -14 }
+groups:
+  leads: [p, q, r]
+  bass: [b]
+  drums: [k, s, h, o, c]

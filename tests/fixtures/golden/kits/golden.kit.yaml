@@ -1,0 +1,15 @@
+name: golden
+description: "One of each source, for golden renders."
+instruments:
+  p: { name: pulse, osc: pulse, duty: 0.25, env: [0.004, 0.08, 0.6, 0.08], gain: -6, vibrato: [6, 0.1, 0.1] }
+  w: { name: saw, osc: saw, env: [0.01, 0.1, 0.7, 0.1], filter: { type: lp, cutoff: 1200, resonance: 0.3, env_amount: 2 }, gain: -8 }
+  t: { name: tri, osc: triangle, env: [0.002, 0.05, 0.9, 0.05], range: [E1, C4] }
+  f: { name: fm, osc: fm, fm: { ratio: 2, index: 2, env: [0.001, 0.3, 0.2, 0.2] }, env: [0.002, 0.5, 0.3, 0.2], gain: -6 }
+  a: { name: arp, osc: pulse, arp: [0, 4, 7], unison: 2, detune: 8, gain: -10 }
+  n: { name: crunch, osc: bitnoise, env: [0.001, 0.2, 0.0, 0.05], gain: -10, crush: { bits: 6, rate: 11025 } }
+  k: { name: kick, drum: kick }
+  s: { name: snare, drum: snare, gain: -4 }
+  h: { name: hat, drum: hat, gain: -12 }
+  c: { name: clap, drum: clap, gain: -8 }
+  m: { name: tom, drum: tom, gain: -6 }
+  y: { name: cymbal, drum: cymbal, gain: -12 }

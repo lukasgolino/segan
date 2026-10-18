@@ -454,12 +454,12 @@ MCP tools mirror PAGAN's 1:1 (`status`, `read_docs`, `write_doc`, `log_feedback`
 Each one ends like PAGAN's: tests + mypy green, CLAUDE.md updated, a summary to the owner listing **which WAVs
 and listen sheets to check**, and a commit (plain git under the owner's identity, never AI attribution, never push unasked).
 
-### Milestone 0 — Scaffolding
+### ☑ Milestone 0 — Scaffolding
 Repo exists (`/home/lgolino/repos/SEGAN`, GitHub `lukasgolino/segan`, this file is its `PLAN.md`). Copy and adapt PAGAN's infrastructure (§3). CLI skeleton,
 `segan --version`, CI (3.11–3.13), CLAUDE.md with a decisions log, MIT licence. Check the PyPI name. **Done when:**
 install + mypy + pytest pass and CI is in place.
 
-### Milestone 1 — Synth core + kits
+### ☑ Milestone 1 — Synth core + kits
 `synth.py` (band-limited oscillators, noise PRNG, ADSR, pitch env, vibrato, FM, SVF/biquad filters in blocks,
 drum macros), `oversample` + decimator, `wavio.py` (`smpl`/`cue` chunks), `analysis.py` (peak, LUFS BS.1770,
 onsets, YIN pitch, aliasing metric), `listen.py` (waveform + spectrogram + header), kit parsing/validation,
