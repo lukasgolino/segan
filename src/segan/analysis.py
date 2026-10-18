@@ -11,17 +11,17 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from segan.dsp import Signal, oversample
+from segan.dsp import Signal, oversample, round12
 
 SILENCE_DB = -120.0
 
 
 def frames_of(x: Signal) -> Signal:
-    return x.reshape(len(x), -1)
+    return np.asarray(x, dtype=np.float64).reshape(len(x), -1)
 
 
 def mono(x: Signal) -> Signal:
-    return frames_of(x).mean(axis=1)
+    return np.asarray(frames_of(x).mean(axis=1), dtype=np.float64)
 
 
 def to_db(value: float, floor: float = SILENCE_DB) -> float:
@@ -65,7 +65,7 @@ def k_weight_sos(rate: int) -> Signal:
     q = 0.5003270373238773
     a0 = 1 + k / q + k * k
     high = [1.0, -2.0, 1.0, 1.0, 2 * (k * k - 1) / a0, (1 - k / q + k * k) / a0]
-    return np.round(np.array([shelf, high], dtype=np.float64), 12)
+    return round12([shelf, high])
 
 
 def k_weight(x: Signal, rate: int) -> Signal:

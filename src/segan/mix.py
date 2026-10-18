@@ -13,7 +13,7 @@ from functools import lru_cache
 import numpy as np
 
 from segan.analysis import frames_of, loudness, true_peak_envelope
-from segan.dsp import Signal, biquad, db_to_gain, exp2, noise, seed_of
+from segan.dsp import Signal, biquad, db_to_gain, exp2, noise, round12, seed_of
 from segan.patch import Crush
 from segan.project import MixConfig
 from segan.synth import crush as crush_signal
@@ -43,7 +43,7 @@ def room_ir(rate: int, decay: float, channels: int) -> Signal:
             if tap < n:
                 tail[tap] += gain * 4.0
         out[:, ch] = tail / math.sqrt(float((tail**2).sum()))
-    return np.round(out, 12)
+    return round12(out)
 
 
 def room_tail(mix: MixConfig) -> float:

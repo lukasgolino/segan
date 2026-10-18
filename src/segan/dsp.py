@@ -29,6 +29,11 @@ def _round(value: float) -> float:
     return round(value, 12)
 
 
+def round12(values: object) -> Signal:
+    """Round an array to 12 decimals (hides last-ulp differences between machines)."""
+    return np.asarray(np.round(np.asarray(values, dtype=np.float64), 12), dtype=np.float64)
+
+
 _SIN_TABLE = np.array([_round(math.sin(2 * math.pi * i / TABLE_SIZE)) for i in range(TABLE_SIZE + 1)])
 _EXP2_TABLE = np.array([_round(2.0 ** (i / TABLE_SIZE)) for i in range(TABLE_SIZE + 1)])
 
@@ -195,7 +200,7 @@ def decimator_taps(factor: int) -> NDArray[np.float64]:
     from scipy.signal import firwin
 
     taps = firwin(96 * factor + 1, 0.9 / factor, window=("kaiser", 8.6))
-    return np.round(np.asarray(taps, dtype=np.float64), 12)  # resample_poly scales by `up` itself
+    return round12(taps)  # resample_poly scales by `up` itself
 
 
 def decimate(x: Signal, factor: int) -> Signal:
@@ -212,7 +217,7 @@ def interpolator_taps(factor: int) -> NDArray[np.float64]:
     """Short interpolation FIR (12 taps per phase, as BS.1770 suggests for true-peak meters)."""
     from scipy.signal import firwin
 
-    return np.round(np.asarray(firwin(12 * factor + 1, 0.95 / factor, window=("kaiser", 6.0)), dtype=np.float64), 12)
+    return round12(firwin(12 * factor + 1, 0.95 / factor, window=("kaiser", 6.0)))
 
 
 def oversample(x: Signal, factor: int) -> Signal:
