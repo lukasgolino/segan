@@ -1,0 +1,10 @@
+name: chime
+description: "Golden SFX: preset coin with a looping hum phase and two variations."
+preset: coin
+variations: { count: 2, seed: 3, pitch: 1, timbre: 0.3, gain: 1 }
+phases:
+  hum:
+    duration: 0.4
+    loop: true
+    layers:
+      - { osc: saw, pitch: A3, unison: 2, detune: 7, filter: { type: lp, cutoff: 900 }, env: [0.02, 0.1, 0.8, 0.1] }

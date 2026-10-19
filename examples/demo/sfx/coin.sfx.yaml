@@ -1,0 +1,5 @@
+name: coin
+description: "Preset coin, as is."
+preset: coin
+status: draft
+style_version: 1

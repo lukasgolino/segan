@@ -58,6 +58,7 @@ SETTINGS: tuple[Setting, ...] = (
     Setting("loudness.music", -16.0, "loudness target for songs (integrated LUFS)", "all"),
     Setting("loudness.sfx", -14.0, "loudness target for SFX (loudest 400 ms, LUFS); any category not listed uses this", "all"),
     Setting("loudness.ui", -20.0, "loudness target for SFX with category ui", "all"),
+    Setting("loudness.foley", -22.0, "loudness target for SFX with category foley (footsteps, handling: frequent, so quieter)", "all"),
     Setting("lint.disable", [], "warning ids to turn off", "lint"),
     Setting("lint.max_seam_click", 0.02, "W007: largest click allowed at a loop point (fraction of full scale)", "lint"),
     Setting("lint.max_leading_silence_ms", 5.0, "W005: most silence before an SFX starts (it adds input latency)", "lint"),

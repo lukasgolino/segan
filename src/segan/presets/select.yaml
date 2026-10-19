@@ -1,0 +1,16 @@
+# Menu confirm: two quick rising triangle notes, a fifth apart.
+category: ui
+duration: 0.2
+layers:
+  - id: tone
+    osc: triangle
+    pitch: [[0, E5], [0.05, B5]]
+    env: [0.001, 0.06, 0.4, 0.06]
+    length: 0.11
+    gain: -4
+  - id: edge
+    osc: pulse
+    duty: 0.25
+    pitch: [[0, E6], [0.05, B6]]
+    env: [0.001, 0.03, 0.0, 0.03]
+    gain: -18

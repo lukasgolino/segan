@@ -1,0 +1,18 @@
+# Footstep on a hard floor: a short filtered tap; variations keep repeats from sounding robotic.
+category: foley
+duration: 0.12
+layers:
+  - id: tap
+    osc: noise
+    filter: { type: lp, cutoff: 1800, resonance: 0.2 }
+    env: [0.0005, 0.035, 0.0, 0.02]
+    gain: -3
+  - id: body
+    drum: tom
+    tune: 95
+    decay: 0.07
+    punch: 4
+    noise: 0.0
+    click: 0.0
+    gain: -10
+variations: { count: 4, seed: 1, pitch: 1.5, timbre: 0.3, gain: 1.5 }

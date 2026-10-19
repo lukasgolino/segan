@@ -1,0 +1,25 @@
+# Melee impact: a hard noise crack over a low square knock that drops in pitch, with a short body.
+category: sfx
+duration: 0.3
+layers:
+  - id: crack
+    osc: noise
+    filter: { type: bp, cutoff: 2400, resonance: 0.25 }
+    env: [0.0005, 0.06, 0.0, 0.02]
+    gain: -6
+  - id: knock
+    osc: pulse
+    duty: 0.5
+    pitch: [[0, A3], [0.12, C2]]
+    slide: true
+    filter: { type: lp, cutoff: 1600 }
+    env: [0.001, 0.15, 0.45, 0.1]
+    length: 0.14
+    gain: -3
+  - id: body
+    drum: tom
+    tune: 70
+    decay: 0.22
+    punch: 12
+    noise: 0.2
+    gain: -6

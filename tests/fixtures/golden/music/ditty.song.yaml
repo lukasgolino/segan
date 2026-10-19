@@ -1,0 +1,42 @@
+name: ditty
+description: "Golden song: two bars, every lane kind, swing, a loop and a variant."
+kit: golden
+tempo: 140
+swing: 0.1
+key: A minor
+tracks:
+  lead: { roll: [A4, A5] }
+  bass: { roll: [A2, A3], gain: -3 }
+  drums: { drums: [k, s, h] }
+patterns:
+  a:
+    length: 16
+    lead: |
+      ....|....|....|....  A5
+      ....|....|....|....  G5
+      ....|....|..p-|....  F5
+      ....|p-..|....|....  E5
+      ....|....|....|p---  D5
+      ..p-|....|....|....  C5
+      ....|....|....|....  B4
+      p-..|..f-|f-..|....  A4
+    bass: |
+      ....|....|....|....  A3
+      ....|....|....|....  G3
+      ....|....|....|....  F3
+      ....|....|....|....  E3
+      ....|....|....|....  D3
+      ....|....|t---|....  C3
+      ....|....|....|....  B2
+      t---|t---|....|t---  A2
+    drums: |
+      x...|..x.|x...|....  k
+      ....|X...|....|X..o  s
+      x.x.|x.x.|x.x.|x.xx  h
+  b: { from: a, transpose: { lead: 1 }, swap: { p: w } }
+sections:
+  main: [a, b]
+arrangement: [main]
+loop: main
+variants:
+  slow: { tempo: 100, instrument_swap: { f: a } }

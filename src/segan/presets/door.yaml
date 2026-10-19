@@ -1,0 +1,26 @@
+# Wooden door: the latch clicks, the hinge creaks, and the door thuds shut.
+category: sfx
+duration: 0.75
+layers:
+  - id: latch
+    osc: noise
+    filter: { type: bp, cutoff: 3500, resonance: 0.4 }
+    env: [0.0005, 0.025, 0.0, 0.01]
+    gain: -8
+  - id: creak
+    osc: saw
+    start: 0.04
+    pitch: [[0, D3], [0.15, F3], [0.3, C#3], [0.42, E3]]
+    slide: true
+    vibrato: [11, 0.25]
+    filter: { type: bp, cutoff: 900, resonance: 0.6 }
+    env: [0.04, 0.1, 0.6, 0.1]
+    length: 0.42
+    gain: -10
+  - id: thud
+    drum: tom
+    start: 0.52
+    tune: 75
+    decay: 0.2
+    noise: 0.25
+    gain: -4

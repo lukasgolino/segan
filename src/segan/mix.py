@@ -123,15 +123,14 @@ class Level:
     lufs: float  # after normalisation and limiting
 
 
-def limiter_gain(x: Signal, ceiling_db: float, rate: int) -> Signal:
-    """Per-frame gain that keeps the true peak under the ceiling: required gain, held over a 4 ms look-ahead
-    window, then averaged over the same window (never above the requirement, no clicks)."""
+def limiter_gain(peaks: Signal, ceiling_db: float, rate: int) -> Signal:
+    """Per-frame gain that keeps the true-peak envelope `peaks` under the ceiling: the required gain, held over
+    a 4 ms look-ahead window, then averaged over the same window (never above the requirement, no clicks)."""
     from scipy.ndimage import minimum_filter1d, uniform_filter1d
 
     ceiling = db_to_gain(ceiling_db)
-    peaks = true_peak_envelope(x)
     required = np.minimum(1.0, ceiling / np.maximum(peaks, 1e-12))
-    if required.min() >= 1.0:
+    if len(required) == 0 or required.min() >= 1.0:
         return np.ones(len(peaks))
     width = 2 * round(0.004 * rate) + 1
     held = minimum_filter1d(required, width, mode="nearest")
@@ -139,19 +138,28 @@ def limiter_gain(x: Signal, ceiling_db: float, rate: int) -> Signal:
     return np.asarray(np.minimum(smooth, required), dtype=np.float64)
 
 
-def finish(x: Signal, rate: int, target: float | None, measure: str, ceiling_db: float, gain: Signal | None = None) -> tuple[Signal, Level, Signal]:
-    """Normalise to `target` LUFS (None = keep the level) and limit to the true-peak ceiling. Returns the signal,
-    the level report and the gain curve applied (so stems can follow the mix exactly)."""
+def finish(x: Signal, rate: int, target: float | None, measure: str, ceiling_db: float, max_limiting_db: float = 3.0) -> tuple[Signal, Level, Signal]:
+    """Normalise to `target` LUFS (None = keep the level) and limit to the true-peak ceiling. The limiter never
+    takes off more than `max_limiting_db`: a sound too peaky to reach its target that way stays quieter
+    (lint W001 reports the shortfall). Returns the signal, the level report and the total gain curve applied
+    (so stems can follow the mix exactly)."""
     data = frames_of(x)
     measured = loudness(data, rate, measure)
     gain_db = 0.0 if target is None or measured <= -100 else target - measured
-    scaled = data * db_to_gain(gain_db)
-    curve = limiter_gain(scaled, ceiling_db, rate) if gain is None else gain
-    limited = scaled * curve[:, None]
-    excess = float(true_peak_envelope(limited).max()) / db_to_gain(ceiling_db) if len(limited) else 0.0
-    if excess > 1.0:  # inter-sample overshoot left after smoothing: scale it away
+    peaks = true_peak_envelope(data) if len(data) else np.zeros(0)
+    if len(data) and target is not None:
+        peak = float(peaks.max())
+        if peak > 0:
+            over = gain_db + 20.0 * math.log10(peak) - ceiling_db  # dB the limiter would have to remove
+            if over > max_limiting_db:
+                gain_db -= over - max_limiting_db
+    gain = db_to_gain(gain_db)
+    curve = limiter_gain(peaks * gain, ceiling_db, rate)
+    # the gain curve is smooth (8 ms), so the limited signal's true peaks are the envelope times the curve
+    excess = float((peaks * gain * curve).max()) / db_to_gain(ceiling_db) if len(data) else 0.0
+    if excess > 1.0:
         curve = curve / excess
-        limited = scaled * curve[:, None]
+    limited = data * (gain * curve)[:, None]
     reduction = -20.0 * math.log10(float(curve.min())) if len(curve) and curve.min() > 0 else 0.0
     level = Level(measured, gain_db, target, reduction, loudness(limited, rate, measure))
-    return limited, level, curve * db_to_gain(gain_db)
+    return limited, level, curve * gain

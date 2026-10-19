@@ -177,8 +177,17 @@ def _axis(draw: ImageDraw.ImageDraw, c: Canvas, y: int) -> int:
 # --- panels --------------------------------------------------------------------------------------
 
 
+def fit_text(draw: ImageDraw.ImageDraw, text: str, width: float, f: ImageFont.FreeTypeFont | ImageFont.ImageFont) -> str:
+    """`text`, shortened with "..." to fit `width` pixels."""
+    if draw.textlength(text, font=f) <= width:
+        return text
+    while text and draw.textlength(text + "...", font=f) > width:
+        text = text[:-1]
+    return text + "..."
+
+
 def _header(draw: ImageDraw.ImageDraw, spec: SheetSpec, y: int) -> int:
-    draw.text((10, y), spec.title, fill=TEXT, font=font(18))
+    draw.text((10, y), fit_text(draw, spec.title, WIDTH - 20, font(18)), fill=TEXT, font=font(18))
     y += 26
     x = 10
     f = font(12)
@@ -192,7 +201,7 @@ def _header(draw: ImageDraw.ImageDraw, spec: SheetSpec, y: int) -> int:
             x, y = 10, y + 16
     y += 18
     for line in spec.notes:
-        draw.text((10, y), line, fill=DIM, font=f)
+        draw.text((10, y), fit_text(draw, line, WIDTH - 20, f), fill=DIM, font=f)
         y += 15
     return y + 4
 
@@ -213,9 +222,10 @@ def _blocks_panel(draw: ImageDraw.ImageDraw, c: Canvas, blocks: list[Block], y: 
             text = block.label
         if draw.textlength(text, font=f) <= b - a - 4:
             draw.text((a + 3, y + height // 2 - 7), text, fill=TEXT, font=f)
-    for name, at in c.spec.markers:
-        if c.t0 <= at <= c.t1:
-            draw.text((c.x(at) + 2, y - 1), f"v {name}", fill=MARKER, font=f)
+    if label == "sections" or (label == "parts"):
+        for name, at in c.spec.markers:
+            if c.t0 <= at <= c.t1:
+                draw.text((c.x(at) + 2, y - 1), f"v {name}", fill=MARKER, font=f)
     return height + 4
 
 
@@ -245,7 +255,7 @@ def _roll_panel(draw: ImageDraw.ImageDraw, c: Canvas, track: RollTrack, y: int) 
         shade = 0.45 + 0.55 * min(1.0, note.velocity)
         fill = tuple(int(v * shade) for v in colour)
         draw.rectangle([a, top + 1, b - 1, top + row_h - 1], fill=fill)
-        if b - a > 9 and row_h >= 9:
+        if row_h >= 9 and draw.textlength(note.key, font=f) <= b - a - 3:
             draw.text((a + 2, top + row_h // 2 - 6), note.key, fill=(10, 10, 10), font=f)
     return height + 4
 

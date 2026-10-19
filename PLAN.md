@@ -466,12 +466,12 @@ onsets, YIN pitch, aliasing metric), `listen.py` (waveform + spectrogram + heade
 `kit show`, `init`, `new kit`. Ship 3 demo kits (e.g. `nes`, `fm_soft`, `arcade_synth`). Golden tests (±1 LSB)
 + determinism test. **Done when:** the owner listens to the kit-show WAVs and picks/tweaks; aliasing metric < threshold on the pulse/saw tests.
 
-### Milestone 2 — SFX
+### ☑ Milestone 2 — SFX
 SFX format (layers, keyframes, presets, variations, phases, extends), lint E013/W004/W005/W008/W010/W011,
 `render`, `preview` (pitch overlay), `gallery`, `bake sfx`. **Done when:** a fresh agent with only the reference
 makes the 11 preset SFX in `examples/demo/`, they're lint-clean, and the owner approves at least 8 by ear.
 
-### Milestone 3 — Songs
+### ☑ Milestone 3 — Songs
 Tracks, roll/drum lanes, labels, patterns, derived patterns, sections/arrangement/loop/markers, swing, variants
 + axes, sequencer → events → mix; piano roll + arrangement strip + seam view in the listen sheet; E002–E015,
 W002/W003/W007/W009/W012. **Done when:** two demo loops (exploration + combat), each with a variant, loop without

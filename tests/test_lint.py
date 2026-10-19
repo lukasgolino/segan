@@ -1,0 +1,117 @@
+from __future__ import annotations
+
+from pathlib import Path
+
+import pytest
+
+from segan.lint import WARNING_RULES, lint_paths
+from segan.project import Project
+
+from conftest import CONFIG, make_project, write
+
+from test_song import SONG
+
+
+def lint_rules(project: Project, kind: str, name: str, text: str) -> list[tuple[str, str | None]]:
+    path = write(project, kind, name, text)
+    return [(f.rule, f.where) for f in lint_paths(project, [path]).findings]
+
+
+def test_clean_assets_have_no_findings(project: Project) -> None:
+    assert lint_rules(project, "sfx", "c", "name: c\npreset: blip\n") == []
+
+
+def test_w001_too_peaky_for_the_target(project: Project) -> None:
+    text = "name: x\nduration: 0.05\nlayers:\n  - { osc: noise, env: [0, 0.004, 0, 0.001] }\n"
+    assert ("W001", "x") in lint_rules(project, "sfx", "x", text)
+
+
+def test_w002_w004_unused_and_empty(project: Project) -> None:
+    text = SONG.replace("  intro: [c]\n", "  intro: [c]\n  spare: [a]\n").replace(
+        "  c: { from: a,", "  d:\n    length: 8\n  c: { from: a,"
+    )
+    found = lint_rules(project, "song", "tune", text)
+    assert ("W002", "sections.spare") in found and ("W002", "patterns.d") in found and ("W004", "patterns.d") in found
+
+
+def test_w003_too_many_instruments(tmp_path: Path) -> None:
+    project = make_project(tmp_path, CONFIG + "\n[lint]\nmax_instruments = 3\n")
+    assert ("W003", "patterns") in lint_rules(project, "song", "tune", SONG)
+
+
+def test_w005_leading_silence(project: Project) -> None:
+    text = "name: x\nlayers:\n  - { osc: sine, start: 0.05, pitch: A4, env: [0.001, 0.1, 0, 0.05] }\n"
+    assert ("W005", "x") in lint_rules(project, "sfx", "x", text)
+
+
+def test_w006_older_style(tmp_path: Path) -> None:
+    project = make_project(tmp_path, CONFIG.replace('default_kit = "t"', 'default_kit = "t"\nstyle_version = 2'))
+    assert ("W006", "style_version") in lint_rules(project, "sfx", "c", "name: c\npreset: blip\nstyle_version: 1\n")
+
+
+def test_w007_loop_click(tmp_path: Path) -> None:
+    project = make_project(tmp_path, CONFIG.replace("[mix]", "[mix]\ndeclick = false"))  # declick would fade the edges
+    text = "name: x\nloop: true\ncrossfade: 0\nduration: 0.2\nlayers:\n  - { osc: sine, pitch: 441.3, env: [0, 0, 1, 0] }\n"
+    assert ("W007", "loop") in lint_rules(project, "sfx", "x", text)
+    smooth = text.replace("crossfade: 0", "crossfade: 0.05")
+    assert ("W007", "loop") not in lint_rules(project, "sfx", "x", smooth)
+
+
+def test_w008_dc_offset(project: Project) -> None:
+    text = "name: x\nduration: 0.02\nlayers:\n  - { osc: sine, pitch: 20, env: [0, 0, 1, 0] }\n"  # half a cycle of 20 Hz
+    assert ("W008", "x") in lint_rules(project, "sfx", "x", text)
+
+
+def test_w009_clash(project: Project) -> None:
+    text = SONG.replace("      b---|b---  C3", "      b---|b---  C3").replace("      ....|....  B3\n", "      ....|....  B3\n", 1)
+    # put a bass B3 under the lead's C5 on step 1: a minor 9th (minor 2nd class)
+    text = text.replace("      ....|....  B3\n      ....|....  A3\n      ....|....  G3\n      ....|....  F3\n      ....|....  E3\n      ....|....  D3\n      b---|b---  C3",
+                        "      b---|....  B3\n      ....|....  A3\n      ....|....  G3\n      ....|....  F3\n      ....|....  E3\n      ....|....  D3\n      ....|b---  C3")
+    assert ("W009", "patterns.a") in lint_rules(project, "song", "tune", text)
+
+
+def test_w010_aliasing(tmp_path: Path) -> None:
+    project = make_project(tmp_path, CONFIG.replace("[mix]", "[mix]\noversample = 1"))
+    text = "name: x\nlayers:\n  - { id: hi, osc: saw, pitch: C8, env: [0, 0.1, 0.5, 0.05] }\n"
+    assert ("W010", "hi") in lint_rules(project, "sfx", "x", text)
+
+
+def test_w011_cut_off_tail(project: Project) -> None:
+    text = "name: x\nduration: 0.1\nlayers:\n  - { id: long, osc: sine, pitch: A4, length: 0.09, env: [0.001, 0.1, 0.5, 0.5] }\n"
+    assert ("W011", "duration (long)") in lint_rules(project, "sfx", "x", text)
+
+
+def test_w012_held_past_the_end(project: Project) -> None:
+    assert ("W012", "patterns.c.shift") in lint_rules(project, "song", "tune", SONG)
+
+
+def test_w013_unnormalised_level(project: Project) -> None:
+    text = "name: x\nnormalize: false\nlayers:\n  - { osc: sine, pitch: A4, gain: -40, env: [0.001, 0.1, 0.5, 0.1] }\n"
+    assert ("W013", "x") in lint_rules(project, "sfx", "x", text)
+
+
+def test_e012_duplicate_names(project: Project) -> None:
+    write(project, "sfx", "tune", "name: tune\npreset: blip\n")
+    write(project, "song", "tune", SONG)
+    assert "E012" in [f.rule for f in lint_paths(project, render=False).findings]
+
+
+def test_per_asset_and_project_disable(tmp_path: Path) -> None:
+    project = make_project(tmp_path, CONFIG + '\n[lint]\ndisable = ["W012"]\n')
+    assert "W012" not in [r for r, _ in lint_rules(project, "song", "tune", SONG)]
+    project = make_project(tmp_path, CONFIG)
+    found = lint_rules(project, "song", "tune", SONG.replace("tempo: 120", "tempo: 120\nlint: { disable: [W012] }"))
+    assert "W012" not in [r for r, _ in found]
+
+
+def test_kit_aliasing_warning(tmp_path: Path) -> None:
+    project = make_project(tmp_path, CONFIG.replace("[mix]", "[mix]\noversample = 1"))
+    (project.kits_dir / "hi.kit.yaml").write_text("name: hi\ninstruments:\n  p: { osc: saw, range: [C4, C8] }\n")
+    assert ("W010", "instruments.p") in [(f.rule, f.where) for f in lint_paths(project, [project.kits_dir / "hi.kit.yaml"]).findings]
+
+
+@pytest.mark.parametrize("rule", sorted(WARNING_RULES))
+def test_every_warning_is_documented(rule: str) -> None:
+    reference = (Path(__file__).parent.parent / "src" / "segan" / "skill" / "reference.md")
+    if reference.exists():
+        assert rule in reference.read_text()

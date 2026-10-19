@@ -48,6 +48,7 @@ warmth = 0.0              # low-mid body, dB
 music = -16.0
 sfx = -14.0
 ui = -20.0
+foley = -22.0             # footsteps, cloth, small handling sounds: frequent, so quieter
 
 # Only with export "godot".
 [godot]

@@ -24,7 +24,7 @@ SAMPLE_RATES = (22050, 32000, 44100, 48000)
 OVERSAMPLE = (1, 2, 4, 8)
 CHANNELS = ("mono", "stereo")
 GODOT_COMPRESS = ("none", "ima", "qoa")
-DEFAULT_LOUDNESS = {"music": -16.0, "sfx": -14.0, "ui": -20.0}
+DEFAULT_LOUDNESS = {"music": -16.0, "sfx": -14.0, "ui": -20.0, "foley": -22.0}
 
 Mode = Literal["strict", "open"]
 

@@ -22,3 +22,11 @@ check before upgrading. Patch bumps never change existing behaviour. Every relea
 ### Added
 
 - Project scaffolding: package, `segan --version`, CI on Python 3.11-3.13.
+- Synth core: band-limited oscillators (PolyBLEP/BLAMP), FM, noise, envelopes, filters, drum macros, oversampling.
+- Kits (`kits/*.kit.yaml`), `segan init`, `segan new kit`, `segan kit show` (listen sheet + WAVs per instrument).
+- SFX (`sfx/*.sfx.yaml`): layers with pitch/gain/cutoff keyframes, effects, 11 presets, variations, phases, loops,
+  `extends` templates; `segan new sfx`, `segan bake sfx`.
+- Songs (`music/*.song.yaml`): roll and drum lanes with checked row labels, derived patterns, sections, arrangement,
+  seamless loops, markers, swing, variants and variant axes; `segan new song`.
+- `segan render`, `segan preview` (WAV + listen sheet + seam view + analysis JSON), `segan gallery`, `segan lint`
+  (E000-E015, W001-W013), render cache.

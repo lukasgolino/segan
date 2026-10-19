@@ -1,0 +1,12 @@
+# Platformer jump: a square wave sweeping up fast, short and springy.
+category: sfx
+duration: 0.3
+layers:
+  - id: tone
+    osc: pulse
+    duty: 0.25
+    pitch: [[0, D4], [0.16, A5]]
+    slide: true
+    env: [0.002, 0.1, 0.45, 0.1]
+    length: 0.15
+    gain: -6

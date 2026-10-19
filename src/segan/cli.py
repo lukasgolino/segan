@@ -15,9 +15,12 @@ from typing import Any
 from segan import progress
 from segan.buildinfo import version_string
 from segan.findings import Finding, SeganError, display_path
+from segan.asset import SFX_SUFFIX, SONG_SUFFIX, load_asset_or_raise
 from segan.kit import KIT_SUFFIX, NAME_RE, Kit, load_kit_file
+from segan.lint import lint_paths
 from segan.project import CONFIG_NAME, Project, discover_project, find_project_root, load_project
 from segan.settings import Change, describe, lookup, set_in_toml, set_setting, unset_setting
+from segan.sfx import PRESETS, preset_data
 
 
 class Output:
@@ -257,6 +260,328 @@ def cmd_kit_show(args: argparse.Namespace, out: Output) -> int:
     return 0
 
 
+# --- assets: resolve, new song/sfx ----------------------------------------------------------
+
+
+def resolve_asset_path(target: str, project: Project) -> Path:
+    """A path to an asset file, or a bare asset name looked up in music/ and sfx/."""
+    path = Path(target)
+    if path.is_file():
+        return path
+    if NAME_RE.match(target):
+        for candidate in (project.music_dir / f"{target}{SONG_SUFFIX}", project.sfx_dir / f"{target}{SFX_SUFFIX}"):
+            if candidate.is_file():
+                return candidate
+    raise usage_error(f"no such asset: {target} (give a path, or the name of a file in music/ or sfx/)")
+
+
+def load_targets(targets: list[str], project: Project) -> tuple[list[Any], list[Finding]]:
+    assets: list[Any] = []
+    findings: list[Finding] = []
+    for target in targets:
+        try:
+            assets.append(load_asset_or_raise(resolve_asset_path(target, project), project))
+        except SeganError as exc:
+            findings.extend(exc.findings)
+    return assets, findings
+
+
+def _kit_line(project: Project, kit: str | None) -> tuple[str, Kit | None]:
+    if kit is not None:
+        return f"kit: {kit}\n", project.load_kit(kit)
+    if project.config.default_kit is not None:
+        return f"# kit: {project.config.default_kit}   (project default)\n", project.load_kit(project.config.default_kit)
+    if project.config.mode == "open":
+        return _INLINE_KIT, None
+    raise usage_error("no --kit given and segan.toml has no default_kit")
+
+
+_INLINE_KIT = """\
+instruments:              # inline instruments (open mode); or name a kit file with `kit:`
+  p: { name: lead, osc: pulse, duty: 0.25, env: [0.005, 0.1, 0.6, 0.1], gain: -8 }
+  b: { name: bass, osc: triangle, env: [0.002, 0.05, 0.9, 0.05], gain: -3 }
+  k: { name: kick, drum: kick }
+  s: { name: snare, drum: snare, gain: -5 }
+  h: { name: hat, drum: hat, gain: -13 }
+"""
+
+
+def _song_scaffold(name: str, description: str, kit_line: str, kit: Kit | None, key_text: str, tempo: int, bars: int, style: int) -> str:
+    from segan.notes import parse_key
+
+    key = parse_key(key_text)
+    if key is None:
+        raise usage_error(f"invalid --key {key_text!r}: a root and a scale, e.g. 'A minor', 'C major', 'D dorian'")
+    length = bars * 16
+    melodic = [k for k, i in (kit.instruments.items() if kit else []) if not i.is_drum]
+    drums = [k for k, i in (kit.instruments.items() if kit else []) if i.is_drum][:3] or ["k", "s", "h"]
+    lead = melodic[0] if melodic else "p"
+    root = key.root
+    lead_low = 60 + root if 60 + root <= 64 else 48 + root + 12
+    bass_low = 36 + root if 36 + root <= 40 else 24 + root + 12
+
+    def rows(low: int) -> list[str]:
+        return [key.name(m) for m in key.notes_between(low, low + 12)]
+
+    def grid(labels: list[str]) -> str:
+        cells = "|".join(["...."] * (length // 4))
+        return "".join(f"      {cells}  {label}\n" for label in labels)
+
+    return f"""name: {name}
+description: {json.dumps(description)}
+{kit_line.rstrip()}
+tempo: {tempo}
+meter: [4, 4]
+steps_per_beat: 4             # 16th-note grid; `|` (ignored) marks each beat
+key: {key.describe()}
+status: draft
+style_version: {style}
+tags: []
+
+# Rows are the scale notes in each roll range, highest first; drum rows are kit keys. Keep the labels:
+# lint checks them (E011), so a missing or extra row can't shift the grid.
+# Roll cells: a kit key starts a note, - holds it, . rests. Drum cells: x hit, X accent, o ghost.
+tracks:
+  lead:  {{ roll: [{key.name(lead_low)}, {key.name(lead_low + 12)}] }}      # play it with key {lead!r}
+  bass:  {{ roll: [{key.name(bass_low)}, {key.name(bass_low + 12)}] }}
+  drums: {{ drums: [{', '.join(drums)}] }}
+
+patterns:
+  a:
+    length: {length}
+    lead: |
+{grid(rows(lead_low))}    bass: |
+{grid(rows(bass_low))}    drums: |
+{grid(drums)}
+sections:
+  main: [a]
+arrangement: [main]
+loop: main
+# variants:
+#   danger: {{ tempo: {tempo + 20} }}
+"""
+
+
+def _sfx_scaffold(name: str, description: str, kit_line: str, preset: str | None, style: int) -> str:
+    head = f"name: {name}\ndescription: {json.dumps(description)}\n"
+    if preset is not None:
+        return head + f"""preset: {preset}             # starting point; `segan bake sfx {name} --in-place` writes out every field to tune
+category: {preset_data(preset).get('category', 'sfx')}
+status: draft
+style_version: {style}
+tags: []
+# Override any preset field here, e.g. a different length:
+# duration: 0.5
+# Change one preset layer by its id (only the fields you give change):
+# layers:
+#   - {{ id: {next((layer.get('id') for layer in preset_data(preset).get('layers', []) if layer.get('id')), 'tone')}, gain: -9 }}
+"""
+    return head + f"""{kit_line.rstrip() if kit_line.startswith('kit') else '# kit: (layers can use `instrument: <key>` from the kit)'}
+category: sfx                 # picks the loudness target ([loudness] in segan.toml)
+duration: 0.3                 # seconds of dry sound; the room tail is added after
+status: draft
+style_version: {style}
+tags: []
+layers:
+  - id: tone
+    osc: pulse                # sine, triangle, saw, pulse, noise, bitnoise, fm; or drum: kick|snare|hat|clap|tom|cymbal
+    duty: 0.5
+    pitch: [[0, C5], [0.1, G5]]   # keyframes [seconds, note or Hz]
+    slide: true               # glide between keyframes (false: step)
+    env: [0.002, 0.08, 0.5, 0.1]  # attack, decay, sustain (0-1), release
+    length: 0.15              # seconds held before the release
+    gain: -6
+# variations: {{ count: 4, seed: 1, pitch: 1.0, timbre: 0.2 }}   # for sounds that repeat a lot
+"""
+
+
+def cmd_new_asset(args: argparse.Namespace, out: Output) -> int:
+    kind: str = args.kind
+    name: str = args.name
+    if not NAME_RE.match(name):
+        raise usage_error(f"invalid name {name!r}: use lowercase letters, digits, '_' or '-'")
+    project = require_project()
+    description = args.description or "TODO: what this is, when it plays and how it should sound"
+    style = project.config.style_version
+    if kind == "song":
+        if not 1 <= args.bars <= 8:
+            raise usage_error("--bars must be 1-8 (make longer songs from several patterns)")
+        kit_line, kit = _kit_line(project, args.kit)
+        text = _song_scaffold(name, description, kit_line, kit, args.key, args.tempo, args.bars, style)
+        path = project.music_dir / f"{name}{SONG_SUFFIX}"
+    else:
+        if args.preset is not None and args.preset not in PRESETS:
+            raise usage_error(f"unknown --preset {args.preset!r}; presets: {', '.join(PRESETS)}")
+        kit_line = f"kit: {args.kit}\n" if args.kit else ""
+        if args.kit:
+            project.load_kit(args.kit)
+        text = _sfx_scaffold(name, description, kit_line, args.preset, style)
+        path = project.sfx_dir / f"{name}{SFX_SUFFIX}"
+    other = (project.sfx_dir / f"{name}{SFX_SUFFIX}") if kind == "song" else (project.music_dir / f"{name}{SONG_SUFFIX}")
+    if path.exists():
+        raise usage_error("file already exists", path)
+    if other.exists():
+        raise usage_error(f"{display_path(other)} already uses the name {name!r}: names are unique across songs and SFX", other)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(text, encoding="utf-8")
+    out.say(f"created {display_path(path)}")
+    out.result({"created": display_path(path), "kind": kind, "name": name})
+    return 0
+
+
+# --- segan render / preview / gallery / bake ----------------------------------------------------
+
+
+def cmd_render(args: argparse.Namespace, out: Output) -> int:
+    from segan.render import render_asset
+
+    project = project_for(args.assets)
+    assets, findings = load_targets(args.assets, project)
+    outputs: list[dict[str, Any]] = []
+    for asset in assets:
+        render = render_asset(asset, project)
+        folder = project.preview_dir / asset.name
+        written = []
+        for output in render.outputs:
+            path = folder / f"{output.stem.replace('/', '.')}.wav"
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(output.wav())
+            written.append(display_path(path))
+        out.say(f"{asset.name}: wrote {len(written)} WAVs to {display_path(folder)}")
+        outputs.append({"asset": asset.name, "files": written})
+    if findings:
+        out.failure(findings, {"outputs": outputs})
+        return 1
+    out.result({"outputs": outputs})
+    return 0
+
+
+def _position(text: str | None, asset: Any) -> float | None:
+    """--from/--to: seconds ("2.5s" or a plain number for SFX) or a bar number for songs ("5")."""
+    if text is None:
+        return None
+    try:
+        if text.endswith("s"):
+            return float(text[:-1])
+        value = float(text)
+    except ValueError:
+        raise usage_error(f"invalid position {text!r}: a bar number (songs) or seconds like 2.5s") from None
+    if asset.kind == "song":
+        from segan.sequence import build_timeline
+
+        timeline = build_timeline(asset)
+        return timeline.seconds(round((value - 1) * timeline.steps_per_bar))
+    return value
+
+
+def cmd_preview(args: argparse.Namespace, out: Output) -> int:
+    from segan.preview import write_preview
+    from segan.render import render_asset
+
+    project = project_for(args.assets)
+    assets, findings = load_targets(args.assets, project)
+    outputs: list[dict[str, Any]] = []
+    for asset in assets:
+        render = render_asset(asset, project)
+        result = write_preview(asset, render, project, _position(args.start, asset), _position(args.end, asset), args.output)
+        if not result.files:
+            raise usage_error(f"{asset.name} has no output {args.output!r} (outputs: {', '.join(o.id or 'main' for o in render.outputs)})")
+        for entry in result.files:
+            a = entry["analysis"]
+            target = f" (target {a['target_lufs']:g})" if a.get("target_lufs") is not None else ""
+            out.say(f"{entry['output']:>16}: {display_path(entry['sheet'])}  {a['seconds']:.2f}s, {a['lufs']:.1f} LUFS{target}, peak {a['true_peak_dbtp']:.1f} dBTP")
+            out.say(f"{'':>16}  listen: {display_path(entry['wav'])}" + (f"  seam: {display_path(entry['seam'])} (click {a['seam_click']:.4f})" if "seam" in entry else ""))
+        outputs.append({"asset": asset.name, "kind": asset.kind, "outputs": [
+            {"output": e["output"], "wav": display_path(e["wav"]), "sheet": display_path(e["sheet"]),
+             **({"seam": display_path(e["seam"])} if "seam" in e else {}), "analysis": e["analysis"]} for e in result.files]})  # fmt: skip
+    if findings:
+        out.failure(findings, {"outputs": outputs})
+        return 1
+    if not out.as_json:
+        print("Open the .listen.png sheets to check them; a human has to listen to the WAVs before approving.")
+    out.result({"outputs": outputs})
+    return 0
+
+
+def cmd_gallery(args: argparse.Namespace, out: Output) -> int:
+    from segan.listen import GalleryItem, gallery_image
+    from segan.render import render_asset
+
+    project = discover_project()
+    result = lint_paths(project, render=False)
+    items = []
+    for asset in sorted((a for a in result.assets if not a.meta.template), key=lambda a: (a.kind != "sfx", a.name)):
+        render = render_asset(asset, project)
+        main = render.main
+        category = getattr(asset, "category", "music")
+        items.append(GalleryItem(main.stem, category, main.audio, main.rate, float(main.level.get("lufs") or -100.0),
+                                 main.level.get("target"), float(main.level.get("measured") or -100.0)))  # fmt: skip
+    path = Path(args.out) if args.out else project.preview_dir / "gallery.png"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    gallery_image(items, f"{project.root.name} gallery").save(path)
+    out.say(f"wrote {display_path(path)} ({len(items)} assets)")
+    if result.errors:
+        out.say(f"{len(result.errors)} errors: assets with errors are missing; run `segan lint`")
+    out.result({"gallery": display_path(path), "assets": len(items), "errors": len(result.errors)})
+    return 0
+
+
+def cmd_bake_sfx(args: argparse.Namespace, out: Output) -> int:
+    from segan.yamlwrite import dump_mapping
+
+    project = project_for([args.sfx])
+    path = resolve_asset_path(args.sfx, project)
+    sfx = load_asset_or_raise(path, project)
+    if sfx.kind != "sfx":
+        raise usage_error(f"{sfx.name} is a song; `segan bake sfx` expands SFX presets and templates")
+    fields = {k: v for k, v in sfx.effective.items() if k not in ("preset", "extends", "remove", "template")}
+    name = sfx.name if args.in_place else (args.name or f"{sfx.name}_baked")
+    if not NAME_RE.match(name):
+        raise usage_error(f"invalid name {name!r}")
+    fields["name"] = name
+    target = path if args.in_place else (Path(args.out) if args.out else project.sfx_dir / f"{name}{SFX_SUFFIX}")
+    if target.exists() and not (args.force or args.in_place):
+        raise usage_error("file already exists (pass --force to overwrite)", target)
+    header = f"# Baked from {path.name}" + (f" (preset {sfx.preset})" if sfx.preset else "") + ": every field written out for hand-tuning.\n"
+    order = ["name", "description", "category", "kit", "duration", "loop", "crossfade", "normalize", "status", "style_version", "tags", "lint", "layers", "variations", "phases"]
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(header + dump_mapping(fields, order), encoding="utf-8")
+    out.say(f"baked {sfx.name} -> {display_path(target)}")
+    if not args.in_place:
+        out.say("Asset names are unique: when you keep the bake, delete or rename the original.")
+    out.result({"created": display_path(target), "name": name})
+    return 0
+
+
+# --- segan lint -------------------------------------------------------------------------------
+
+
+def _rule_counts(findings: list[Finding]) -> str:
+    counts: dict[str, int] = {}
+    for f in findings:
+        counts[f.rule] = counts.get(f.rule, 0) + 1
+    return ", ".join(f"{rule}x{n}" for rule, n in sorted(counts.items(), key=lambda item: (-item[1], item[0])))
+
+
+def cmd_lint(args: argparse.Namespace, out: Output) -> int:
+    project = project_for(args.paths)
+    paths = [Path(p) for p in args.paths] or None
+    missing = [p for p in paths or [] if not p.exists()]
+    if missing:
+        raise usage_error(f"no such file or directory: {', '.join(map(str, missing))}")
+    result = lint_paths(project, paths, render=not args.no_render)
+    failed = bool(result.errors) or (args.warnings_as_errors and bool(result.warnings))
+    if out.as_json:
+        print(json.dumps({"ok": not failed, "files": [display_path(f) for f in result.files], "errors": len(result.errors),
+                          "warnings": len(result.warnings), "findings": [f.to_dict() for f in result.findings]}, indent=2))  # fmt: skip
+    else:
+        for finding in result.findings:
+            print(finding.format())
+        summary = f"{len(result.files)} files: {len(result.errors)} errors, {len(result.warnings)} warnings"
+        print(summary + (f" ({_rule_counts(result.warnings)})" if result.warnings else ""))
+    return 1 if failed else 0
+
+
 # --- segan config -----------------------------------------------------------------------------
 
 
@@ -341,6 +666,51 @@ def build_parser() -> argparse.ArgumentParser:
     new_kit = new_kinds.add_parser("kit", parents=[common], help="scaffold a kit file")
     new_kit.add_argument("name", help="kit name, e.g. nes")
     new_kit.set_defaults(handler=cmd_new_kit)
+    new_song = new_kinds.add_parser("song", parents=[common], help="scaffold a song (tracks, an empty pattern, a loop)")
+    new_song.add_argument("name", help="song name, e.g. overworld")
+    new_song.add_argument("--kit", help="kit name (default: the project's default_kit)")
+    new_song.add_argument("--key", default="A minor", help='key, e.g. "A minor" (default), "C major", "D dorian"')
+    new_song.add_argument("--tempo", type=int, default=120, help="bpm (default 120)")
+    new_song.add_argument("--bars", type=int, default=2, help="bars in the first pattern (default 2)")
+    new_song.add_argument("--description", help="what it is and how it should sound; kept in the file")
+    new_song.set_defaults(handler=cmd_new_asset, kind="song")
+    new_sfx = new_kinds.add_parser("sfx", parents=[common], help="scaffold a sound effect (optionally from a preset)")
+    new_sfx.add_argument("name", help="SFX name, e.g. coin")
+    new_sfx.add_argument("--preset", help=f"starting point: {', '.join(PRESETS)}")
+    new_sfx.add_argument("--kit", help="kit whose instruments layers may use (instrument: <key>)")
+    new_sfx.add_argument("--description", help="what it is and how it should sound; kept in the file")
+    new_sfx.set_defaults(handler=cmd_new_asset, kind="sfx")
+
+    render = commands.add_parser("render", parents=[common], help="render songs/SFX to WAVs in the previews folder")
+    render.add_argument("assets", nargs="+", help="asset files or names")
+    render.set_defaults(handler=cmd_render)
+
+    preview = commands.add_parser("preview", parents=[common], help="WAVs + listen sheets (+ seam views for loops) and the numbers to check")
+    preview.add_argument("assets", nargs="+", help="asset files or names")
+    preview.add_argument("--from", dest="start", help="start of the shown window: bar number (songs) or seconds (2.5s)")
+    preview.add_argument("--to", dest="end", help="end of the shown window")
+    preview.add_argument("--output", help="only this output: main, variant:<name>, variation:<n>, phase:<name>, stem:<track>")
+    preview.set_defaults(handler=cmd_preview)
+
+    gallery = commands.add_parser("gallery", parents=[common], help="every asset side by side + loudness by category")
+    gallery.add_argument("--out", help="output PNG (default: <previews>/gallery.png)")
+    gallery.set_defaults(handler=cmd_gallery)
+
+    bake = commands.add_parser("bake", help="write an expanded source for hand-tuning")
+    bake_kinds = bake.add_subparsers(title="kinds", metavar="<kind>")
+    bake_sfx = bake_kinds.add_parser("sfx", parents=[common], help="an SFX with its preset/template expanded into every field")
+    bake_sfx.add_argument("sfx", help="SFX file or name")
+    bake_sfx.add_argument("--in-place", action="store_true", help="replace the SFX's own file (drops preset/extends)")
+    bake_sfx.add_argument("--name", help="name of the baked SFX (default: <sfx>_baked)")
+    bake_sfx.add_argument("--out", help="output path")
+    bake_sfx.add_argument("--force", action="store_true", help="overwrite an existing file")
+    bake_sfx.set_defaults(handler=cmd_bake_sfx)
+
+    lint = commands.add_parser("lint", parents=[common], help="check sources (and their rendered audio) for errors and warnings")
+    lint.add_argument("paths", nargs="*", help="files or directories (default: the whole project)")
+    lint.add_argument("--warnings-as-errors", action="store_true", help="exit non-zero on warnings too")
+    lint.add_argument("--no-render", action="store_true", help="format checks only (skip the audio warnings)")
+    lint.set_defaults(handler=cmd_lint)
 
     kit = commands.add_parser("kit", help="kit tools")
     kit_cmds = kit.add_subparsers(title="kit commands", metavar="<command>")

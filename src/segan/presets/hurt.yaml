@@ -1,0 +1,19 @@
+# Player takes damage: a gritty square that falls a fifth with a fast wobble.
+category: sfx
+duration: 0.36
+layers:
+  - id: tone
+    osc: pulse
+    duty: 0.5
+    pitch: [[0, E5], [0.22, A4]]
+    slide: true
+    vibrato: [28, 0.5]
+    env: [0.001, 0.1, 0.5, 0.1]
+    length: 0.22
+    gain: -6
+  - id: grit
+    osc: bitnoise
+    pitch: [[0, E6], [0.22, A5]]
+    slide: true
+    env: [0.001, 0.08, 0.0, 0.04]
+    gain: -14

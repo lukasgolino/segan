@@ -68,7 +68,9 @@ def render_events(events: list[NoteEvent], ctx: Context, channels: int, frames: 
     length = frames if frames is not None else max((event_end(e, ctx) for e in events), default=0)
     tracks: dict[str, Signal] = {}
     for event in events:
-        buffer = tracks.setdefault(event.track, np.zeros((length, channels)))
+        if event.track not in tracks:
+            tracks[event.track] = np.zeros((length, channels))
+        buffer = tracks[event.track]
         key = (repr(event.inst), event.midi, event.gate, event.velocity, event.seed, event.cut)
         voice = cache.get(key)
         if voice is None:

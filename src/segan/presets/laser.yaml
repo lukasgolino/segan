@@ -1,0 +1,20 @@
+# Retro blaster: a bright square that dives two octaves, with a ring-modulated fizz on top.
+category: sfx
+duration: 0.3
+layers:
+  - id: tone
+    osc: pulse
+    duty: 0.3
+    pitch: [[0, C7], [0.2, C5]]
+    slide: true
+    env: [0.001, 0.05, 0.6, 0.08]
+    length: 0.18
+    gain: -6
+  - id: fizz
+    osc: saw
+    pitch: [[0, C6], [0.2, C4]]
+    slide: true
+    ring: { freq: 1300, mix: 0.6 }
+    filter: { type: hp, cutoff: 1500 }
+    env: [0.001, 0.08, 0.0, 0.05]
+    gain: -16

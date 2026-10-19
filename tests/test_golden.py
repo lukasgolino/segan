@@ -14,7 +14,9 @@ import numpy as np
 import pytest
 
 from segan.dsp import seed_of
+from segan.asset import load_asset_or_raise
 from segan.kitshow import context_for, render_kit_show
+from segan.render import render_asset
 from segan.synth import render_note
 from segan.project import load_project
 from segan.wavio import read_wav, to_pcm16, wav_bytes
@@ -56,3 +58,15 @@ def test_kit_show_is_byte_identical_on_rerun() -> None:
     kit = project.load_kit("golden")
     first, second = render_kit_show(kit, project), render_kit_show(kit, project)
     assert wav_bytes(to_pcm16(first.audio), first.rate) == wav_bytes(to_pcm16(second.audio), second.rate)
+
+
+@pytest.mark.parametrize("name", ["chime", "ditty"])
+def test_golden_assets(name: str) -> None:
+    project = load_project(GOLDEN)
+    path = (project.sfx_dir / f"{name}.sfx.yaml") if (project.sfx_dir / f"{name}.sfx.yaml").exists() else project.music_dir / f"{name}.song.yaml"
+    asset = load_asset_or_raise(path, project)
+    render = render_asset(asset, project, use_cache=False)
+    for output in render.outputs:
+        check_golden(f"{output.stem.replace('/', '.')}.wav", output.wav())
+    again = render_asset(asset, project, use_cache=False)
+    assert [o.wav() for o in again.outputs] == [o.wav() for o in render.outputs]

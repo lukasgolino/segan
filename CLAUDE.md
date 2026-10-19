@@ -30,7 +30,13 @@ CI (`.github/workflows/ci.yml`) runs install + mypy + pytest on Python 3.11-3.13
   - `voices.py` note events -> track buffers (mono voice cuts, pan, note cache); `mix.py` shared bus (room, tone,
     crush, loudness normalisation, true-peak limiter); `analysis.py` LUFS/peaks/onsets/YIN/seam/aliasing;
   - `wavio.py` deterministic WAV with `smpl`/`cue ` chunks; `listen.py` listen sheets, seam view, gallery;
-  - `kitshow.py` `segan kit show`; `project.py` segan.toml + discovery; `templates/` files `segan init` writes.
+  - `kitshow.py` `segan kit show`; `project.py` segan.toml + discovery; `templates/` files `segan init` writes;
+  - `asset.py` shared metadata, `extends` templates, asset loading; `sfx.py` SFX parsing (+ `presets/*.yaml`);
+    `sfxrender.py` SFX rendering (layers, keyframes, effects, variations, phases, loops);
+  - `song.py` song parsing (tracks, lanes, labels, derived patterns, sections, variants, E007/E014 checks);
+    `sequence.py` timeline + note events; `songrender.py` song rendering (loop offset, stems); `songlint.py` source warnings;
+  - `render.py` outputs + render cache (`.segan-cache/renders/`); `preview.py` / `songpreview.py` listen sheets + analysis;
+  - `lint.py` lint (errors from parsing, warnings from source and rendered audio); `yamlwrite.py` YAML writer.
 - `tests/fixtures/golden/` — golden project (22.05 kHz mono so files stay small); `expected/*.wav` are checked
   renders. After an intended rendering change, look at the output, then `SEGAN_UPDATE_GOLDEN=1 pytest tests/test_golden.py`.
 - `examples/demo/` — the demo project (kits: nes, fm_soft, arcade_synth).
@@ -70,4 +76,26 @@ CI (`.github/workflows/ci.yml`) runs install + mypy + pytest on Python 3.11-3.13
 - 2026-10-19: WAV `smpl` loop end is inclusive (RIFF spec); manifest `loop.end` is exclusive (like Godot's loop_end).
 - 2026-10-19: `[mix] crush = {bits, rate}` from the plan is flattened to `crush_bits` / `crush_rate` so
   `segan config set` can edit it (inline tables aren't settable values).
+- 2026-10-19: SFX `pitch` keyframe values: strings are notes ("B5"), numbers are Hz; keyframe times are relative
+  to the layer's start. `duration` is the hard length of the dry sound (layers still sounding there are cut: W011);
+  the room tail is added after it and trimmed at -70 dB.
+- 2026-10-19: Presets are SFX-format files in `src/segan/presets/` merged under the SFX like a template; layers
+  (in presets and `extends` templates) merge by `id`, the child's fields over the template layer's.
+- 2026-10-19: Loudness normalisation never asks the limiter for more than `lint.max_limiting_db` (3 dB): a sound too
+  peaky to reach its target stays quieter and W001 reports the shortfall. W001 is therefore "target out of reach
+  without heavy limiting" (the plan's "source too hot" has no meaning once everything is normalised).
+- 2026-10-19: Added a `foley` loudness category (-22 LUFS) for frequent small sounds (the `step` preset uses it);
+  short transients can't reach -14 LUFS momentary without crushing them.
+- 2026-10-19: Looping songs: the file is the whole song plus N bars of the loop again (N = whole bars covering the
+  longest release + room tail); the loop points are shifted by those N bars from the loop section's start. So the
+  intro rings naturally into the loop, the loop's own end rings into its start, and the seam is click-free without
+  rendering the song twice. Manifest/WAV loop points are the shifted ones; `loop_offset` says by how much.
+- 2026-10-19: Looping SFX/phases blend `crossfade` seconds of overrun into their start (equal power) and get the room
+  wrapped around (bus run on three copies, middle kept).
+- 2026-10-19: Stems are rendered only when `export` includes "stems" (per-track room/tone, mix = sum, same gain
+  curve); otherwise the room runs once on the dry mix. The per-note pitch check (preview) runs on dry track renders.
+- 2026-10-19: Mono voices (`voices: 1`) are cut by the next note on the same track and instrument with a 3 ms fade
+  (declick), like a chip channel; chords need `voices` > 1 (E014 otherwise).
+- 2026-10-19: Kit arpeggio offsets are fixed semitones, so a kit arp instrument should be mode-neutral ([0, 7, 12]);
+  the demo `arcade_synth` arp was changed from a major triad for that reason.
 
