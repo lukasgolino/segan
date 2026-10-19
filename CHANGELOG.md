@@ -37,4 +37,9 @@ check before upgrading. Patch bumps never change existing behaviour. Every relea
 - Long-term management: `segan status`, `segan mark`, `segan style bump` (SOUND.md changelog, W006),
   `segan config show|get|set|unset` (every setting in one registry), `segan mix adjust` (brightness, warmth, room,
   crush, loudness for the whole project), BRIEF.md/SOUND.md templates.
-- `segan mcp`: SEGAN as an MCP server (optional extra `segan[mcp]`).
+- `segan mcp`: SEGAN as an MCP server (optional extra `segan[mcp]`): 22 tools mirroring the CLI, listen sheets
+  returned as images and WAVs as audio, resources (workflow, reference, BRIEF/SOUND, manifest, kits, assets) and prompts.
+- `segan.api` for generator scripts: `scale`, `chord`, `progression`, `euclid`, `arpeggiate`, `humanize`, `Track`,
+  `Pattern`, `song_yaml`, `sfx_yaml` (`API_VERSION = 1`).
+- `segan import midi`: standard MIDI files to songs (quantize, snap to the key, GM programs/drums to kit instruments,
+  reused patterns, a change report).

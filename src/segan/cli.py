@@ -6,6 +6,8 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
+from struct import error as struct_error
 from collections.abc import Callable, Sequence
 from importlib.resources import files
 from pathlib import Path
@@ -765,6 +767,52 @@ def cmd_skill_install(args: argparse.Namespace, out: Output) -> int:
     return 0
 
 
+# --- segan import midi ------------------------------------------------------------------------
+
+
+def cmd_import_midi(args: argparse.Namespace, out: Output) -> int:
+    from segan.midi import MidiError, import_midi, read_midi
+
+    source = Path(args.file)
+    project = discover_project()
+    try:
+        midi = read_midi(source.read_bytes())
+    except OSError as exc:
+        raise usage_error(f"can't read {source}: {exc.strerror}", source) from None
+    except (MidiError, IndexError, struct_error) as exc:
+        raise usage_error(f"can't read MIDI: {exc}", source) from None
+    kit_name = args.kit or project.config.default_kit
+    if kit_name is None:
+        raise usage_error("no --kit given and segan.toml has no default_kit (the importer maps MIDI parts onto a kit)")
+    kit = project.load_kit(kit_name)
+    name = args.name or re.sub(r"[^a-z0-9_]", "_", source.stem.lower()).strip("_") or "imported"
+    if not NAME_RE.match(name):
+        raise usage_error(f"invalid name {name!r}; pass --name")
+    if args.quantize not in (4, 8, 12, 16, 24, 32):
+        raise usage_error("--quantize must be 4, 8, 12, 16, 24 or 32 (grid notes per whole note)")
+    try:
+        text, report = import_midi(midi, kit, kit_name, name, args.quantize, args.key, args.bars_per_pattern, not args.no_loop)
+    except (MidiError, ValueError) as exc:
+        raise usage_error(str(exc), source) from None
+    path = Path(args.out) if args.out else project.music_dir / f"{name}{SONG_SUFFIX}"
+    if path.exists() and not args.force:
+        raise usage_error("file already exists (pass --force to overwrite)", path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(text, encoding="utf-8")
+    r = report
+    out.say(f"imported {display_path(source)} -> {display_path(path)}: {r.notes_out} of {r.notes_in} notes, {r.bars} bars, {r.patterns} patterns")
+    out.say(f"  {r.tempo:g} bpm, {r.meter[0]}/{r.meter[1]}, key {r.key} ({r.key_source})" + (f"; {r.tempo_changes_ignored} tempo changes ignored" if r.tempo_changes_ignored else ""))
+    out.say(f"  changes: {r.quantized} quantized, {r.snapped} snapped to the key, {r.octave_moved} moved by an octave, {r.merged} merged")
+    for reason, count in sorted(r.dropped.items()):
+        out.say(f"  dropped {count}: {reason}")
+    for track in r.tracks:
+        what = f"drums {' '.join(track['drums'])}" if "drums" in track else f"program {track['program']} -> {track['instrument']} ({track['instrument_name'] or '-'})"
+        out.say(f"  track {track['track']}: MIDI track {track['midi_track']} channel {track['channel']}, {what}")
+    out.say("Lint and preview it, then check the listen sheet against the original.")
+    out.result({"created": display_path(path), "report": report.as_dict()})
+    return 0
+
+
 # --- segan config -----------------------------------------------------------------------------
 
 
@@ -939,6 +987,20 @@ def build_parser() -> argparse.ArgumentParser:
     skill_install = skill_cmds.add_parser("install", parents=[common], help="install into <repo>/.claude/skills/segan/")
     skill_install.add_argument("dir", nargs="?", help="repo root (default: the git root containing the cwd)")
     skill_install.set_defaults(handler=cmd_skill_install)
+
+    imp = commands.add_parser("import", help="convert other formats into SEGAN sources")
+    imp_kinds = imp.add_subparsers(title="formats", metavar="<format>")
+    imp_midi = imp_kinds.add_parser("midi", parents=[common], help="a standard MIDI file -> a song (quantized, snapped to the key and kit)")
+    imp_midi.add_argument("file", help=".mid file")
+    imp_midi.add_argument("--kit", help="kit to map the parts onto (default: the project's default_kit)")
+    imp_midi.add_argument("--key", help='key, e.g. "A minor" (default: the key signature, else estimated from the notes)')
+    imp_midi.add_argument("--quantize", type=int, default=16, help="grid: notes per whole note (default 16 = sixteenths)")
+    imp_midi.add_argument("--bars-per-pattern", type=int, default=2, help="pattern length in bars (default 2)")
+    imp_midi.add_argument("--no-loop", action="store_true", help="don't loop the song")
+    imp_midi.add_argument("--name", help="song name (default: from the file name)")
+    imp_midi.add_argument("--out", help="output path (default: music/<name>.song.yaml)")
+    imp_midi.add_argument("--force", action="store_true", help="overwrite an existing file")
+    imp_midi.set_defaults(handler=cmd_import_midi)
 
     kit = commands.add_parser("kit", help="kit tools")
     kit_cmds = kit.add_subparsers(title="kit commands", metavar="<command>")

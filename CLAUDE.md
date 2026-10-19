@@ -43,6 +43,8 @@ generated text files.
   - `render.py` outputs + render cache (`.segan-cache/renders/`); `preview.py` / `songpreview.py` listen sheets + analysis;
   - `lint.py` lint (errors from parsing, warnings from source and rendered audio); `yamlwrite.py` YAML writer;
   - `manage.py` long-term management: catalogue (`segan status`), `mark`, `style bump`, `mix adjust` (text edits keep comments);
+  - `api.py` stable Python API for generator scripts (keys, chords, progressions, euclid, arpeggios, Pattern builder, YAML writers);
+  - `midi.py` hand-written SMF reader + `segan import midi` (quantize, snap to key, GM -> kit, change report);
   - `mcp_server.py` `segan mcp`: MCP tools/resources/prompts over the CLI handlers (stdout captured, cwd pinned, one lock);
   - `build.py` `segan build` (WAVs, manifest.json, stale cleanup); `exporters/godot.py` `.import` edits, Randomizer /
     Synchronized `.tres`, headless verify (`templates/godot_verify.gd`).
@@ -123,4 +125,11 @@ generated text files.
 - 2026-10-19: The demo's generated WAVs (~40 MB per rebuild) aren't committed; manifest.json, `.tres` and `.import`
   are, and CI fails if a rebuild changes them. WAV determinism is covered by golden tests and the byte-identical
   rebuild test.
+- 2026-10-19: MIDI import: GM programs pick kit instruments by name hints first (a "bass" instrument for GM basses,
+  "lead"/"pad"/"piano"... per family), then bass-ness, then range fit; out-of-range notes move by octaves; off-key
+  notes snap to the nearest scale note (ties go down); drums map by GM note (kick/snare/clap/tom/hat/open hat/
+  cymbal/ride with fallbacks); identical bars become one reused pattern; tempo changes after the first are reported
+  and ignored. The key comes from --key, else the key signature, else Krumhansl-Schmuckler on the notes.
+- 2026-10-19: `segan.api` is versioned (`API_VERSION = 1`); its writers use `yamlwrite.py`, so generated sources
+  look hand-written (block style, flow leaves, `|` lanes).
 

@@ -167,7 +167,7 @@ def write_preview(asset: Any, render: Render, project: Project, start: float | N
     result = PreviewResult(asset.name, folder)
     click = project.config.lint.max_seam_click
     for output in render.outputs:
-        if only is not None and output.id != only and output.stem != only:
+        if only is not None and only not in (output.id or "main", output.stem):
             continue
         if only is None and output.id.startswith("stem:"):
             continue  # stems are build outputs; preview them with --output stem:<track>

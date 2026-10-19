@@ -492,7 +492,7 @@ The `segan` skill (workflow + `reference.md`) built from what actually happened 
 `segan.api`. **Done when:** a fresh agent given "make a door-creak SFX and a short shop-music loop" in the demo
 project produces lint-clean assets on its own.
 
-### Milestone 7 — Import
+### ☑ Milestone 7 — Import
 `import midi` (hand-written SMF parser): quantize to the grid, snap pitches to the key (≈ snap to palette) and
 instruments to the kit (GM program → nearest kit instrument), with a change report (notes moved, dropped, merged).
 
