@@ -83,7 +83,7 @@ def level_stats(analysis: dict[str, Any], threshold_click: float | None = None) 
         ("peak", f"{analysis['peak_dbfs']:.1f} dBFS", TEXT),
         ("true peak", f"{analysis['true_peak_dbtp']:.1f} dBTP", TEXT),
         ("LUFS", f"{lufs:.1f}" + (f" (target {target:g})" if target is not None else " (not normalised)"), GOOD if off <= 1 else WARN),
-        ("limiter", f"{analysis["limiter_reduction_db"]:.1f} dB off", GOOD if analysis["limiter_reduction_db"] <= 3 else WARN),
+        ("limiter", f"{analysis['limiter_reduction_db']:.1f} dB off", GOOD if analysis["limiter_reduction_db"] <= 3 else WARN),
     ]
     if "leading_silence_ms" in analysis:
         silence = analysis["leading_silence_ms"]
