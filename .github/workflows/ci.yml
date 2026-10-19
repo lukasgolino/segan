@@ -12,8 +12,8 @@ jobs:
       matrix:
         python-version: ["3.11", "3.12", "3.13"]
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: ${{ matrix.python-version }}
       - name: Install
@@ -35,15 +35,15 @@ jobs:
     env:
       GODOT_VERSION: "4.7.2-stable"
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
       - name: Install
         run: pip install -e ".[dev]"
       - name: Cache Godot
         id: cache-godot
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/godot
           key: godot-${{ env.GODOT_VERSION }}
@@ -70,27 +70,27 @@ jobs:
         run: pytest tests/test_godot.py -v
 
   orchestra:
-    # The sampled-orchestra example: fetches the VSCO 2 CE instruments its kit uses (pinned, checked; cached
-    # between runs), then lints and builds it.
+    # The sampled-orchestra example: fetches the VSCO 2 CE instruments it uses (kit, songs and sfx; pinned,
+    # checked; cached between runs), then lints and builds it.
     runs-on: ubuntu-latest
     env:
       SEGAN_SAMPLES: ${{ github.workspace }}/.samples
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
       - name: Install
         run: pip install -e ".[dev]"
       - name: Cache samples
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: .samples
-          key: samples-${{ hashFiles('src/segan/libraries/*/library.json', 'examples/orchestra/kits/*.yaml') }}
+          key: samples-${{ hashFiles('src/segan/libraries/*/library.json', 'examples/orchestra/**/*.yaml') }}
           restore-keys: samples-
-      - name: Fetch the kit's instruments
+      - name: Fetch the instruments the project uses
         working-directory: examples/orchestra
-        run: segan samples fetch vsco2 $(python -c "from pathlib import Path; from segan.kitshow import library_needs; print(' '.join(library_needs(Path('kits/orchestra.kit.yaml'))))")
+        run: segan samples fetch vsco2 $(python -c "from pathlib import Path; from segan.kitshow import library_needs; print(' '.join(library_needs(Path('.'))))")
       - name: Lint and build
         working-directory: examples/orchestra
         run: |

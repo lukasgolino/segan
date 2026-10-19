@@ -144,8 +144,17 @@ def write_kit_show(show: KitShow, folder: Path, threshold: float) -> tuple[Path,
     return sheet, wavs
 
 
-def library_needs(kit_path: Path) -> list[str]:
-    """Library instruments (`vsco2/<name>`) a kit file names, in order (what `segan samples fetch` needs)."""
+def library_needs(path: Path) -> list[str]:
+    """Library instruments (`vsco2/<name>`) a kit file names, in order (what `segan samples fetch` needs).
+
+    `path` may also be a project folder: then every YAML under it (kits, songs and sfx; hidden folders
+    skipped) is scanned, so samples named directly by sfx layers or songs are included too.
+    """
     import re
 
-    return list(dict.fromkeys(re.findall(r"sample:\s*vsco2/(\w+)", kit_path.read_text(encoding="utf-8"))))
+    if path.is_dir():
+        files = sorted(f for f in path.rglob("*.yaml") if not any(part.startswith(".") for part in f.relative_to(path).parts))
+    else:
+        files = [path]
+    found = [m for f in files for m in re.findall(r"sample:\s*vsco2/(\w+)", f.read_text(encoding="utf-8"))]
+    return list(dict.fromkeys(found))

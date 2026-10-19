@@ -38,6 +38,8 @@ def test_init_orchestral_style(in_tmp: Path, capsys: pytest.CaptureFixture[str])
     assert config.mix.room == 0.3 and config.mix.room_decay == 1.6 and config.lint.max_instruments == 16
     needs = library_needs(in_tmp / "o" / "kits" / "orchestra.kit.yaml")
     assert "violins_sus" in needs and "timpani" in needs
+    (in_tmp / "o" / "sfx" / "hit.sfx.yaml").write_text("layers:\n  - sample: vsco2/horn_stac\n", encoding="utf-8")
+    assert library_needs(in_tmp / "o") == [*needs, "horn_stac"]
 
 
 def test_init_into_godot_project(in_tmp: Path, capsys: pytest.CaptureFixture[str]) -> None:
