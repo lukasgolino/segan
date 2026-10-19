@@ -19,6 +19,10 @@ check before upgrading. Patch bumps never change existing behaviour. Every relea
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-10-19
+
+First release: milestones 0-7 of PLAN.md.
+
 ### Added
 
 - Project scaffolding: package, `segan --version`, CI on Python 3.11-3.13.
@@ -43,3 +47,6 @@ check before upgrading. Patch bumps never change existing behaviour. Every relea
   `Pattern`, `song_yaml`, `sfx_yaml` (`API_VERSION = 1`).
 - `segan import midi`: standard MIDI files to songs (quantize, snap to the key, GM programs/drums to kit instruments,
   reused patterns, a change report).
+
+[Unreleased]: https://github.com/lukasgolino/segan/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/lukasgolino/segan/releases/tag/v0.1.0

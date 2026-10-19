@@ -132,4 +132,4 @@ generated text files.
   and ignored. The key comes from --key, else the key signature, else Krumhansl-Schmuckler on the notes.
 - 2026-10-19: `segan.api` is versioned (`API_VERSION = 1`); its writers use `yamlwrite.py`, so generated sources
   look hand-written (block style, flow leaves, `|` lanes).
-
+- 2026-10-19: Release v0.1.0 tagged and pushed (owner directive §14 allows tags; not published to PyPI).
