@@ -16,7 +16,12 @@ mypy                     # strict type check (config in pyproject.toml)
 pytest
 ```
 
-CI (`.github/workflows/ci.yml`) runs install + mypy + pytest on Python 3.11-3.13 on every push/PR.
+CI (`.github/workflows/ci.yml`) runs install + mypy + pytest + `segan lint --warnings-as-errors` on the demo on
+Python 3.11-3.13, and a `godot` job that downloads Godot 4.7.2, rebuilds the demo into `examples/godot/`
+(failing if the committed text outputs differ), verifies every stream loads, loops and plays, and runs
+`tests/test_godot.py` (skipped locally unless `GODOT=/path/to/godot` or `godot` on PATH).
+After changing demo sources or rendering: `cd examples/demo && segan build --verify-godot` and commit the
+generated text files.
 
 ## Layout
 
@@ -36,7 +41,12 @@ CI (`.github/workflows/ci.yml`) runs install + mypy + pytest on Python 3.11-3.13
   - `song.py` song parsing (tracks, lanes, labels, derived patterns, sections, variants, E007/E014 checks);
     `sequence.py` timeline + note events; `songrender.py` song rendering (loop offset, stems); `songlint.py` source warnings;
   - `render.py` outputs + render cache (`.segan-cache/renders/`); `preview.py` / `songpreview.py` listen sheets + analysis;
-  - `lint.py` lint (errors from parsing, warnings from source and rendered audio); `yamlwrite.py` YAML writer.
+  - `lint.py` lint (errors from parsing, warnings from source and rendered audio); `yamlwrite.py` YAML writer;
+  - `build.py` `segan build` (WAVs, manifest.json, stale cleanup); `exporters/godot.py` `.import` edits, Randomizer /
+    Synchronized `.tres`, headless verify (`templates/godot_verify.gd`).
+- `examples/godot/` — Godot 4.7 project receiving the demo's build; `scenes/audio_test.tscn` plays everything.
+  Only text outputs (manifest, .tres, .import) are committed; run `segan build` in examples/demo first.
+- `scripts/check_committed_build.py` — CI: the rebuilt generated folder must match the commit.
 - `tests/fixtures/golden/` — golden project (22.05 kHz mono so files stay small); `expected/*.wav` are checked
   renders. After an intended rendering change, look at the output, then `SEGAN_UPDATE_GOLDEN=1 pytest tests/test_golden.py`.
 - `examples/demo/` — the demo project (kits: nes, fm_soft, arcade_synth).
@@ -98,4 +108,17 @@ CI (`.github/workflows/ci.yml`) runs install + mypy + pytest on Python 3.11-3.13
   (declick), like a chip channel; chords need `voices` > 1 (E014 otherwise).
 - 2026-10-19: Kit arpeggio offsets are fixed semitones, so a kit arp instrument should be mode-neutral ([0, 7, 12]);
   the demo `arcade_synth` arp was changed from a major triad for that reason.
+- 2026-10-19: Godot 4.7.2 loop semantics (measured by mixing a ramp): a forward loop plays the frames after
+  `loop_begin` up to and including `loop_end`. So `.import` gets `loop_begin = start - 1`, `loop_end = end - 1` for a
+  loop [start, end), and every SEGAN loop starts at frame >= 1 (looping SFX get one lead-in frame, a copy of the loop's
+  last frame). "Detect from WAV" (smpl chunk, spec-inclusive end) would drop one frame per pass, so SEGAN always
+  writes the loop into `.import`. QOA keeps the points exact; IMA-ADPCM is off by about a frame (Godot's decoder).
+- 2026-10-19: Godot export: `.import` [params] edits (loop_mode/begin/end, compress/mode), a minimal sidecar when
+  none exists (Godot fills the rest, verified); AudioStreamRandomizer `.tres` per SFX with variations (Godot's
+  default random-no-repeats; verified it cycles); AudioStreamSynchronized `.tres` per song with stems.
+  AudioStreamInteractive is deferred: it needs one stream per clip, so the manifest's section offsets are the
+  contract for now (PLAN.md §9 allows this).
+- 2026-10-19: The demo's generated WAVs (~40 MB per rebuild) aren't committed; manifest.json, `.tres` and `.import`
+  are, and CI fails if a rebuild changes them. WAV determinism is covered by golden tests and the byte-identical
+  rebuild test.
 

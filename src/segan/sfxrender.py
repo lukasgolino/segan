@@ -187,9 +187,13 @@ def render_sfx(sfx: Sfx, project: Project) -> Render:
         dry, sounding = dry_mix(layers, ctx, duration, sfx.name, variation, pitch, timbre, loop, crossfade)
         final, level = _finish_output(dry, sfx, project, loop, gain)
         pcm = to_pcm16(frames_of(final))
+        if loop and len(pcm):
+            # Loops start one frame in: the file opens with the loop's last frame, so players that (like Godot)
+            # wrap to the frame after loop_begin still hear every frame of the loop exactly once.
+            pcm = np.concatenate([pcm[-1:], pcm])
         info = {"sounding_at_end": sounding, "duration": duration, "variation": variation, "pitch_offset": pitch,
                 "loop": loop, "dry_frames": len(dry), "room_tail": room_tail(project.config.mix)}  # fmt: skip
-        outputs.append(Output(output_id, stem, pcm, ctx.rate, (0, len(pcm)) if loop else None, [], level, info))
+        outputs.append(Output(output_id, stem, pcm, ctx.rate, (1, len(pcm)) if loop else None, [], level, info))
 
     if sfx.layers:
         emit("", sfx.name, sfx.layers, sfx.duration, sfx.loop, sfx.crossfade)

@@ -24,3 +24,47 @@ jobs:
         run: mypy
       - name: Run tests
         run: pytest
+      - name: Lint the demo project
+        working-directory: examples/demo
+        run: segan lint --warnings-as-errors
+
+  godot:
+    # Builds the demo into the example Godot project, checks the committed output is identical (WAVs within
+    # 1 LSB, everything else byte for byte), then loads and plays everything in a real headless Godot.
+    runs-on: ubuntu-latest
+    env:
+      GODOT_VERSION: "4.7.2-stable"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install
+        run: pip install -e ".[dev]"
+      - name: Cache Godot
+        id: cache-godot
+        uses: actions/cache@v4
+        with:
+          path: ~/godot
+          key: godot-${{ env.GODOT_VERSION }}
+      - name: Download Godot
+        if: steps.cache-godot.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p ~/godot
+          curl -sSL -o ~/godot/godot.zip "https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}/Godot_v${GODOT_VERSION}_linux.x86_64.zip"
+          unzip -q ~/godot/godot.zip -d ~/godot
+          rm ~/godot/godot.zip
+      - name: Point GODOT at the binary
+        run: |
+          chmod +x ~/godot/Godot_v${GODOT_VERSION}_linux.x86_64
+          echo "GODOT=$HOME/godot/Godot_v${GODOT_VERSION}_linux.x86_64" >> "$GITHUB_ENV"
+      - name: Build the demo and check the committed output is up to date
+        working-directory: examples/demo
+        run: |
+          segan build
+          python ../../scripts/check_committed_build.py ../godot/assets/generated/audio
+      - name: Verify in Godot
+        working-directory: examples/demo
+        run: segan build --verify-godot
+      - name: Godot end-to-end tests
+        run: pytest tests/test_godot.py -v

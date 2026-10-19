@@ -582,6 +582,63 @@ def cmd_lint(args: argparse.Namespace, out: Output) -> int:
     return 1 if failed else 0
 
 
+# --- segan build ------------------------------------------------------------------------------
+
+
+def cmd_build(args: argparse.Namespace, out: Output) -> int:
+    from segan.build import build
+    from segan.exporters.godot import find_godot_binary, res_path, verify_with_godot
+
+    project = project_for([args.project] if args.project else [])
+    if project.config_path is None:
+        raise usage_error(f"no {CONFIG_NAME} found; `segan build` needs a project (run `segan init`)")
+    result = build(project)
+    if result.errors:
+        out.failure(result.errors)
+        if not out.as_json:
+            print("build failed: fix the errors above (`segan lint` shows warnings too)")
+        return 1
+    warnings = result.lint.warnings
+    out.say(f"built {result.assets} assets into {display_path(project.output_dir)}")
+    out.say(f"  {len(result.written)} files written, {len(result.unchanged)} unchanged, {len(result.removed)} stale removed")
+    if result.imports:
+        out.say(f"  {len(result.imports)} Godot .import files updated (loop points, compression)")
+    if warnings:
+        out.say(f"  {len(warnings)} lint warnings: {_rule_counts(warnings)} (run `segan lint` to see them)")
+    verified: bool | None = None
+    if args.verify_godot:
+        godot = find_godot_binary()
+        if result.godot_root is None or result.manifest is None:
+            raise usage_error('--verify-godot needs export = ["wav", "godot"] in segan.toml')
+        if godot is None:
+            raise usage_error("--verify-godot: no Godot binary found; set GODOT=/path/to/godot or put godot on PATH")
+        check = verify_with_godot(godot, result.godot_root, res_path(result.manifest, result.godot_root))
+        verified = check.ok
+        if not check.ok:
+            if out.as_json:
+                out.failure([Finding("E000", "Godot failed to load or play generated audio:\n" + check.output[-3000:])])
+            else:
+                print(check.output[-3000:])
+                print("Godot verification FAILED")
+            return 1
+        out.say(f"  Godot: all {check.streams} streams load, loop where they should and play")
+    out.result(
+        {
+            "output_dir": display_path(project.output_dir),
+            "assets": result.assets,
+            "written": [display_path(p) for p in result.written],
+            "unchanged": len(result.unchanged),
+            "removed": [display_path(p) for p in result.removed],
+            "imports": [display_path(p) for p in result.imports],
+            "manifest": display_path(result.manifest) if result.manifest else None,
+            "warnings": len(warnings),
+            "warnings_by_rule": {r: sum(f.rule == r for f in warnings) for r in sorted({f.rule for f in warnings})},
+            "godot_verified": verified,
+        }
+    )
+    return 0
+
+
 # --- segan config -----------------------------------------------------------------------------
 
 
@@ -711,6 +768,11 @@ def build_parser() -> argparse.ArgumentParser:
     lint.add_argument("--warnings-as-errors", action="store_true", help="exit non-zero on warnings too")
     lint.add_argument("--no-render", action="store_true", help="format checks only (skip the audio warnings)")
     lint.set_defaults(handler=cmd_lint)
+
+    build_cmd = commands.add_parser("build", parents=[common], help="lint, then write WAVs, manifest.json and engine files to output_dir")
+    build_cmd.add_argument("project", nargs="?", help="project directory (default: the one containing the cwd)")
+    build_cmd.add_argument("--verify-godot", action="store_true", help="load and play every generated stream in headless Godot")
+    build_cmd.set_defaults(handler=cmd_build)
 
     kit = commands.add_parser("kit", help="kit tools")
     kit_cmds = kit.add_subparsers(title="kit commands", metavar="<command>")

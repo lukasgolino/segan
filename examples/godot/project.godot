@@ -1,0 +1,15 @@
+; Godot 4 project used to check SEGAN's output. Assets in assets/generated/audio/ come from
+; `segan build` in ../demo; open this folder in Godot and press Play to hear them all.
+
+config_version=5
+
+[application]
+
+config/name="SEGAN audio test"
+run/main_scene="res://scenes/audio_test.tscn"
+config/features=PackedStringArray("4.7")
+
+[display]
+
+window/size/viewport_width=960
+window/size/viewport_height=600

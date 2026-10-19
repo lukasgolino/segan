@@ -1,0 +1,17 @@
+[gd_resource type="AudioStreamSynchronized" format=3]
+
+[ext_resource type="AudioStream" path="res://assets/generated/audio/stems/overworld/lead.wav" id="1_lead"]
+[ext_resource type="AudioStream" path="res://assets/generated/audio/stems/overworld/harmony.wav" id="2_harmony"]
+[ext_resource type="AudioStream" path="res://assets/generated/audio/stems/overworld/bass.wav" id="3_bass"]
+[ext_resource type="AudioStream" path="res://assets/generated/audio/stems/overworld/drums.wav" id="4_drums"]
+
+[resource]
+stream_count = 4
+stream_0/stream = ExtResource("1_lead")
+stream_0/volume = 0.0
+stream_1/stream = ExtResource("2_harmony")
+stream_1/volume = 0.0
+stream_2/stream = ExtResource("3_bass")
+stream_2/volume = 0.0
+stream_3/stream = ExtResource("4_drums")
+stream_3/volume = 0.0

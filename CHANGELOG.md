@@ -30,3 +30,7 @@ check before upgrading. Patch bumps never change existing behaviour. Every relea
   seamless loops, markers, swing, variants and variant axes; `segan new song`.
 - `segan render`, `segan preview` (WAV + listen sheet + seam view + analysis JSON), `segan gallery`, `segan lint`
   (E000-E015, W001-W013), render cache.
+- `segan build [--verify-godot]`: WAVs (smpl loop points, cue markers), stems, `manifest.json` (loops, sections,
+  markers and variants in samples/seconds/bars), stale cleanup; Godot `.import` loop/compression edits,
+  AudioStreamRandomizer and AudioStreamSynchronized resources, headless verification.
+- Example Godot 4.7 project (`examples/godot`) that lists and plays every demo asset.

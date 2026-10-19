@@ -10,7 +10,7 @@ default_kit = "nes"
 
 # Where `segan build` writes final assets, e.g. your game's audio folder. Keep it apart from PAGAN's
 # output_dir: both write a manifest.json.
-output_dir = "build/audio"
+output_dir = "../godot/assets/generated/audio"
 
 # Scratch output from `segan render` / `segan preview` (WAVs and listen sheets). Keep it out of version control.
 preview_dir = "previews"
@@ -18,7 +18,7 @@ preview_dir = "previews"
 # What `segan build` produces: WAVs + manifest.json always ("wav"); add "godot" (loop points and compression in
 # each WAV's .import, AudioStreamRandomizer for SFX variations, AudioStreamSynchronized for stems) and
 # "stems" (one WAV per song track, sample-aligned, for adaptive layering).
-export = ["wav"]
+export = ["wav", "godot", "stems"]
 
 # Bump this when SOUND.md changes in a way that means existing sounds should be revisited. Assets record
 # the style_version they were made under; older ones get lint warning W006. [mix] changes need no bump:

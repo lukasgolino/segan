@@ -477,7 +477,7 @@ Tracks, roll/drum lanes, labels, patterns, derived patterns, sections/arrangemen
 W002/W003/W007/W009/W012. **Done when:** two demo loops (exploration + combat), each with a variant, loop without
 a click (W007 clean) and the owner judges them listenable.
 
-### Milestone 4 — Build + manifest + Godot
+### ☑ Milestone 4 — Build + manifest + Godot
 Loudness normalisation + limiter, stems, manifest, stale cleanup, the Godot exporter (§9), example Godot project,
 headless verify, CI godot job. **Done when:** the Godot demo scene plays everything, loops are seamless in-engine,
 and the randomizer cycles variations.

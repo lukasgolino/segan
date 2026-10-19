@@ -1,0 +1,5 @@
+# The WAVs `segan build` writes here are big (tens of MB per rebuild), so only the text outputs are committed
+# (manifest.json, Godot .tres and .import files); CI rebuilds and checks those match. Run `segan build` in
+# ../demo before opening this project.
+assets/generated/audio/**/*.wav
+.godot/

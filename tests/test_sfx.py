@@ -70,7 +70,8 @@ def test_variations_and_phases(project: Project) -> None:
     waves = [o.pcm for o in render.outputs[:4]]
     assert not np.array_equal(waves[0][:500], waves[1][:500])
     hold = render.output("phase:hold")
-    assert hold.loop == (0, hold.frames) and hold.frames == round(0.5 * 22050)
+    assert hold.loop == (1, hold.frames) and hold.frames == round(0.5 * 22050) + 1
+    assert np.array_equal(hold.pcm[0], hold.pcm[-1])  # the lead-in frame is the loop's last frame
 
 
 def test_kit_instruments_in_layers(project: Project) -> None:
