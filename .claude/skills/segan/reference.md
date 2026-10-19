@@ -84,7 +84,10 @@ layer has no filter), `distort` (0-1), `ring` (`{ freq: Hz, mix: 0-1 }` ring mod
 
 More SFX fields:
 - `variations`: `count` 1-32, `seed` (change it for a different set), `pitch` (+/- semitones), `timbre` (0-1:
-  duty, filter, envelope jitter), `gain` (+/- dB). Each variation is its own WAV, all normalised to the target.
+  duty, filter, envelope jitter), `gain` (+/- dB). Each variation is its own WAV, all normalised to the target
+  (a +dB variation aims above the target: near the limiter cap it gets W001). `include_main: false` builds only
+  `<name>.1..N.wav` (no `<name>.wav`) when the game plays the randomizer.
+- `room: 0-1`: this SFX's room send (x `[mix] room`; 0 = dry, no tail). Default: its category's `[room]` entry, else 1.
 - `phases`: `{ <name>: { duration, loop, crossfade, layers } }` - each phase is its own output `<name>.<phase>.wav`
   (layers default to the SFX's own); e.g. a looping `charge` and a one-shot `release`.
 - `loop: true` + `crossfade` (s, default 0.05): a seamless loop (engine hum, alarm): the end blends into the start.
@@ -94,7 +97,7 @@ More SFX fields:
   Own fields (name, description, tags, status, style_version) aren't inherited.
 - `preset` works like `extends` with a built-in template (layers merge by id, `remove: [ids]` drops preset layers;
   `segan new sfx --preset P` lists the preset's layer ids). `segan bake sfx <name> [--in-place]` writes everything out.
-- The output is `duration` plus the room tail (trimmed at -70 dB). Every output is normalised to its category
+- The output is `duration` plus the room tail (cut at `[mix] tail_trim_db`, default -70 dB below the peak). Every output is normalised to its category
   target, however quiet or loud the layers are written (`normalisation_gain_db` in the analysis); write gains for
   the balance between layers, not for the absolute level.
 
@@ -162,6 +165,19 @@ Variants (each becomes `<song>.<variant>.wav`): `tempo`, `swing`, `instrument_sw
 `{ intensity: { calm: {...}, combat: {...} }, time: { day: {...}, night: {...} } }` makes every combination,
 named `calm+day` etc.
 
+Stems (adaptive layers): with `"stems"` in `export` every track is a stem WAV. A `stems:` block (stems for this
+song whatever `export` says) groups tracks and names the combinations the game plays:
+
+```yaml
+stems:
+  groups: { base: [drums, bass], calm: [calm_*], combat: [combat_*] }   # track names or globs; each track in one group
+  mixes: { calm: [base, calm], combat: [base, combat] }                 # normalised so the loudest mix hits the target
+  main_mix: false                                                       # build only the stems (no full-mix WAV)
+```
+
+`segan preview <song> --output mix:calm --output stem:base` renders once and shows each; the main analysis
+lists every mix's LUFS (`stem_mixes_lufs`). Without `mixes` the stems follow the full mix's gain (they add up to it).
+
 More song fields: `category` (default `music`: loudness target), `normalize: false`, `extends` (a song with
 `template: true`; tracks, patterns, sections, variants merge by name), and the common fields below.
 
@@ -195,8 +211,11 @@ declick = true                # micro-fades at note edges
 limiter = -1.0                # true-peak ceiling, dBFS
 brightness = 0.0              # dB tilt
 warmth = 0.0                  # dB low-mid
+tail_trim_db = -70.0          # room tail cut this far below the peak (-40 = shorter files)
 
-[loudness]                    # LUFS per category (songs: integrated; SFX: loudest 400 ms)
+[room]                        # room send per category, 0-1 x mix.room (unlisted: 1); e.g. ui = 0 (dry, no tail)
+
+[loudness]                    # LUFS per category (songs: integrated; SFX: loudest 400 ms; unlisted categories, songs too, use sfx)
 music = -16.0
 sfx = -14.0
 ui = -20.0
@@ -224,7 +243,7 @@ loudness_tolerance = 1.0      # W001/W013, LU
 | `segan new kit <name>` / `new song <name> [--kit K] [--key "A minor"] [--tempo 120] [--bars 2]` / `new sfx <name> [--preset P] [--kit K]` | starter files (always pass `--description`) |
 | `segan kit show [kits]` | every instrument playing a test phrase: `previews/kits/<kit>.listen.png` + WAVs |
 | `segan lint [paths] [--warnings-as-errors] [--no-render]` | errors + warnings (audio warnings render the asset; cached) |
-| `segan preview <asset...> [--output main\|variant:X\|variation:N\|phase:X\|stem:T] [--from 5 --to 8]` | WAV + listen sheet (+ seam view for loops) per output in `previews/<asset>/`, analysis in `--json` |
+| `segan preview <asset...> [--output main\|variant:X\|variation:N\|phase:X\|stem:T\|mix:M ...] [--from 5 --to 8]` | WAV + listen sheet (+ seam view for loops) per output in `previews/<asset>/`, analysis in `--json` |
 | `segan render <asset...>` | WAVs only |
 | `segan gallery` | every asset's waveform + spectrum and a loudness chart by category |
 | `segan bake sfx <name> [--in-place]` | expand a preset/template into every field |
@@ -255,7 +274,8 @@ E003 row width or row count wrong, E004 missing pattern/section/marker target, E
 problem (unknown key/group, group sizes differ, a key with no instrument), E007 note outside an instrument's
 range (also in variants), E008 bad loop/phase/crossfade, E009 inline instruments in strict mode, E010 derived
 pattern problem, E011 row label doesn't match its row, E012 duplicate asset name, E013 SFX problem, E014 more
-notes at once than an instrument's voices, E015 hold with nothing to hold.
+notes at once than an instrument's voices, E015 hold with nothing to hold, E016 `stems:` problem (a track in no
+group or two, unknown stem in a mix).
 
 Warnings: W001 loudness target out of reach without more limiting than `max_limiting_db` (too short/spiky:
 give it body or a quieter category), W002 unused pattern or section, W003 too many instruments in one song,
@@ -277,7 +297,8 @@ Turn warnings off for one asset with `lint: { disable: [...] }`, project-wide wi
   (name -> sample, seconds, bar), `loop` (`start`/`end` in the file + `offset`: the loop points sit that many
   samples (whole bars, usually one) after the loop section's start and the song's end, because the file carries
   that much of the loop's start again with the end's tail ringing into it; `section`), `variants` (name -> file entry + timing),
-  `stems` (track -> file entry) and `godot_stems`.
+  `stems` (stem -> file entry + `tracks`), `stem_mixes` (mix -> `stems`, `lufs`), `stems_normalised_over` and
+  `godot_stems`. With `main_mix: false` / `include_main: false` the entry has no `file` (timing and loop stay).
 Files: `music/<song>.wav`, `music/<song>.<variant>.wav`, `stems/<song>/<track>.wav`, `sfx/<name>.wav`,
 `sfx/<name>.<n>.wav`, `sfx/<name>.<phase>.wav`. WAVs are 16-bit PCM with a `smpl` loop chunk and `cue` markers.
 The build only rewrites files that changed and deletes outputs (and their `.import`) it no longer produces.

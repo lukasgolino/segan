@@ -57,12 +57,16 @@ def analyze(output: Output, kind: str) -> dict[str, Any]:
         "centroid_hz": round(spectral_centroid(audio, rate), 1),
         "onsets_s": onsets(audio, rate),
     }
+    if output.info.get("mixes"):
+        result["stem_mixes_lufs"] = output.info["mixes"]  # each `stems.mixes` combination as the game plays it
+    if output.info.get("normalised_over"):
+        result["normalised_over_mix"] = output.info["normalised_over"]
     if kind == "sfx" and not output.info.get("loop"):
         result["room_tail_s"] = round(max(0.0, output.seconds - float(output.info.get("duration", output.seconds))), 3)
     if kind == "sfx":
         result["leading_silence_ms"] = round(leading_silence(audio, rate) * 1000.0, 2)
         result["sounding_at_end"] = output.info.get("sounding_at_end", [])
-        track = yin(audio[: min(len(audio), rate * 4)], rate)
+        track = yin(audio[: min(len(audio), rate * 4)], rate, require_fundamental=True)
         voiced = track.hz[track.hz > 0]
         if len(voiced):
             result["pitch_hz"] = {"start": round(float(voiced[0]), 1), "end": round(float(voiced[-1]), 1),
@@ -151,7 +155,7 @@ def sfx_sheet(sfx: Sfx, output: Output, analysis: dict[str, Any], project: Proje
     if analysis.get("pitch_hz"):
         p = analysis["pitch_hz"]
         notes.append(f"detected pitch: start {p['start']} Hz, end {p['end']} Hz (range {p['min']}-{p['max']}); white lines = intended")
-    pitch = yin(output.audio, output.rate, hop=0.004)
+    pitch = yin(output.audio, output.rate, hop=0.004, require_fundamental=True)
     return SheetSpec(title[:150], level_stats(analysis, threshold_click), output.audio, output.rate, tracks=[lanes], pitch=pitch,
                      pitch_targets=targets, notes=notes, loop=(output.loop[0] / output.rate, output.loop[1] / output.rate) if output.loop else None)  # fmt: skip
 
@@ -163,25 +167,29 @@ class PreviewResult:
     files: list[dict[str, Any]] = field(default_factory=list)  # per output: wav, sheet, seam, analysis
 
 
-def write_preview(asset: Any, render: Render, project: Project, start: float | None = None, end: float | None = None, only: str | None = None) -> PreviewResult:
+def write_preview(asset: Any, render: Render, project: Project, start: float | None = None, end: float | None = None,
+                  only: list[str] | None = None) -> PreviewResult:  # fmt: skip
     """WAV + listen sheet (+ seam view for loops) per output into <preview_dir>/<asset>/."""
     folder = project.preview_dir / asset.name
     folder.mkdir(parents=True, exist_ok=True)
     result = PreviewResult(asset.name, folder)
     click = project.config.lint.max_seam_click
     for output in render.outputs:
-        if only is not None and only not in (output.id or "main", output.stem):
+        if only and not {output.id or "main", output.stem} & set(only):
             continue
-        if only is None and output.id.startswith("stem:"):
-            continue  # stems are build outputs; preview them with --output stem:<track>
+        if not only and output.id.startswith(("stem:", "mix:")):
+            continue  # stems are build outputs; preview them with --output stem:<name> / mix:<name>
         base = output.stem.replace("/", ".")
         wav = folder / f"{base}.wav"
         wav.write_bytes(output.wav())
         analysis = analyze(output, render.kind)
-        if render.kind == "song" and output.id == "":
+        if render.kind == "song" and (output.id == "" or output.id.startswith(("stem:", "mix:"))):
             from segan.songpreview import pitch_check
 
-            analysis["pitch_check"] = pitch_check(asset, project)
+            check = pitch_check(asset, project)
+            if output.id:  # a stem or mix: only its own tracks
+                check = {t: c for t, c in check.items() if t in output.info.get("tracks", [])}
+            analysis["pitch_check"] = check
             analysis["notes_per_pattern"] = {name: {t: sum(n.track == t for n in pat.notes) for t in sorted({n.track for n in pat.notes})}
                                              for name, pat in asset.patterns.items()}  # fmt: skip
         if render.kind == "sfx":

@@ -93,8 +93,8 @@ def bus(x: Signal, mix: MixConfig) -> Signal:
     return apply_crush(apply_tone(apply_room(x, mix), mix), mix)
 
 
-def trim_tail(x: Signal, keep: int, rate: int) -> Signal:
-    """Cut the silent end after `keep` frames (the room tail below -70 dB of the peak), with a 5 ms fade."""
+def trim_tail(x: Signal, keep: int, rate: int, floor_db: float = TAIL_FLOOR_DB) -> Signal:
+    """Cut the silent end after `keep` frames (the room tail below `floor_db` of the peak), with a 5 ms fade."""
     data = frames_of(x)
     if len(data) <= keep:
         return data
@@ -102,7 +102,7 @@ def trim_tail(x: Signal, keep: int, rate: int) -> Signal:
     peak = float(level.max())
     if peak <= 0:
         return data[:keep]
-    loud = np.flatnonzero(level[keep:] > peak * 10 ** (TAIL_FLOOR_DB / 20))
+    loud = np.flatnonzero(level[keep:] > peak * 10 ** (floor_db / 20))
     end = keep + (int(loud[-1]) + 1 if len(loud) else 0)
     out = data[:end].copy()
     fade = min(round(0.005 * rate), end - keep)

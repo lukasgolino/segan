@@ -109,7 +109,7 @@ def build(project: Project) -> BuildResult:
             "sample_rate": main.rate,
         }
         if asset.kind == "sfx":
-            if asset.layers:
+            if asset.layers and (asset.variations is None or asset.variations.include_main):
                 entry.update(emit(main, "sfx"))
                 entry.update(_levels(main))
             variations = [o for o in render.outputs if o.id.startswith("variation:")]
@@ -126,8 +126,11 @@ def build(project: Project) -> BuildResult:
             if phases:
                 entry["phases"] = {o.id.split(":", 1)[1]: emit(o, "sfx") for o in phases}
         else:
-            entry.update(emit(main, "music"))
-            entry.update(_levels(main))
+            if asset.stems is None or asset.stems.main_mix:
+                entry.update(emit(main, "music"))
+                entry.update(_levels(main))
+            else:  # stems only: the game never plays the full mix
+                entry.update({"seconds": round(main.seconds, 6), "samples": main.frames, "channels": main.channels, "loop": _loop(main)})
             entry.update(_song_timing(asset, main))
             variants = [o for o in render.outputs if o.id.startswith("variant:")]
             if variants:
@@ -137,7 +140,11 @@ def build(project: Project) -> BuildResult:
                     entry["variants"][variant.name] = {**emit(output, "music"), **_levels(output), **_song_timing(asset, output, variant)}
             stems = [o for o in render.outputs if o.id.startswith("stem:")]
             if stems:
-                entry["stems"] = {o.id.split(":", 1)[1]: emit(o, "stems") for o in stems}
+                entry["stems"] = {o.id.split(":", 1)[1]: {**emit(o, "stems"), "tracks": o.info.get("tracks", [])} for o in stems}
+                if asset.stems is not None and asset.stems.mixes:
+                    mixes = [o for o in render.outputs if o.id.startswith("mix:")]
+                    entry["stem_mixes"] = {o.info["mix"]: {"stems": o.info["stems"], "lufs": _round(o.level.get("lufs"))} for o in mixes}
+                    entry["stems_normalised_over"] = mixes[0].info.get("normalised_over") if mixes else None
                 if godot_root is not None:
                     entry["godot_stems"] = emit_tres(out / "stems" / f"{asset.name}.tres", synchronized_tres([s["file"] for s in entry["stems"].values()]))
         entries[asset.name] = entry

@@ -8,6 +8,7 @@ Patterns are arranged into sections, sections into the arrangement; `loop` names
 
 from __future__ import annotations
 
+import fnmatch
 import re
 from dataclasses import dataclass, field, replace
 from pathlib import Path
@@ -24,7 +25,8 @@ if TYPE_CHECKING:
     from segan.project import Project
 
 SONG_FIELDS = (*META_FIELDS, "kit", "instruments", "groups", "tempo", "meter", "steps_per_beat", "swing", "key", "tracks",
-               "patterns", "sections", "arrangement", "loop", "variants", "variant_axes", "markers", "normalize", "category")  # fmt: skip
+               "patterns", "sections", "arrangement", "loop", "variants", "variant_axes", "markers", "normalize", "category", "stems")  # fmt: skip
+STEM_FIELDS = ("groups", "mixes", "main_mix")
 TRACK_FIELDS = ("roll", "drums", "chromatic", "gain", "pan")
 DERIVE_FIELDS = ("from", "transpose", "semitones", "shift", "reverse", "mute", "swap")
 VARIANT_FIELDS = ("tempo", "swing", "instrument_swap", "group_swap", "kit", "transpose", "semitones", "key")
@@ -89,6 +91,16 @@ class Variant:
                        self.transpose + other.transpose, self.semitones + other.semitones, other.key or self.key)  # fmt: skip
 
 
+@dataclass(frozen=True)
+class Stems:
+    """`stems:` - which tracks share a stem WAV (groups), the stem combinations the game plays (mixes: the
+    stems are normalised so the loudest mix hits the target), and whether the full mix is built at all."""
+
+    groups: tuple[tuple[str, tuple[str, ...]], ...] = ()  # group -> tracks, in source order
+    mixes: tuple[tuple[str, tuple[str, ...]], ...] = ()  # mix -> groups
+    main_mix: bool = True
+
+
 @dataclass
 class Song:
     meta: Meta
@@ -108,6 +120,7 @@ class Song:
     variant_axes: dict[str, dict[str, Variant]] = field(default_factory=dict)
     normalize: bool = True
     category: str = "music"
+    stems: Stems | None = None
 
     @property
     def name(self) -> str:
@@ -116,6 +129,12 @@ class Song:
     @property
     def kind(self) -> str:
         return "song"
+
+    def stem_groups(self) -> dict[str, tuple[str, ...]]:
+        """Stem WAV name -> the tracks summed into it (one per track unless `stems.groups` says otherwise)."""
+        if self.stems is not None and self.stems.groups:
+            return dict(self.stems.groups)
+        return {name: (name,) for name in self.tracks}
 
     @property
     def path(self) -> Path | None:
@@ -506,6 +525,64 @@ def load_song(path: Path, project: Project) -> tuple[Song | None, list[Finding]]
     return parse_song(data, path, project, report)
 
 
+def parse_stems(raw: Any, tracks: dict[str, Track], report: Report, line: int | None) -> Stems | None:
+    """E016: every track in exactly one group (names or globs like `calm_*`); mixes list known groups."""
+    if not isinstance(raw, dict) or any(k not in STEM_FIELDS for k in raw):
+        _bad(report, "E016", f"stems must be a mapping of {', '.join(STEM_FIELDS)}, e.g. {{ groups: {{ base: [drums, bass], calm: [calm_*] }}, mixes: {{ calm: [base, calm] }} }}", line, "stems")
+        return None
+    groups: dict[str, tuple[str, ...]] = {}
+    raw_groups = raw.get("groups", {})
+    gline = line_of(raw, "groups", line)
+    if not isinstance(raw_groups, dict):
+        _bad(report, "E016", "stems.groups must map stem names to track lists, e.g. base: [drums, bass]", gline, "stems.groups")
+        return None
+    owner: dict[str, str] = {}
+    for gname, items in raw_groups.items():
+        where, iline = f"stems.groups.{gname}", line_of(raw_groups, gname, gline)
+        if not isinstance(gname, str) or not TRACK_RE.match(gname):
+            _bad(report, "E016", f"stem group name {gname!r} must be lowercase letters, digits or '_'", iline, where)
+            continue
+        if not isinstance(items, list) or not items or not all(isinstance(i, str) for i in items):
+            _bad(report, "E016", f"stem group {gname!r} must list track names or globs, e.g. [drums, calm_*]", iline, where)
+            continue
+        members: list[str] = []
+        for item in items:
+            found = [t for t in tracks if fnmatch.fnmatchcase(t, item)]
+            if not found:
+                _bad(report, "E016", f"stem group {gname!r}: {item!r} matches no track (tracks: {', '.join(tracks)})", iline, where)
+            for t in found:
+                if t in owner and owner[t] != gname:
+                    _bad(report, "E016", f"track {t!r} is in stem groups {owner[t]!r} and {gname!r}: each track goes in one stem", iline, where)
+                elif t not in members:
+                    owner[t] = gname
+                    members.append(t)
+        groups[gname] = tuple(t for t in tracks if t in members)
+    if groups and (left := [t for t in tracks if t not in owner]):
+        _bad(report, "E016", f"track(s) {', '.join(left)} are in no stem group (the stems must add up to the song)", gline, "stems.groups")
+    known = groups or {t: (t,) for t in tracks}
+    mixes: dict[str, tuple[str, ...]] = {}
+    raw_mixes = raw.get("mixes", {})
+    xline = line_of(raw, "mixes", line)
+    if not isinstance(raw_mixes, dict):
+        _bad(report, "E016", "stems.mixes must map mix names to stem lists, e.g. calm: [base, calm]", xline, "stems.mixes")
+    else:
+        for mname, items in raw_mixes.items():
+            where, iline = f"stems.mixes.{mname}", line_of(raw_mixes, mname, xline)
+            if not isinstance(mname, str) or not TRACK_RE.match(mname):
+                _bad(report, "E016", f"mix name {mname!r} must be lowercase letters, digits or '_'", iline, where)
+            elif not isinstance(items, list) or not items or not all(isinstance(i, str) for i in items) or len(set(items)) != len(items):
+                _bad(report, "E016", f"mix {mname!r} must list stems once each, e.g. [base, calm]", iline, where)
+            elif missing := [i for i in items if i not in known]:
+                _bad(report, "E016", f"mix {mname!r}: unknown stem(s) {', '.join(map(repr, missing))} (stems: {', '.join(known)})", iline, where)
+            else:
+                mixes[mname] = tuple(items)
+    main_mix = raw.get("main_mix", True)
+    if not isinstance(main_mix, bool):
+        _bad(report, "E016", "stems.main_mix must be true or false (false: build only the stems)", line_of(raw, "main_mix", line), "stems.main_mix")
+        main_mix = True
+    return Stems(tuple(groups.items()), tuple(mixes.items()), main_mix)
+
+
 def parse_song(data: dict[str, Any], path: Path | None, project: Project, report: Report | None = None) -> tuple[Song | None, list[Finding]]:
     report = report or Report(path)
     data, chain = resolve_extends(data, path, path.parent if path else None, SONG_SUFFIX, report)
@@ -636,10 +713,11 @@ def parse_song(data: dict[str, Any], path: Path | None, project: Project, report
         clash = [o for opts in axes.values() for o in opts if o in variants]
         if clash:
             _bad(report, "E006", f"variant name(s) {', '.join(clash)} are used by variants and variant_axes", xline, "variant_axes")
+    stems = parse_stems(data["stems"], tracks, report, line_of(data, "stems", line)) if "stems" in data and tracks else None
     if report.failed or key is None:
         return None, report.findings
     song = Song(meta, kit, float(tempo), (meter[0], meter[1]), steps_per_beat, float(swing), key, tracks, patterns, sections, arrangement, loop,
-                markers, variants, axes, normalize, category)  # fmt: skip
+                markers, variants, axes, normalize, category, stems)  # fmt: skip
     for mname, (section, bar) in markers.items():
         steps = sum(patterns[p].length for p in sections[section])
         if (bar - 1) * song.steps_per_bar >= steps:

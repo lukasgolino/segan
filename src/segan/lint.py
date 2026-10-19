@@ -153,7 +153,7 @@ def lint_audio(asset: Any, project: Project) -> list[Finding]:
     path = asset.path
     render = render_asset(asset, project)
     for output in render.outputs:
-        if output.id.startswith("stem:"):
+        if output.id.startswith(("stem:", "mix:")):
             continue
         label = output.stem
         level = output.level

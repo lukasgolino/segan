@@ -14,7 +14,7 @@ import math
 
 import numpy as np
 
-from segan.analysis import frames_of
+from segan.analysis import frames_of, integrated_lufs
 from segan.dsp import Signal
 from segan.kitshow import context_for
 from segan.mix import apply_crush, apply_room, apply_tone, finish, room_tail, trim_tail
@@ -30,8 +30,13 @@ def song_cache_parts(song: Song, project: Project) -> tuple[object, ...]:
     patterns = sorted((name, p.length, tuple(p.notes)) for name, p in song.patterns.items())
     return ("song", song.name, song.kit, song.tempo, song.meter, song.steps_per_beat, song.swing, song.key, sorted(song.tracks.items()),
             patterns, sorted(song.sections.items()), song.arrangement, song.loop, sorted(song.markers.items()),
-            sorted(song.all_variants().items()), song.normalize, song.category, project.config.mix,
-            project.config.target(song.category), project.config.lint.max_limiting_db, "stems" in project.config.export)  # fmt: skip
+            sorted(song.all_variants().items()), song.normalize, song.category, project.config.mix_for(song.category),
+            project.config.target(song.category), project.config.lint.max_limiting_db, wants_stems(song, project), song.stems)  # fmt: skip
+
+
+def wants_stems(song: Song, project: Project) -> bool:
+    """Stems for every song when `export` has "stems", and for any song with a `stems:` block."""
+    return "stems" in project.config.export or song.stems is not None
 
 
 def loop_offset_steps(song: Song, timeline: Timeline, tail: float) -> int:
@@ -44,7 +49,7 @@ def loop_offset_steps(song: Song, timeline: Timeline, tail: float) -> int:
 
 
 def render_variant(song: Song, project: Project, variant: Variant | None, stems: bool = False) -> tuple[Output, list[Output]]:
-    mix = project.config.mix
+    mix = project.config.mix_for(song.category)
     ctx = context_for(mix)
     rate = ctx.rate
     channels = 2 if mix.music_channels == "stereo" else 1
@@ -58,11 +63,12 @@ def render_variant(song: Song, project: Project, variant: Variant | None, stems:
     if file_end is not None:
         events = [e for e in events if e.start < file_end]
     total = max([end_frame, *(event_end(e, ctx) for e in events)]) + round(room_tail(mix) * rate) + 1
+    total = max(total, file_end or 0)  # a sparse loop can end sounding before the file does
     tracks = render_events(events, ctx, channels, total)
     wet: dict[str, Signal] = {}
-    if stems:  # the room and tone are linear: per-track buses still add up to the mix
-        for name in song.tracks:
-            buffer = tracks.get(name, np.zeros((total, channels)))
+    if stems:  # the room and tone are linear: per-stem buses still add up to the mix
+        for name, members in song.stem_groups().items():
+            buffer = np.sum([tracks.get(t, np.zeros((total, channels))) for t in members], axis=0)
             wet[name] = apply_tone(apply_room(buffer, mix), mix)[:total]
         summed = np.sum(list(wet.values()), axis=0)
     else:
@@ -70,7 +76,7 @@ def render_variant(song: Song, project: Project, variant: Variant | None, stems:
         summed = apply_tone(apply_room(dry, mix), mix)[:total]
 
     def cut(signal: Signal) -> Signal:
-        return signal[:file_end] if file_end is not None else trim_tail(signal, end_frame, rate)
+        return signal[:file_end] if file_end is not None else trim_tail(signal, end_frame, rate, mix.tail_trim_db)
 
     mixed = cut(apply_crush(summed, mix))
     target = project.config.target(song.category) if song.normalize else None
@@ -85,16 +91,31 @@ def render_variant(song: Song, project: Project, variant: Variant | None, stems:
     main = Output("" if variant is None else f"variant:{variant.name}", stem_name, to_pcm16(frames_of(final)), rate, loop, cues, level_dict(level), info)
     stem_outputs: list[Output] = []
     if variant is None and stems:
+        crushed: dict[str, Signal] = {}
         for name, buffer in wet.items():
             stem = cut(apply_crush(buffer, mix))[: len(curve)]
-            if len(stem) < len(curve):
-                stem = np.pad(stem, ((0, len(curve) - len(stem)), (0, 0)))
-            stem_outputs.append(Output(f"stem:{name}", f"{song.name}/{name}", to_pcm16(stem * curve[:, None]), rate, loop, [], {}, {"track": name}))
+            crushed[name] = np.pad(stem, ((0, len(curve) - len(stem)), (0, 0))) if len(stem) < len(curve) else stem
+        mixes = dict(song.stems.mixes) if song.stems is not None else {}
+        loudest = ""
+        if mixes:  # normalise over the loudest stem combination the game plays, not the full mix it never does
+            sums = {m: np.sum([crushed[g] for g in groups], axis=0) for m, groups in mixes.items()}
+            loudest = max(sums, key=lambda m: (integrated_lufs(sums[m], rate), m))
+            _, _, curve = finish(sums[loudest], rate, target, "integrated", mix.limiter, project.config.lint.max_limiting_db)
+        groups = song.stem_groups()
+        for name, stem in crushed.items():
+            stem_outputs.append(Output(f"stem:{name}", f"{song.name}/{name}", to_pcm16(stem * curve[:, None]), rate, loop, [], {},
+                                       {**info, "track": name, "tracks": list(groups[name])}))  # fmt: skip
+        for mname, members in mixes.items():
+            audio = np.sum([crushed[g] for g in members], axis=0) * curve[:, None]
+            lufs = integrated_lufs(audio, rate)
+            mix_info = {**info, "mix": mname, "stems": list(members), "tracks": [t for g in members for t in groups[g]], "normalised_over": loudest}
+            stem_outputs.append(Output(f"mix:{mname}", f"{song.name}/mix.{mname}", to_pcm16(audio), rate, loop, [], {"target": target, "lufs": lufs}, mix_info))
+            main.info.setdefault("mixes", {})[mname] = round(lufs, 2)
     return main, stem_outputs
 
 
 def render_song(song: Song, project: Project) -> Render:
-    main, stems = render_variant(song, project, None, "stems" in project.config.export)
+    main, stems = render_variant(song, project, None, wants_stems(song, project))
     outputs = [main]
     for variant in song.all_variants().values():
         outputs.append(render_variant(song, project, variant)[0])

@@ -27,11 +27,13 @@ def _colours(song: Song) -> dict[str, tuple[int, int, int]]:
     return {key: TRACK_COLOURS[i % len(TRACK_COLOURS)] for i, key in enumerate(song.kit.instruments)}
 
 
-def roll_tracks(song: Song, timeline: Timeline, variant: Variant | None) -> list[RollTrack]:
+def roll_tracks(song: Song, timeline: Timeline, variant: Variant | None, only: list[str] | None = None) -> list[RollTrack]:
     colours = _colours(song)
     placed = placed_notes(song, timeline, variant)
     out: list[RollTrack] = []
     for track in song.tracks.values():
+        if only is not None and track.name not in only:
+            continue
         mine = [p for p in placed if p.note.track == track.name]
         if track.drums:
             rows = [str(k) for k in track.rows]
@@ -59,7 +61,7 @@ def song_sheet(song: Song, output: Output, analysis: dict[str, Any], project: Pr
     title = f"song {output.stem}" + (f"  - {song.meta.description}" if song.meta.description else "")
     notes = []
     if timeline.loop is not None:
-        offset_bars = (output.info.get("loop_offset", 0) / output.rate) / (timeline.steps_per_bar * timeline.step_seconds)
+        offset_bars = round((output.info.get("loop_offset", 0) / output.rate) / (timeline.steps_per_bar * timeline.step_seconds), 3)  # whole bars, up to frame rounding
         notes.append(f"loop = section {song.loop!r} (bar {timeline.bar_of(timeline.loop[0]):g}) to the end, played from {offset_bars:g} bar(s) later "
                      f"(bars {timeline.bar_of(timeline.loop[0]) + offset_bars:g}-{timeline.bar_of(timeline.total) + offset_bars:g}) so its own tail rings "
                      "into its start; yellow lines = the loop points in the file")
@@ -72,7 +74,7 @@ def song_sheet(song: Song, output: Output, analysis: dict[str, Any], project: Pr
     loop = (output.loop[0] / output.rate, output.loop[1] / output.rate) if output.loop else None
     markers = [(name, timeline.seconds(step)) for name, step in timeline.markers.items()]
     return SheetSpec(title[:150], stats, output.audio, output.rate, beats=beats, bars=bars, blocks=sections, sub_blocks=patterns,
-                     tracks=roll_tracks(song, timeline, variant), loop=loop, markers=markers, loudness_curve=True, notes=notes)  # fmt: skip
+                     tracks=roll_tracks(song, timeline, variant, output.info.get("tracks")), loop=loop, markers=markers, loudness_curve=True, notes=notes)  # fmt: skip
 
 
 def pitch_check(song: Song, project: Project) -> dict[str, Any]:

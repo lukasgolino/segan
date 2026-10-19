@@ -55,6 +55,7 @@ SETTINGS: tuple[Setting, ...] = (
     Setting("mix.limiter", -1.0, "true-peak ceiling in dBFS for every output", "all"),
     Setting("mix.brightness", 0.0, "tilt EQ in dB: + brighter, - darker (every asset)", "all"),
     Setting("mix.warmth", 0.0, "low-mid body in dB: + warmer (and a softer top), - thinner", "all"),
+    Setting("mix.tail_trim_db", -70.0, "where an SFX's (or one-shot song's) room tail is cut, in dB below its peak (-40 = shorter files)", "all"),
     Setting("loudness.music", -16.0, "loudness target for songs (integrated LUFS)", "all"),
     Setting("loudness.sfx", -14.0, "loudness target for SFX (loudest 400 ms, LUFS); any category not listed uses this", "all"),
     Setting("loudness.ui", -20.0, "loudness target for SFX with category ui", "all"),
@@ -78,6 +79,8 @@ def lookup(key: str) -> Setting | None:
         return BY_KEY[key]
     if re.fullmatch(r"loudness\.[a-z][a-z0-9_]*", key):
         return Setting(key, None, f"loudness target for SFX with category {key.split('.')[1]}", "all")
+    if re.fullmatch(r"room\.[a-z][a-z0-9_]*", key):
+        return Setting(key, None, f"room send (0-1, x mix.room; 0 = dry, no tail) for assets with category {key.split('.')[1]}", "all")
     return None
 
 
@@ -85,6 +88,8 @@ def current_value(config: Config, key: str) -> Any:
     table, _, name = key.rpartition(".")
     if table == "loudness":
         return config.loudness.get(name)
+    if table == "room":
+        return config.room.get(name)
     source: Any = getattr(config, table) if table else config
     value = getattr(source, name)
     if isinstance(value, tuple):
@@ -266,6 +271,7 @@ def unset_setting(project: Project, key: str) -> Change:
 
 def describe(config: Config) -> list[dict[str, Any]]:
     extra = [lookup(f"loudness.{c}") for c in sorted(config.loudness) if f"loudness.{c}" not in BY_KEY]
+    extra += [lookup(f"room.{c}") for c in sorted(config.room)]
     return [
         {
             "key": s.key,

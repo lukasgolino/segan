@@ -76,7 +76,9 @@ class Key:
             return True
         if "#" in self.root_name:
             return False
-        major_root = (self.root - {"minor": 9, "dorian": 2, "phrygian": 4, "mixolydian": 7, "lydian": 5, "locrian": 11}.get(self.scale, 0)) % 12
+        relative = {"minor": 9, "harmonic_minor": 9, "melodic_minor": 9, "pentatonic_minor": 9, "blues": 9,
+                    "dorian": 2, "phrygian": 4, "mixolydian": 7, "lydian": 5, "locrian": 11}  # fmt: skip
+        major_root = (self.root - relative.get(self.scale, 0)) % 12
         return major_root in (5, 10, 3, 8, 1, 6)  # F Bb Eb Ab Db Gb
 
     def contains(self, midi: int) -> bool:

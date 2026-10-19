@@ -28,7 +28,7 @@ LOG2_10_OVER_20 = math.log2(10.0) / 20.0
 
 def sfx_cache_parts(sfx: Sfx, project: Project) -> tuple[object, ...]:
     return ("sfx", sfx.name, sfx.category, sfx.duration, sfx.layers, sfx.loop, sfx.crossfade, sfx.variations,
-            sorted(sfx.phases.items()), sfx.normalize, project.config.mix, project.config.target(sfx.category))  # fmt: skip
+            sorted(sfx.phases.items()), sfx.normalize, project.config.mix_for(sfx.category, sfx.room), project.config.target(sfx.category))  # fmt: skip
 
 
 def _keyframe_curve(frames: tuple[tuple[float, float], ...], slide: bool, offset: float = 0.0):  # type: ignore[no-untyped-def]
@@ -161,7 +161,7 @@ def dry_mix(layers: tuple[Layer, ...], ctx: Context, duration: float, name: str,
 
 
 def _finish_output(dry: Signal, sfx: Sfx, project: Project, loop: bool, gain_offset: float = 0.0) -> tuple[Signal, dict[str, float | None]]:
-    mix = project.config.mix
+    mix = project.config.mix_for(sfx.category, sfx.room)
     rate = mix.sample_rate
     channels = 2 if mix.sfx_channels == "stereo" else 1
     data = np.repeat(dry[:, None], channels, axis=1)
@@ -170,7 +170,7 @@ def _finish_output(dry: Signal, sfx: Sfx, project: Project, loop: bool, gain_off
         twice = bus(np.concatenate([data, data, data]), mix)  # the room of the previous cycle rings into this one
         wet = twice[frames : 2 * frames]
     else:
-        wet = trim_tail(bus(data, mix), frames, rate) if mix.room > 0 else bus(data, mix)
+        wet = trim_tail(bus(data, mix), frames, rate, mix.tail_trim_db) if mix.room > 0 else bus(data, mix)
     target = project.config.target(sfx.category) + gain_offset if sfx.normalize else None
     if target is None and gain_offset:
         wet = wet * 2.0 ** (gain_offset * LOG2_10_OVER_20)
@@ -192,7 +192,7 @@ def render_sfx(sfx: Sfx, project: Project) -> Render:
             # wrap to the frame after loop_begin still hear every frame of the loop exactly once.
             pcm = np.concatenate([pcm[-1:], pcm])
         info = {"sounding_at_end": sounding, "duration": duration, "variation": variation, "pitch_offset": pitch,
-                "loop": loop, "dry_frames": len(dry), "room_tail": room_tail(project.config.mix)}  # fmt: skip
+                "loop": loop, "dry_frames": len(dry), "room_tail": room_tail(project.config.mix_for(sfx.category, sfx.room))}  # fmt: skip
         outputs.append(Output(output_id, stem, pcm, ctx.rate, (1, len(pcm)) if loop else None, [], level, info))
 
     if sfx.layers:

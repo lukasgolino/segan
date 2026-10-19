@@ -10,7 +10,7 @@ import math
 import re
 import tomllib
 from collections.abc import Callable
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any, Literal
 
@@ -44,6 +44,7 @@ class MixConfig:
     limiter: float = -1.0
     brightness: float = 0.0
     warmth: float = 0.0
+    tail_trim_db: float = -70.0  # the room tail is cut where it falls this far below the peak
 
 
 @dataclass(frozen=True)
@@ -75,10 +76,17 @@ class Config:
     loudness: dict[str, float] = field(default_factory=lambda: dict(DEFAULT_LOUDNESS))
     lint: LintConfig = field(default_factory=LintConfig)
     godot: GodotConfig = field(default_factory=GodotConfig)
+    room: dict[str, float] = field(default_factory=dict)  # category -> room send (0-1, x mix.room)
 
     def target(self, category: str) -> float:
         """Loudness target (LUFS) for a category; categories not listed use `sfx`."""
         return self.loudness.get(category, self.loudness.get("sfx", DEFAULT_LOUDNESS["sfx"]))
+
+    def mix_for(self, category: str, send: float | None = None) -> MixConfig:
+        """The shared mix with this asset's room send applied (the asset's own `room:`, else its category's
+        `[room]` entry, else 1): the same space, just less of it (0 = dry, no tail)."""
+        amount = send if send is not None else self.room.get(category, 1.0)
+        return self.mix if amount == 1.0 else replace(self.mix, room=round(self.mix.room * amount, 12))
 
 
 @dataclass(frozen=True)
@@ -183,7 +191,7 @@ def parse_config(data: dict[str, Any], path: Path) -> Config:
         findings.append(Finding("E001", message, path, None, where))
 
     defaults = Config()
-    allowed = ("mode", "default_kit", "output_dir", "preview_dir", "export", "style_version", "mix", "loudness", "lint", "godot")
+    allowed = ("mode", "default_kit", "output_dir", "preview_dir", "export", "style_version", "mix", "loudness", "room", "lint", "godot")
     for key in data:
         if key not in allowed:
             error(f"unknown setting {key!r}; allowed: {', '.join(allowed)}", key)
@@ -218,6 +226,7 @@ def parse_config(data: dict[str, Any], path: Path) -> Config:
 
     mix = _parse_mix(data.get("mix", {}), error)
     loudness = _parse_loudness(data.get("loudness", {}), error)
+    room = _parse_room(data.get("room", {}), error)
     lint = _parse_lint(data.get("lint", {}), error)
     godot = _parse_godot(data.get("godot", {}), error)
     if findings:
@@ -233,6 +242,7 @@ def parse_config(data: dict[str, Any], path: Path) -> Config:
         loudness=loudness,
         lint=lint,
         godot=godot,
+        room=room,
     )
 
 
@@ -272,13 +282,14 @@ def _parse_mix(data: Any, error: Callable[[str, str], None]) -> MixConfig:
         "limiter": (lambda v: _number(v) and -12 <= v <= 0, "must be -12..0 dBFS (true-peak ceiling)"),
         "brightness": (lambda v: _number(v) and -12 <= v <= 12, "must be -12..12 dB (high/low tilt)"),
         "warmth": (lambda v: _number(v) and -12 <= v <= 12, "must be -12..12 dB (low-mid body)"),
+        "tail_trim_db": (lambda v: _number(v) and -120 <= v <= -20, "must be -120..-20 dB (where the room tail is cut, below the peak)"),
     }
     v = _table(data, "mix", MixConfig(), rules, error)
     return MixConfig(
         sample_rate=int(v["sample_rate"]), oversample=int(v["oversample"]), music_channels=v["music_channels"],
         sfx_channels=v["sfx_channels"], tuning=float(v["tuning"]), room=float(v["room"]), room_decay=float(v["room_decay"]),
         crush_bits=int(v["crush_bits"]), crush_rate=float(v["crush_rate"]), declick=v["declick"], limiter=float(v["limiter"]),
-        brightness=float(v["brightness"]), warmth=float(v["warmth"]),
+        brightness=float(v["brightness"]), warmth=float(v["warmth"]), tail_trim_db=float(v["tail_trim_db"]),
     )  # fmt: skip
 
 
@@ -292,6 +303,21 @@ def _parse_loudness(data: Any, error: Callable[[str, str], None]) -> dict[str, f
             error(f"loudness category {key!r} must be lowercase letters, digits or '_'", f"loudness.{key}")
         elif not (_number(value) and -40 <= value <= -5):
             error(f"loudness.{key} must be a target in LUFS, -40..-5 (e.g. -16)", f"loudness.{key}")
+        else:
+            out[key] = float(value)
+    return out
+
+
+def _parse_room(data: Any, error: Callable[[str, str], None]) -> dict[str, float]:
+    out: dict[str, float] = {}
+    if not isinstance(data, dict):
+        error("[room] must be a table of category = room send (0-1)", "room")
+        return out
+    for key, value in data.items():
+        if not re.fullmatch(r"[a-z][a-z0-9_]*", key):
+            error(f"room category {key!r} must be lowercase letters, digits or '_'", f"room.{key}")
+        elif not (_number(value) and 0 <= value <= 1):
+            error(f"room.{key} must be a send of 0-1 (x mix.room; 0 = dry, no tail)", f"room.{key}")
         else:
             out[key] = float(value)
     return out

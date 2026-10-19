@@ -35,7 +35,7 @@ if TYPE_CHECKING:
     from segan.project import Project
 
 PRESETS = ("coin", "jump", "laser", "explosion", "hit", "hurt", "powerup", "blip", "select", "door", "step")
-SFX_FIELDS = (*META_FIELDS, "category", "kit", "instruments", "groups", "preset", "duration", "layers", "variations", "phases",
+SFX_FIELDS = (*META_FIELDS, "category", "kit", "instruments", "groups", "preset", "duration", "layers", "variations", "phases", "room",
               "loop", "crossfade", "normalize")  # fmt: skip
 LAYER_EXTRA = ("id", "instrument", "start", "length", "pitch", "slide", "gain", "cutoff", "distort", "delay", "ring")
 PHASE_FIELDS = ("duration", "loop", "layers", "crossfade")
@@ -72,6 +72,7 @@ class Variations:
     pitch: float = 0.0  # +/- semitones
     timbre: float = 0.0  # 0-1 amount of jitter in duty, filter and envelope times
     gain: float = 0.0  # +/- dB
+    include_main: bool = True  # false: build only the variations (the game plays them through a randomizer)
 
 
 @dataclass(frozen=True)
@@ -98,6 +99,7 @@ class Sfx:
     normalize: bool = True
     preset: str | None = None
     effective: dict[str, Any] = field(default_factory=dict)  # fields after preset/extends (for `segan bake sfx`)
+    room: float | None = None  # room send (0-1, x mix.room); None = the category's [room] entry
 
     @property
     def name(self) -> str:
@@ -294,6 +296,10 @@ def parse_sfx(data: dict[str, Any], path: Path | None, project: Project, report:
         report.error("E013", "normalize must be true or false", line_of(data, "normalize", line), "normalize")
         normalize = True
     variations = _variations(data.get("variations"), report, line_of(data, "variations", line))
+    room = data.get("room")
+    if room is not None and not (is_number(room) and 0 <= room <= 1):
+        report.error("E013", "room must be a send of 0-1 (x the project's mix.room; 0 = dry, no tail)", line_of(data, "room", line), "room")
+        room = None
     phases: dict[str, Phase] = {}
     raw_phases = data.get("phases")
     if raw_phases is not None:
@@ -309,16 +315,16 @@ def parse_sfx(data: dict[str, Any], path: Path | None, project: Project, report:
     if report.failed or duration is None or layers is None:
         return None, report.findings
     sfx = Sfx(meta, category, kit, duration, layers, loop, float(crossfade), variations, phases, normalize,
-              preset if isinstance(preset, str) else None, dict(data))  # fmt: skip
+              preset if isinstance(preset, str) else None, dict(data), float(room) if room is not None else None)  # fmt: skip
     return sfx, report.findings
 
 
 def _variations(raw: Any, report: Report, line: int | None) -> Variations | None:
     if raw is None:
         return None
-    allowed = ("count", "seed", "pitch", "timbre", "gain")
+    allowed = ("count", "seed", "pitch", "timbre", "gain", "include_main")
     if not isinstance(raw, dict) or any(k not in allowed for k in raw):
-        report.error("E013", "variations must be { count, seed, pitch (semitones), timbre (0-1), gain (dB) }", line, "variations")
+        report.error("E013", "variations must be { count, seed, pitch (semitones), timbre (0-1), gain (dB), include_main }", line, "variations")
         return None
     count, seed = raw.get("count", 4), raw.get("seed", 0)
     pitch, timbre, gain = raw.get("pitch", 0.0), raw.get("timbre", 0.0), raw.get("gain", 0.0)
@@ -328,8 +334,10 @@ def _variations(raw: Any, report: Report, line: int | None) -> Variations | None
         report.error("E013", "variations.seed must be a whole number (change it for a different set)", line, "variations.seed")
     elif not (is_number(pitch) and 0 <= pitch <= 12 and is_number(timbre) and 0 <= timbre <= 1 and is_number(gain) and 0 <= gain <= 12):
         report.error("E013", "variations: pitch 0-12 semitones, timbre 0-1, gain 0-12 dB (each is the most a variation moves)", line, "variations")
+    elif not isinstance(include_main := raw.get("include_main", True), bool):
+        report.error("E013", "variations.include_main must be true or false (false: build only <name>.1..N.wav)", line, "variations.include_main")
     else:
-        return Variations(count, seed, float(pitch), float(timbre), float(gain))
+        return Variations(count, seed, float(pitch), float(timbre), float(gain), include_main)
     return None
 
 

@@ -174,3 +174,66 @@ def test_open_mode_song(tmp_path) -> None:  # type: ignore[no-untyped-def]
         "".join(f"      {'z---' if i == 7 else '....'}\n" for i in range(8)) + "sections: { main: [a] }\narrangement: [main]\n"
     song, findings = load(project, "song", "s", text)
     assert song is not None, findings
+
+
+SPARSE = """\
+name: sparse
+tempo: 120
+tracks:
+  lead: { roll: [C5, D5] }
+patterns:
+  a:
+    length: 16
+    lead: |
+      ....|....|....|....  D5
+      p...|....|....|....  C5
+sections:
+  main: [a, a]
+arrangement: [main]
+loop: main
+"""
+
+
+def test_sparse_looping_song_renders_to_the_loop_end(project: Project) -> None:
+    song, findings = load(project, "song", "sparse", SPARSE)
+    assert song is not None, findings
+    main = render_asset(song, project).main
+    assert main.loop is not None and main.loop[1] == main.frames
+    assert read_wav(main.wav()).loop == main.loop
+
+
+GROUPED = SONG.replace("variants:", """stems:
+  groups: { base: [bass, drums], top: [lead] }
+  mixes: { calm: [base], full: [base, top] }
+variants:""")
+
+
+def test_stem_groups_and_mixes(project: Project) -> None:
+    from segan.analysis import integrated_lufs
+
+    song, findings = load(project, "song", "tune", GROUPED)
+    assert song is not None, findings
+    render = render_asset(song, project)  # a stems: block renders stems without "stems" in export
+    ids = [o.id for o in render.outputs if o.id.startswith(("stem:", "mix:"))]
+    assert ids == ["stem:base", "stem:top", "mix:calm", "mix:full"]
+    base, top, full = render.output("stem:base"), render.output("stem:top"), render.output("mix:full")
+    assert base.info["tracks"] == ["bass", "drums"] and base.info["loop_offset"] == render.main.info["loop_offset"]
+    assert float(np.max(np.abs(base.audio + top.audio - full.audio))) < 0.002
+    assert abs(integrated_lufs(full.audio, full.rate) + 16.0) < 0.5  # the loudest mix is on target
+    assert render.main.info["mixes"]["calm"] < render.main.info["mixes"]["full"]
+
+
+@pytest.mark.parametrize(
+    ("stems", "message"),
+    [
+        ("{ groups: { base: [bass, drums] } }", "no stem group"),
+        ("{ groups: { a: [lead, z*], b: [bass, drums] } }", "matches no track"),
+        ("{ groups: { a: [lead, bass], b: [bass, drums] } }", "is in stem groups"),
+        ("{ mixes: { calm: [lead, nope] } }", "unknown stem"),
+        ("{ main_mix: maybe }", "main_mix"),
+        ("{ grups: {} }", "stems must be"),
+    ],
+)
+def test_stem_errors(project: Project, stems: str, message: str) -> None:
+    song, findings = load(project, "song", "tune", SONG.replace("variants:", f"stems: {stems}\nvariants:"))
+    assert song is None and any(f.rule == "E016" and message in f.message for f in findings), findings

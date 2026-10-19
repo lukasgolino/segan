@@ -7,6 +7,7 @@ from segan.analysis import (
     max_momentary_lufs,
     onsets,
     seam_click,
+    spectral_centroid,
     true_peak_db,
     yin,
 )
@@ -63,3 +64,18 @@ def test_seam_click() -> None:
     cut = sine(440, 1.0, rate)  # 440.0 cycles + a broken phase
     broken = cut[: rate - 37]
     assert seam_click(broken, 0, len(broken)) > 0.02
+
+
+def test_yin_can_ignore_a_dyads_common_period() -> None:
+    dyad = sine(1567.98, 0.5, 44100) + sine(2093.0, 0.5, 44100)  # G6 + C7: common period ~ C5, which nobody hears
+    assert np.any(yin(dyad, 44100).hz > 0)
+    assert not np.any(yin(dyad, 44100, require_fundamental=True).hz > 0)
+    track = yin(sine(220, 0.5, 44100) + 0.3 * sine(440, 0.5, 44100), 44100, require_fundamental=True)
+    assert abs(float(np.median(track.hz[track.hz > 0])) - 220) < 1
+
+
+def test_centroid_is_not_dominated_by_a_noise_floor() -> None:
+    rate = 44100
+    noise = np.random.default_rng(1).standard_normal(rate) * 10 ** (-50 / 20)
+    assert spectral_centroid(sine(100, 1.0, rate) + noise, rate) < 300
+    assert 900 < spectral_centroid(sine(1000, 1.0, rate), rate) < 1100

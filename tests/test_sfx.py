@@ -124,3 +124,22 @@ def test_open_mode_inline_instruments(tmp_path: Path) -> None:
     sfx, findings = load(project, "sfx", "x", "name: x\ninstruments:\n  z: { osc: saw }\nlayers:\n  - { instrument: z, pitch: A4 }\n")
     assert sfx is not None, findings
     assert rules(findings) == []
+
+
+def test_room_send_and_tail_trim(tmp_path: Path) -> None:
+    from conftest import CONFIG, make_project
+
+    text = "name: tick\ncategory: ui\nduration: 0.05\nlayers:\n  - { osc: pulse, pitch: C6, env: [0.001, 0.02, 0.0, 0.01] }\n"
+    lengths = {}
+    for label, extra in [("wet", ""), ("trim", "tail_trim_db = -45\n"), ("dry", "\n[room]\nui = 0\n")]:
+        config = CONFIG.replace("room_decay = 0.2\n", "room_decay = 0.2\n" + extra) if label == "trim" else CONFIG + extra
+        (tmp_path / label).mkdir()
+        project = make_project(tmp_path / label, config)
+        sfx, findings = load(project, "sfx", "tick", text)
+        assert sfx is not None, findings
+        lengths[label] = render_asset(sfx, project).main.frames
+    assert lengths["dry"] == round(0.05 * 22050) < lengths["trim"] < lengths["wet"]
+    (tmp_path / "field").mkdir()
+    project = make_project(tmp_path / "field")
+    sfx, _ = load(project, "sfx", "tick", text + "room: 0\n")
+    assert sfx is not None and render_asset(sfx, project).main.frames == lengths["dry"]

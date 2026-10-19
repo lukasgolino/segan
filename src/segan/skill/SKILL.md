@@ -126,7 +126,8 @@ bass, maybe a pad or arpeggio, 3-5 drums.
      `length`/release.
    - Sounds that repeat a lot (steps, shots, hits) get `variations: { count: 4, pitch: 1, timbre: 0.3 }`;
      Godot gets an AudioStreamRandomizer that cycles them.
-   - The file is `duration` plus the shared room's tail (the sheet shows "1.10s + 0.26s room tail").
+   - The file is `duration` plus the shared room's tail (the sheet shows "1.10s + 0.26s room tail"). Short,
+     frequent sounds (UI clicks) can go dry: `room: 0` on the SFX or `[room] ui = 0` in segan.toml.
    - `category` picks the loudness target: `sfx` -14, `ui` -20, `foley` -22 LUFS (segan.toml `[loudness]`).
      A sound too short and spiky to reach its target gets W001: give it more body or a quieter category.
 4. `segan lint <file>` -> fix every error and every warning that's a real problem (a warning you keep on
@@ -169,7 +170,8 @@ bass, maybe a pad or arpeggio, 3-5 drums.
    before the loop.
 6. **Variants** in one line each: `danger: { tempo: 150, instrument_swap: { q: r } }`, `calm: { kit: soft_kit }`,
    `night: { semitones: -2 }`, `major: { key: A major }`; combinations with `variant_axes`. Adaptive layering:
-   add `"stems"` to `export` (one WAV per track, Godot AudioStreamSynchronized).
+   add `"stems"` to `export` (one WAV per track, Godot AudioStreamSynchronized), or a `stems:` block with `groups`
+   (one WAV per layer) and `mixes` (the layer combinations the game plays: normalised over the loudest of them).
 7. `segan lint`, then `segan preview <song>`: look at the piano roll (is it what you meant?), the spectrogram
    (busy where you expect, bass at the bottom, no smear of clashing notes), the LUFS curve (no holes or spikes),
    `pitch_check` (every note within 50 cents), the seam. Long songs: `--from 9 --to 16` (bars) shows a window.

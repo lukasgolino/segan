@@ -167,14 +167,18 @@ def seam_click(x: Signal, start: int, end: int) -> float:
 
 
 def spectral_centroid(x: Signal, rate: int) -> float:
+    """Power-weighted centroid on a log-frequency axis (20 Hz up), in Hz: where the energy sits as heard.
+    A linear magnitude centroid is dominated by the many high bins of a noise floor."""
     m = mono(x)
     if len(m) < 64 or not np.any(m):
         return 0.0
     size = min(len(m), 1 << 16)
-    spectrum = np.abs(np.fft.rfft(m[:size] * np.hanning(size)))
+    power = np.abs(np.fft.rfft(m[:size] * np.hanning(size))) ** 2
     freqs = np.fft.rfftfreq(size, 1.0 / rate)
-    total = float(spectrum.sum())
-    return float((spectrum * freqs).sum() / total) if total > 0 else 0.0
+    keep = freqs >= 20.0
+    power, freqs = power[keep], freqs[keep]
+    total = float(power.sum())
+    return float(2.0 ** ((power * np.log2(freqs)).sum() / total)) if total > 0 else 0.0
 
 
 def onsets(x: Signal, rate: int, max_count: int = 64) -> list[float]:
@@ -208,8 +212,12 @@ class PitchTrack:
     hz: Signal  # 0 where unvoiced
 
 
-def yin(x: Signal, rate: int, fmin: float = 50.0, fmax: float = 4000.0, hop: float = 0.0, threshold: float = 0.15) -> PitchTrack:
-    """YIN fundamental-frequency estimate per frame (de Cheveigne & Kawahara 2002), FFT autocorrelation."""
+def yin(x: Signal, rate: int, fmin: float = 50.0, fmax: float = 4000.0, hop: float = 0.0, threshold: float = 0.15,
+        require_fundamental: bool = False) -> PitchTrack:  # fmt: skip
+    """YIN fundamental-frequency estimate per frame (de Cheveigne & Kawahara 2002), FFT autocorrelation.
+
+    `require_fundamental` drops frames whose period has no energy of its own (within 30 dB of the frame's
+    strongest partial): the common period of a dyad or a bell's partials is a pitch nobody hears."""
     m = mono(x)
     hop = hop or max(0.01, len(m) / rate / 1200)  # about one estimate per pixel column of a listen sheet
     tau_max = int(rate / fmin)
@@ -251,6 +259,14 @@ def yin(x: Signal, rate: int, fmin: float = 50.0, fmax: float = 4000.0, hop: flo
             denom = a - 2 * b + c
             shift = 0.5 * (a - c) / denom if denom != 0 else 0.0
             hz[i] = rate / (tau + shift)
+    if require_fundamental and np.any(hz > 0):
+        voiced = np.flatnonzero(hz > 0)
+        nfft_s = 1 << (4 * size - 1).bit_length()  # zero-padded: ~rate / (4 size) Hz bins
+        spectra = np.abs(np.fft.rfft(frames[voiced] * np.hanning(size), nfft_s, axis=1))
+        bins = np.round(hz[voiced] * nfft_s / rate).astype(int)
+        width = max(1, nfft_s // size)  # the window's main lobe
+        at = np.array([spectra[j, max(0, b - width) : b + width + 1].max() for j, b in enumerate(bins)])
+        hz[voiced[at < spectra.max(axis=1) * 10 ** (-30 / 20)]] = 0.0
     times = (starts + size / 2) / rate
     return PitchTrack(times, hz)
 

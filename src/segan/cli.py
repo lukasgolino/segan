@@ -488,8 +488,9 @@ def cmd_preview(args: argparse.Namespace, out: Output) -> int:
     for asset in assets:
         render = render_asset(asset, project)
         result = write_preview(asset, render, project, _position(args.start, asset), _position(args.end, asset), args.output)
-        if not result.files:
-            raise usage_error(f"{asset.name} has no output {args.output!r} (outputs: {', '.join(o.id or 'main' for o in render.outputs)})")
+        missing = [o for o in args.output or [] if not any(o in (r.id or "main", r.stem) for r in render.outputs)]
+        if missing or not result.files:
+            raise usage_error(f"{asset.name} has no output {', '.join(map(repr, missing or args.output or []))} (outputs: {', '.join(o.id or 'main' for o in render.outputs)})")
         for entry in result.files:
             a = entry["analysis"]
             target = f" (target {a['target_lufs']:g})" if a.get("target_lufs") is not None else ""
@@ -942,7 +943,8 @@ def build_parser() -> argparse.ArgumentParser:
     preview.add_argument("assets", nargs="+", help="asset files or names")
     preview.add_argument("--from", dest="start", help="start of the shown window: bar number (songs) or seconds (2.5s)")
     preview.add_argument("--to", dest="end", help="end of the shown window")
-    preview.add_argument("--output", help="only this output: main, variant:<name>, variation:<n>, phase:<name>, stem:<track>")
+    preview.add_argument("--output", action="append", help="only this output (repeat for several; one render): main, variant:<name>, variation:<n>, "
+                         "phase:<name>, stem:<name>, mix:<name>")  # fmt: skip
     preview.set_defaults(handler=cmd_preview)
 
     gallery = commands.add_parser("gallery", parents=[common], help="every asset side by side + loudness by category")

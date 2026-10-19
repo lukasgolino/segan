@@ -52,6 +52,20 @@ def test_preview_writes_wav_sheet_and_analysis(proj: Path, capsys: pytest.Captur
     assert code == 0 and len(data["outputs"][0]["outputs"]) == 1
 
 
+def test_preview_several_stems_at_once(proj: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    from test_song import GROUPED
+
+    write(make_project(proj), "song", "tune", GROUPED)
+    code, data = run_json(["preview", "tune", "--output", "stem:top", "--output", "mix:calm", "--output", "main"], capsys)
+    assert code == 0, data
+    outputs = {o["output"]: o["analysis"] for o in data["outputs"][0]["outputs"]}
+    assert set(outputs) == {"main", "stem:top", "mix:calm"}
+    assert set(outputs["stem:top"]["pitch_check"]) == {"lead"} and "bass" in outputs["mix:calm"]["pitch_check"]
+    assert set(outputs["main"]["stem_mixes_lufs"]) == {"calm", "full"} and outputs["mix:calm"]["normalised_over_mix"] == "full"
+    code, data = run_json(["preview", "tune", "--output", "stem:nope"], capsys)
+    assert code == 1 and "stem:nope" in data["findings"][0]["message"]
+
+
 def test_render_gallery_bake(proj: Path, capsys: pytest.CaptureFixture[str]) -> None:
     project = make_project(proj)
     write(project, "sfx", "coin", "name: coin\npreset: coin\nvariations: { count: 2 }\n")

@@ -19,6 +19,9 @@ def test_keys_and_rows() -> None:
     assert [key.name(m) for m in rows] == ["A4", "G4", "F4", "E4", "D4", "C4", "B3", "A3"]
     assert parse_key("C# dorian") is not None and parse_key("X major") is None and parse_key("A") is None
     assert parse_key("F major") is not None and parse_key("F major").flats  # type: ignore[union-attr]
+    for name in ("D harmonic_minor", "G melodic_minor", "D pentatonic_minor", "C blues"):
+        assert parse_key(name).flats, name  # type: ignore[union-attr]  # D harmonic minor has Bb, not A#
+    assert not parse_key("E harmonic_minor").flats  # type: ignore[union-attr]
 
 
 def test_degree_shift_and_mode_mapping() -> None:

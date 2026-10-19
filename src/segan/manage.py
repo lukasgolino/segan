@@ -72,7 +72,7 @@ def catalogue(project: Project, render: bool = True) -> list[AssetStatus]:
             if render and not asset.meta.template:
                 rendered = render_asset(asset, project)
                 seconds = round(rendered.main.seconds, 3)
-                outputs = len([o for o in rendered.outputs if not o.id.startswith("stem:")])
+                outputs = len([o for o in rendered.outputs if not o.id.startswith(("stem:", "mix:"))])
             meta = asset.meta
             out.append(AssetStatus(asset.name, kind, path, meta.description, meta.status, meta.style_version, asset.category,
                                    seconds, outputs, errors, warnings, meta.tags, meta.template))  # fmt: skip

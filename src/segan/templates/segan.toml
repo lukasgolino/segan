@@ -41,6 +41,7 @@ declick = true            # micro-fades at note edges; false = raw chip edges (c
 limiter = -1.0            # true-peak ceiling, dBFS
 brightness = 0.0          # tilt EQ, dB: + brighter, - darker
 warmth = 0.0              # low-mid body, dB
+tail_trim_db = -70.0      # the room tail is cut this far below the peak (-40 = shorter SFX files)
 
 # Loudness targets in LUFS, per category. `segan build` normalises every asset to its target.
 # Songs use integrated loudness; SFX the loudest 400 ms. Any SFX category not listed uses `sfx`.
@@ -49,6 +50,11 @@ music = -16.0
 sfx = -14.0
 ui = -20.0
 foley = -22.0             # footsteps, cloth, small handling sounds: frequent, so quieter
+
+# Room send per category (0-1, x mix.room; unlisted categories get 1). 0 = dry, no tail: short, frequent
+# sounds hold engine voices for their file length. An SFX's own `room:` overrides its category.
+[room]
+# ui = 0
 
 # Only with export "godot".
 [godot]

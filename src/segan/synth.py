@@ -259,7 +259,7 @@ def _tone(inst: Instrument, ctx: Context, n: int, n_gate: int, t: Signal, semis:
         cents = inst.detune * ((2.0 * k / (voices - 1) - 1.0) if voices > 1 else 1.0)
         freq = ctx.tuning * exp2((semis + cents / 100.0 - 69.0) / 12.0)
         inc = freq / rate
-        start = k / voices
+        start = 0.25 * k / voices  # spread under a quarter turn: k / voices cancels the fundamental (2 voices)
         if inst.wave == "fm":
             fm = inst.fm
             ratio, index = (fm.ratio, fm.index) if fm else (2.0, 1.0)

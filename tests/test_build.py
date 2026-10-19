@@ -121,3 +121,21 @@ def test_tres_text() -> None:
         'stream_0/stream = ExtResource("1_a_1")\nstream_1/stream = ExtResource("2_a_2")\n'
     )
     assert 'stream_1/volume = 0.0' in synchronized_tres(["res://x.wav", "res://y.wav"])
+
+
+def test_stems_only_and_variations_only(tmp_path: Path) -> None:
+    from test_song import GROUPED
+
+    project = make_project(tmp_path)
+    write(project, "song", "tune", GROUPED.replace("mixes:", "main_mix: false\n  mixes:"))
+    write(project, "sfx", "coin", "name: coin\npreset: coin\nvariations: { count: 2, seed: 1, pitch: 1, include_main: false }\n")
+    result = build(load_project(tmp_path))
+    assert not result.errors, result.errors
+    manifest = json.loads((tmp_path / "build" / "audio" / "manifest.json").read_text())
+    coin, tune = manifest["assets"]["coin"], manifest["assets"]["tune"]
+    assert "file" not in coin and len(coin["variations"]) == 2
+    assert "file" not in tune and tune["loop"]["end"] == tune["samples"]
+    assert tune["stems"]["base"]["tracks"] == ["bass", "drums"] and tune["stems"]["base"]["file"] == "stems/tune/base.wav"
+    assert tune["stem_mixes"]["calm"]["stems"] == ["base"] and tune["stems_normalised_over"] == "full"
+    assert "sfx/coin.wav" not in manifest["files"] and "music/tune.wav" not in manifest["files"]
+    assert not any("mix." in f for f in manifest["files"])

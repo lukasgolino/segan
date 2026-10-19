@@ -73,3 +73,13 @@ def test_harmonic_aliasing_metric_sees_naive_aliasing() -> None:
     t = np.arange(rate) / rate
     naive = 2 * ((t * f0) % 1.0) - 1  # a naive saw aliases badly
     assert harmonic_aliasing_db(naive, rate, f0) > -30
+
+
+@pytest.mark.parametrize("wave", ["sine", "fm", "saw"])
+def test_unison_starts_at_full_level(wave: str) -> None:
+    """Two detuned voices must not start in antiphase (they'd swell in over 1 / (2 * beat))."""
+    one = Instrument(wave=wave, env=STEADY)
+    two = Instrument(wave=wave, env=STEADY, unison=2, detune=5.0)
+    ctx = Context()
+    a, b = (render_note(i, ctx, 84, 0.5, length=0.5)[: ctx.rate // 50] for i in (one, two))
+    assert peak_db(b) > peak_db(a) - 3.0

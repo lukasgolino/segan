@@ -136,7 +136,10 @@
             "start": 70560
           },
           "samples": 635040,
-          "seconds": 14.4
+          "seconds": 14.4,
+          "tracks": [
+            "arp"
+          ]
         },
         "bass": {
           "channels": 2,
@@ -146,7 +149,10 @@
             "start": 70560
           },
           "samples": 635040,
-          "seconds": 14.4
+          "seconds": 14.4,
+          "tracks": [
+            "bass"
+          ]
         },
         "drums": {
           "channels": 2,
@@ -156,7 +162,10 @@
             "start": 70560
           },
           "samples": 635040,
-          "seconds": 14.4
+          "seconds": 14.4,
+          "tracks": [
+            "drums"
+          ]
         },
         "lead": {
           "channels": 2,
@@ -166,7 +175,10 @@
             "start": 70560
           },
           "samples": 635040,
-          "seconds": 14.4
+          "seconds": 14.4,
+          "tracks": [
+            "lead"
+          ]
         }
       },
       "steps_per_beat": 4,
@@ -495,7 +507,10 @@
             "start": 264600
           },
           "samples": 970200,
-          "seconds": 22.0
+          "seconds": 22.0,
+          "tracks": [
+            "bass"
+          ]
         },
         "drums": {
           "channels": 2,
@@ -505,7 +520,10 @@
             "start": 264600
           },
           "samples": 970200,
-          "seconds": 22.0
+          "seconds": 22.0,
+          "tracks": [
+            "drums"
+          ]
         },
         "harmony": {
           "channels": 2,
@@ -515,7 +533,10 @@
             "start": 264600
           },
           "samples": 970200,
-          "seconds": 22.0
+          "seconds": 22.0,
+          "tracks": [
+            "harmony"
+          ]
         },
         "lead": {
           "channels": 2,
@@ -525,7 +546,10 @@
             "start": 264600
           },
           "samples": 970200,
-          "seconds": 22.0
+          "seconds": 22.0,
+          "tracks": [
+            "lead"
+          ]
         }
       },
       "steps_per_beat": 4,
@@ -826,7 +850,10 @@
             "start": 105840
           },
           "samples": 952560,
-          "seconds": 21.6
+          "seconds": 21.6,
+          "tracks": [
+            "bass"
+          ]
         },
         "drums": {
           "channels": 2,
@@ -836,7 +863,10 @@
             "start": 105840
           },
           "samples": 952560,
-          "seconds": 21.6
+          "seconds": 21.6,
+          "tracks": [
+            "drums"
+          ]
         },
         "keys": {
           "channels": 2,
@@ -846,7 +876,10 @@
             "start": 105840
           },
           "samples": 952560,
-          "seconds": 21.6
+          "seconds": 21.6,
+          "tracks": [
+            "keys"
+          ]
         },
         "lead": {
           "channels": 2,
@@ -856,7 +889,10 @@
             "start": 105840
           },
           "samples": 952560,
-          "seconds": 21.6
+          "seconds": 21.6,
+          "tracks": [
+            "lead"
+          ]
         }
       },
       "steps_per_beat": 4,
