@@ -13,7 +13,7 @@ from string import Template
 from typing import Any
 
 from segan import progress
-from segan.buildinfo import version_string
+from segan.buildinfo import is_editable, version_string
 from segan.findings import Finding, SeganError, display_path
 from segan.asset import SFX_SUFFIX, SONG_SUFFIX, load_asset_or_raise
 from segan.kit import KIT_SUFFIX, NAME_RE, Kit, load_kit_file
@@ -639,6 +639,132 @@ def cmd_build(args: argparse.Namespace, out: Output) -> int:
     return 0
 
 
+# --- segan status / mark / style bump / mix adjust -------------------------------------------
+
+
+def cmd_status(args: argparse.Namespace, out: Output) -> int:
+    from segan.manage import catalogue
+
+    project = project_for([args.project] if args.project else [])
+    if project.config_path is None:
+        raise usage_error(f"no {CONFIG_NAME} found here or in any parent directory: this isn't a SEGAN project yet "
+                          "(run `segan init <dir>`, or cd into the audio folder)")  # fmt: skip
+    entries = catalogue(project, render=not args.fast)
+    current = project.config.style_version
+    if out.as_json:
+        print(json.dumps({"ok": True, "project": display_path(project.root), "style_version": current, "default_kit": project.config.default_kit,
+                          "kits": project.kit_names(), "segan": version_string(),
+                          "assets": [{"name": e.name, "kind": e.kind, "path": display_path(e.path), "description": e.description, "status": e.status,
+                                      "style_version": e.style_version, "category": e.category, "seconds": e.seconds, "outputs": e.outputs,
+                                      "errors": e.errors, "warnings": e.warnings, "tags": list(e.tags), "template": e.template,
+                                      "needs": e.needs(current)} for e in entries]}, indent=2))  # fmt: skip
+        return 0
+    kit = project.config.default_kit or ("open mode" if project.config.mode == "open" else "none")
+    print(f"{display_path(project.root)}: {len(entries)} assets, kit {kit}, style v{current}  [{version_string()}]")
+    if is_editable():
+        print("  note: SEGAN is an editable dev checkout; if this project pins a release, install that instead")
+    for e in entries:
+        length = f"{e.seconds:.2f}s" if e.seconds is not None else "?"
+        flags = ", ".join(e.needs(current)) or "ok"
+        print(f"  {e.name:<20} {e.kind:<5} {e.category:<8} {length:>8}  {e.status:<8} v{e.style_version}  [{flags}]")
+        if e.description:
+            description = e.description.replace("\n", " ")
+            print(f"      {description[:100]}{'...' if len(description) > 100 else ''}")
+    stale = [e for e in entries if e.style_version < current]
+    if stale:
+        print(f"{len(stale)} assets predate style v{current}: see SOUND.md's changelog, update them, then `segan mark --current <asset>`")
+    return 0
+
+
+def cmd_mark(args: argparse.Namespace, out: Output) -> int:
+    from segan.manage import mark, outdated
+
+    project = project_for(args.assets if not args.outdated else [])
+    if args.outdated:
+        paths = outdated(project)
+    else:
+        if not args.assets:
+            raise usage_error("name the assets to mark (or pass --outdated)")
+        paths = [resolve_asset_path(a, project) for a in args.assets]
+    if args.status is None and not args.current:
+        raise usage_error("nothing to do: pass --status approved|draft and/or --current")
+    mark(paths, args.status, project.config.style_version if args.current else None)
+    for path in paths:
+        out.say(f"marked {display_path(path)}")
+    out.result({"marked": [display_path(p) for p in paths]})
+    return 0
+
+
+def cmd_style_bump(args: argparse.Namespace, out: Output) -> int:
+    from segan.manage import bump_style, outdated
+
+    project = require_project()
+    version = bump_style(project, args.note)
+    stale = len(outdated(load_project(project.root)))
+    out.say(f"style is now v{version}; logged in SOUND.md. {stale} assets are flagged for review (lint W006, `segan status`).")
+    out.result({"style_version": version, "outdated": stale})
+    return 0
+
+
+def cmd_mix_adjust(args: argparse.Namespace, out: Output) -> int:
+    from segan.manage import MixAdjustment, adjust_mix
+
+    project = require_project()
+    adjustment = MixAdjustment(args.brightness, args.warmth, args.room, args.crush, args.loudness)
+    if adjustment.is_identity():
+        raise usage_error("nothing to change: pass --brightness, --warmth, --room, --crush and/or --loudness")
+    changes = adjust_mix(project, adjustment, args.dry_run)
+    for key, (old, new) in changes.items():
+        out.say(f"  {key}: {json.dumps(old)} -> {json.dumps(new)}")
+    if not changes:
+        out.say("nothing changed (already at the limits?)")
+    elif args.dry_run:
+        out.say(f"dry run: {len(changes)} settings would change")
+    else:
+        out.say(f"saved in {CONFIG_NAME}: every song and SFX re-renders with this on the next `segan build` / `segan preview`; "
+                "check with `segan gallery`, and log it in BRIEF.md's feedback log.")  # fmt: skip
+    out.result({"changes": {k: {"from": a, "to": b} for k, (a, b) in changes.items()}, "written": bool(changes) and not args.dry_run})
+    return 0
+
+
+# --- segan mcp / skill install ----------------------------------------------------------------
+
+
+def cmd_mcp(args: argparse.Namespace, out: Output) -> int:
+    try:
+        from segan.mcp_server import serve
+    except ImportError:
+        raise usage_error('the MCP server needs the "mcp" extra: pip install "segan[mcp]"') from None
+    return serve(args.project, args.allow_godot)
+
+
+SKILL_FILES = ("SKILL.md", "reference.md")
+
+
+def _git_root(start: Path) -> Path | None:
+    for directory in (start.resolve(), *start.resolve().parents):
+        if (directory / ".git").exists():
+            return directory
+    return None
+
+
+def cmd_skill_install(args: argparse.Namespace, out: Output) -> int:
+    base = Path(args.dir) if args.dir else (_git_root(Path.cwd()) or Path.cwd())
+    target = base / ".claude" / "skills" / "segan"
+    target.mkdir(parents=True, exist_ok=True)
+    written: list[str] = []
+    for name in SKILL_FILES:
+        text = files("segan").joinpath("skill", name).read_text(encoding="utf-8")
+        path = target / name
+        if path.exists() and path.read_text(encoding="utf-8") == text:
+            continue
+        path.write_text(text, encoding="utf-8")
+        written.append(display_path(path))
+    out.say(f"SEGAN skill {'installed' if written else 'already up to date'} in {display_path(target)}")
+    out.result({"skill_dir": display_path(target), "written": written})
+    return 0
+
+
 # --- segan config -----------------------------------------------------------------------------
 
 
@@ -773,6 +899,46 @@ def build_parser() -> argparse.ArgumentParser:
     build_cmd.add_argument("project", nargs="?", help="project directory (default: the one containing the cwd)")
     build_cmd.add_argument("--verify-godot", action="store_true", help="load and play every generated stream in headless Godot")
     build_cmd.set_defaults(handler=cmd_build)
+
+    status = commands.add_parser("status", parents=[common], help="catalogue of every song and SFX and what needs attention")
+    status.add_argument("project", nargs="?", help="project directory (default: the one containing the cwd)")
+    status.add_argument("--fast", action="store_true", help="don't render (no lengths, no audio warnings)")
+    status.set_defaults(handler=cmd_status)
+
+    mark_cmd = commands.add_parser("mark", parents=[common], help="set assets' status and/or stamp the current style version")
+    mark_cmd.add_argument("assets", nargs="*", help="asset files or names")
+    mark_cmd.add_argument("--status", choices=["draft", "approved"], help="set status (approved = a human listened and agreed)")
+    mark_cmd.add_argument("--current", action="store_true", help="set style_version to the project's current one")
+    mark_cmd.add_argument("--outdated", action="store_true", help="apply to every asset made under an older style")
+    mark_cmd.set_defaults(handler=cmd_mark)
+
+    style = commands.add_parser("style", help="sound style versioning")
+    style_cmds = style.add_subparsers(title="style commands", metavar="<command>")
+    bump_cmd = style_cmds.add_parser("bump", parents=[common], help="record a style change; flags older assets for review")
+    bump_cmd.add_argument("note", help='what changed, e.g. "drums punchier: kick decay 0.2 -> 0.3"')
+    bump_cmd.set_defaults(handler=cmd_style_bump)
+
+    mix = commands.add_parser("mix", help="the shared mix ([mix] in segan.toml)")
+    mix_cmds = mix.add_subparsers(title="mix commands", metavar="<command>")
+    adjust = mix_cmds.add_parser("adjust", parents=[common], help="change the whole project's sound at once (relative changes)")
+    adjust.add_argument("--brightness", type=float, default=0.0, help="dB of tilt to add: + brighter, - darker (e.g. 2)")
+    adjust.add_argument("--warmth", type=float, default=0.0, help="dB of low-mid body to add (e.g. 2 warmer, -2 thinner)")
+    adjust.add_argument("--room", type=float, default=0.0, help="reverb amount to add (e.g. 0.1 wetter, -0.1 drier)")
+    adjust.add_argument("--crush", type=int, help="bit depth for a lo-fi sound (e.g. 8); 0 turns crushing off")
+    adjust.add_argument("--loudness", type=float, default=0.0, help="LU to add to every loudness target (e.g. -2 quieter)")
+    adjust.add_argument("--dry-run", action="store_true", help="show the changes without writing")
+    adjust.set_defaults(handler=cmd_mix_adjust)
+
+    mcp_cmd = commands.add_parser("mcp", help="run SEGAN as an MCP server over stdio (needs segan[mcp])")
+    mcp_cmd.add_argument("--project", help="SEGAN project directory (default: the one containing the cwd)")
+    mcp_cmd.add_argument("--allow-godot", action="store_true", help="let the build tool run a Godot binary (verify_godot)")
+    mcp_cmd.set_defaults(handler=cmd_mcp)
+
+    skill = commands.add_parser("skill", help="the Claude skill that teaches agents to use SEGAN")
+    skill_cmds = skill.add_subparsers(title="skill commands", metavar="<command>")
+    skill_install = skill_cmds.add_parser("install", parents=[common], help="install into <repo>/.claude/skills/segan/")
+    skill_install.add_argument("dir", nargs="?", help="repo root (default: the git root containing the cwd)")
+    skill_install.set_defaults(handler=cmd_skill_install)
 
     kit = commands.add_parser("kit", help="kit tools")
     kit_cmds = kit.add_subparsers(title="kit commands", metavar="<command>")

@@ -42,6 +42,8 @@ generated text files.
     `sequence.py` timeline + note events; `songrender.py` song rendering (loop offset, stems); `songlint.py` source warnings;
   - `render.py` outputs + render cache (`.segan-cache/renders/`); `preview.py` / `songpreview.py` listen sheets + analysis;
   - `lint.py` lint (errors from parsing, warnings from source and rendered audio); `yamlwrite.py` YAML writer;
+  - `manage.py` long-term management: catalogue (`segan status`), `mark`, `style bump`, `mix adjust` (text edits keep comments);
+  - `mcp_server.py` `segan mcp`: MCP tools/resources/prompts over the CLI handlers (stdout captured, cwd pinned, one lock);
   - `build.py` `segan build` (WAVs, manifest.json, stale cleanup); `exporters/godot.py` `.import` edits, Randomizer /
     Synchronized `.tres`, headless verify (`templates/godot_verify.gd`).
 - `examples/godot/` — Godot 4.7 project receiving the demo's build; `scenes/audio_test.tscn` plays everything.

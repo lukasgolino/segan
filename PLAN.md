@@ -482,7 +482,7 @@ Loudness normalisation + limiter, stems, manifest, stale cleanup, the Godot expo
 headless verify, CI godot job. **Done when:** the Godot demo scene plays everything, loops are seamless in-engine,
 and the randomizer cycles variations.
 
-### Milestone 5 — Long-term management
+### ☑ Milestone 5 — Long-term management
 `status`, `mark`, `style bump`, `config` registry, `mix adjust`, BRIEF.md/SOUND.md templates, render cache.
 **Done when:** `config set mix.room 0.3` + build re-renders everything, and `style bump` flags all assets.
 
