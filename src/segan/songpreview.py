@@ -50,7 +50,8 @@ def song_sheet(song: Song, output: Output, analysis: dict[str, Any], project: Pr
     sections = [Block(s.name, timeline.seconds(s.start), timeline.seconds(s.end), f"bars {timeline.bar_of(s.start):g}-{timeline.bar_of(s.end) - 1:g}") for s in timeline.sections]
     patterns = [Block(p.name, timeline.seconds(p.start), timeline.seconds(p.start + p.length)) for s in timeline.sections for p in s.patterns]
     beats = [timeline.seconds(step) for step in range(0, timeline.total + 1, timeline.steps_per_beat)]
-    bars = [(timeline.seconds(step), step // timeline.steps_per_bar + 1) for step in range(0, timeline.total + 1, timeline.steps_per_bar)]
+    file_steps = math.ceil(output.seconds / timeline.step_seconds)
+    bars = [(timeline.seconds(step), step // timeline.steps_per_bar + 1) for step in range(0, file_steps + 1, timeline.steps_per_bar)]
     tempo = variant.tempo if variant is not None and variant.tempo else song.tempo
     key = variant.key.describe() if variant is not None and variant.key else song.key.describe()
     stats = [("tempo", f"{tempo:g} bpm", TEXT), ("key", key, TEXT), ("meter", f"{song.meter[0]}/{song.meter[1]}", TEXT),
@@ -58,14 +59,17 @@ def song_sheet(song: Song, output: Output, analysis: dict[str, Any], project: Pr
     title = f"song {output.stem}" + (f"  - {song.meta.description}" if song.meta.description else "")
     notes = []
     if timeline.loop is not None:
-        notes.append(f"loops from section {song.loop!r} (bar {timeline.bar_of(timeline.loop[0]):g}) to the end; yellow lines = loop points")
+        offset_bars = (output.info.get("loop_offset", 0) / output.rate) / (timeline.steps_per_bar * timeline.step_seconds)
+        notes.append(f"loop = section {song.loop!r} (bar {timeline.bar_of(timeline.loop[0]):g}) to the end, played from {offset_bars:g} bar(s) later "
+                     f"(bars {timeline.bar_of(timeline.loop[0]) + offset_bars:g}-{timeline.bar_of(timeline.total) + offset_bars:g}) so its own tail rings "
+                     "into its start; yellow lines = the loop points in the file")
     if variant is not None:
         notes.append(f"variant {variant.name}: piano roll shows the notes as played (* = off the song's key)")
     checks = analysis.get("pitch_check", {})
     off = [f"{t}: {len(c['off'])} off" for t, c in checks.items() if c.get("off")]
     if checks:
-        notes.append("pitch check (stems vs. written notes): " + (", ".join(off) if off else "every checked note within 50 cents"))
-    loop = (timeline.seconds(timeline.loop[0]), timeline.seconds(timeline.loop[1])) if timeline.loop else None
+        notes.append(f"pitch check (one-note-at-a-time tracks: {', '.join(checks)}): " + (", ".join(off) if off else "every checked note within 50 cents"))
+    loop = (output.loop[0] / output.rate, output.loop[1] / output.rate) if output.loop else None
     markers = [(name, timeline.seconds(step)) for name, step in timeline.markers.items()]
     return SheetSpec(title[:150], stats, output.audio, output.rate, beats=beats, bars=bars, blocks=sections, sub_blocks=patterns,
                      tracks=roll_tracks(song, timeline, variant), loop=loop, markers=markers, loudness_curve=True, notes=notes)  # fmt: skip

@@ -1,5 +1,5 @@
 name: hurt
-description: "Preset hurt, as is."
+description: "Player takes damage: a gritty square falling a fifth with a fast wobble."
 preset: hurt
 status: draft
 style_version: 1

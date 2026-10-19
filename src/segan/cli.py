@@ -318,6 +318,7 @@ def _song_scaffold(name: str, description: str, kit_line: str, kit: Kit | None, 
     melodic = [k for k, i in (kit.instruments.items() if kit else []) if not i.is_drum]
     drums = [k for k, i in (kit.instruments.items() if kit else []) if i.is_drum][:3] or ["k", "s", "h"]
     lead = melodic[0] if melodic else "p"
+    keys_line = ", ".join(f"{k}={i.name or i.describe()}" for k, i in kit.instruments.items()) if kit else "see the kit"
     root = key.root
     lead_low = 60 + root if 60 + root <= 64 else 48 + root + 12
     bass_low = 36 + root if 36 + root <= 40 else 24 + root + 12
@@ -344,7 +345,7 @@ tags: []
 # lint checks them (E011), so a missing or extra row can't shift the grid.
 # Roll cells: a kit key starts a note, - holds it, . rests. Drum cells: x hit, X accent, o ghost.
 tracks:
-  lead:  {{ roll: [{key.name(lead_low)}, {key.name(lead_low + 12)}] }}      # play it with key {lead!r}
+  lead:  {{ roll: [{key.name(lead_low)}, {key.name(lead_low + 12)}] }}      # kit keys: {keys_line}
   bass:  {{ roll: [{key.name(bass_low)}, {key.name(bass_low + 12)}] }}
   drums: {{ drums: [{', '.join(drums)}] }}
 
@@ -374,7 +375,8 @@ style_version: {style}
 tags: []
 # Override any preset field here, e.g. a different length:
 # duration: 0.5
-# Change one preset layer by its id (only the fields you give change):
+# The preset's layers (ids): {', '.join(f"{layer.get('id')} ({layer.get('osc') or 'drum ' + str(layer.get('drum'))})" for layer in preset_data(preset).get('layers', []))}
+# Change one by its id (only the fields you give change), add new ones, or drop some with `remove: [id, ...]`:
 # layers:
 #   - {{ id: {next((layer.get('id') for layer in preset_data(preset).get('layers', []) if layer.get('id')), 'tone')}, gain: -9 }}
 """
@@ -644,6 +646,10 @@ def cmd_build(args: argparse.Namespace, out: Output) -> int:
 # --- segan status / mark / style bump / mix adjust -------------------------------------------
 
 
+def missing_docs(project: Project) -> list[str]:
+    return [doc for doc in ("BRIEF.md", "SOUND.md") if not (project.root / doc).is_file()]
+
+
 def cmd_status(args: argparse.Namespace, out: Output) -> int:
     from segan.manage import catalogue
 
@@ -654,15 +660,31 @@ def cmd_status(args: argparse.Namespace, out: Output) -> int:
     entries = catalogue(project, render=not args.fast)
     current = project.config.style_version
     if out.as_json:
+        kits: dict[str, Any] = {}
+        for name in project.kit_names():
+            try:
+                kits[name] = {k: i.name or i.describe() for k, i in project.load_kit(name).instruments.items()}
+            except SeganError:
+                kits[name] = None
         print(json.dumps({"ok": True, "project": display_path(project.root), "style_version": current, "default_kit": project.config.default_kit,
-                          "kits": project.kit_names(), "segan": version_string(),
+                          "kits": kits, "missing_docs": missing_docs(project), "segan": version_string(),
                           "assets": [{"name": e.name, "kind": e.kind, "path": display_path(e.path), "description": e.description, "status": e.status,
                                       "style_version": e.style_version, "category": e.category, "seconds": e.seconds, "outputs": e.outputs,
                                       "errors": e.errors, "warnings": e.warnings, "tags": list(e.tags), "template": e.template,
                                       "needs": e.needs(current)} for e in entries]}, indent=2))  # fmt: skip
         return 0
     kit = project.config.default_kit or ("open mode" if project.config.mode == "open" else "none")
-    print(f"{display_path(project.root)}: {len(entries)} assets, kit {kit}, style v{current}  [{version_string()}]")
+    print(f"{display_path(project.root)}: {len(entries)} assets, default kit {kit}, style v{current}  [{version_string()}]")
+    for name in project.kit_names():
+        try:
+            loaded = project.load_kit(name)
+        except SeganError:
+            print(f"  kit {name}: has errors (`segan lint kits/`)")
+            continue
+        listing = ", ".join(f"{k}={i.name or i.describe()}" for k, i in loaded.instruments.items())
+        print(f"  kit {name}: {listing}")
+    for doc in missing_docs(project):
+        print(f"  missing {doc}: write one (`segan init` templates: what the game needs / how it must sound) and ask the owner to fill the gaps")
     if is_editable():
         print("  note: SEGAN is an editable dev checkout; if this project pins a release, install that instead")
     for e in entries:

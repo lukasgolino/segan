@@ -1,5 +1,5 @@
 name: step
-description: "Preset step, as is."
+description: "Footstep on stone: a short filtered tap, four variations so repeats don't sound robotic."
 preset: step
 status: draft
 style_version: 1

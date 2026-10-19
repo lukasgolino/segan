@@ -486,11 +486,14 @@ and the randomizer cycles variations.
 `status`, `mark`, `style bump`, `config` registry, `mix adjust`, BRIEF.md/SOUND.md templates, render cache.
 **Done when:** `config set mix.room 0.3` + build re-renders everything, and `style bump` flags all assets.
 
-### Milestone 6 — Skill + MCP + API
+### ☑ Milestone 6 — Skill + MCP + API
 The `segan` skill (workflow + `reference.md`) built from what actually happened in M1–M5, including the honest
 "you can't hear: here's what to check in the image and numbers, and humans approve" section; `segan mcp`;
 `segan.api`. **Done when:** a fresh agent given "make a door-creak SFX and a short shop-music loop" in the demo
 project produces lint-clean assets on its own.
+*(Done 2026-10-19: a fresh agent with only the skill made `sfx/door_creak.sfx.yaml` and `music/shop.song.yaml`,
+lint-clean, in 2-3 rounds each; its feedback (loop offset explanation, missing demo docs, kit discovery, pitch-check
+scope, W009 wording, preset layer ids, API example) was folded into the skill, the CLI and the sheets.)*
 
 ### ☑ Milestone 7 — Import
 `import midi` (hand-written SMF parser): quantize to the grid, snap pitches to the key (≈ snap to palette) and

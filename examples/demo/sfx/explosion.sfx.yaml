@@ -1,5 +1,5 @@
 name: explosion
-description: "Preset explosion, as is."
+description: "Big chunky explosion: falling crunch noise through a closing filter over a deep thump."
 preset: explosion
 status: draft
 style_version: 1

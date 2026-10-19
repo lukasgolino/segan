@@ -1,5 +1,5 @@
 name: blip
-description: "Preset blip, as is."
+description: "Menu cursor move: a tiny soft square tick."
 preset: blip
 status: draft
 style_version: 1

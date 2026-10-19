@@ -1,5 +1,5 @@
 name: door
-description: "Preset door, as is."
+description: "Wooden door opened and shut: latch click, hinge creak, thud."
 preset: door
 status: draft
 style_version: 1

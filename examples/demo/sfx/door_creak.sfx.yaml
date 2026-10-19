@@ -1,0 +1,33 @@
+name: door_creak
+description: "Slow, eerie wooden door creaking open, about one second: latch click, then a wavering stick-slip creak rising and sagging, no slam."
+preset: door             # starting point; `segan bake sfx door_creak --in-place` writes out every field to tune
+category: sfx
+status: draft
+style_version: 1
+tags: [door, foley, horror]
+duration: 1.1
+layers:
+  - { id: latch, gain: -12 }
+  - id: creak
+    start: 0
+    pitch: [[0, C3], [0.25, E3], [0.5, D#3], [0.75, G3], [0.95, F#3]]
+    slide: true
+    vibrato: [7, 0.35]
+    tremolo: [23, 0.7]             # stick-slip grain
+    filter: { type: bp, cutoff: 1100, resonance: 0.7 }
+    env: [0.01, 0.15, 0.75, 0.12]
+    length: 0.92
+    gain: [[0, -13], [0.3, -8], [0.5, -12], [0.8, -7], [0.92, -12]]   # uneven swells: the door catches and gives
+  - id: groan                       # higher, thinner partial: the eerie part
+    osc: pulse
+    duty: 0.15
+    start: 0.08
+    pitch: [[0, G4], [0.3, B4], [0.55, A#4], [0.8, D5]]
+    slide: true
+    vibrato: [5, 0.2]
+    tremolo: [17, 0.5]
+    filter: { type: bp, cutoff: 1800, resonance: 0.5 }
+    env: [0.15, 0.2, 0.6, 0.15]
+    length: 0.8
+    gain: -20
+remove: [thud]

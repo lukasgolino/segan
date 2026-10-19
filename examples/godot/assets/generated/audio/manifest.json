@@ -3,7 +3,7 @@
     "blip": {
       "category": "ui",
       "channels": 1,
-      "description": "Preset blip, as is.",
+      "description": "Menu cursor move: a tiny soft square tick.",
       "file": "res://assets/generated/audio/sfx/blip.wav",
       "kind": "sfx",
       "limiting_db": 0.0,
@@ -20,7 +20,7 @@
     "coin": {
       "category": "pickup",
       "channels": 1,
-      "description": "Preset coin, as is.",
+      "description": "Bright two-note pickup chime for coins: a square blip stepping up a fourth, short, no tail.",
       "file": "res://assets/generated/audio/sfx/coin.wav",
       "kind": "sfx",
       "limiting_db": 0.0,
@@ -273,7 +273,7 @@
     "door": {
       "category": "sfx",
       "channels": 1,
-      "description": "Preset door, as is.",
+      "description": "Wooden door opened and shut: latch click, hinge creak, thud.",
       "file": "res://assets/generated/audio/sfx/door.wav",
       "kind": "sfx",
       "limiting_db": 1.91,
@@ -287,10 +287,31 @@
       "tags": [],
       "target_lufs": -14.0
     },
+    "door_creak": {
+      "category": "sfx",
+      "channels": 1,
+      "description": "Slow, eerie wooden door creaking open, about one second: latch click, then a wavering stick-slip creak rising and sagging, no slam.",
+      "file": "res://assets/generated/audio/sfx/door_creak.wav",
+      "kind": "sfx",
+      "limiting_db": 0.88,
+      "loop": null,
+      "lufs": -14.07,
+      "sample_rate": 44100,
+      "samples": 59924,
+      "seconds": 1.358821,
+      "status": "draft",
+      "style_version": 1,
+      "tags": [
+        "door",
+        "foley",
+        "horror"
+      ],
+      "target_lufs": -14.0
+    },
     "explosion": {
       "category": "sfx",
       "channels": 1,
-      "description": "Preset explosion, as is.",
+      "description": "Big chunky explosion: falling crunch noise through a closing filter over a deep thump.",
       "file": "res://assets/generated/audio/sfx/explosion.wav",
       "kind": "sfx",
       "limiting_db": 0.27,
@@ -307,7 +328,7 @@
     "hit": {
       "category": "sfx",
       "channels": 1,
-      "description": "Preset hit, as is.",
+      "description": "Melee impact on an enemy: noise crack, falling low knock and a short body.",
       "file": "res://assets/generated/audio/sfx/hit.wav",
       "kind": "sfx",
       "limiting_db": 1.92,
@@ -324,7 +345,7 @@
     "hurt": {
       "category": "sfx",
       "channels": 1,
-      "description": "Preset hurt, as is.",
+      "description": "Player takes damage: a gritty square falling a fifth with a fast wobble.",
       "file": "res://assets/generated/audio/sfx/hurt.wav",
       "kind": "sfx",
       "limiting_db": 0.0,
@@ -341,7 +362,7 @@
     "jump": {
       "category": "sfx",
       "channels": 1,
-      "description": "Preset jump, as is.",
+      "description": "Platformer jump: a quick square sweep upwards, springy and short.",
       "file": "res://assets/generated/audio/sfx/jump.wav",
       "kind": "sfx",
       "limiting_db": 1.13,
@@ -358,7 +379,7 @@
     "laser": {
       "category": "sfx",
       "channels": 1,
-      "description": "Preset laser, as is.",
+      "description": "Retro blaster shot: a bright square diving two octaves with a fizzy top.",
       "file": "res://assets/generated/audio/sfx/laser.wav",
       "kind": "sfx",
       "limiting_db": 0.0,
@@ -701,7 +722,7 @@
     "powerup": {
       "category": "pickup",
       "channels": 1,
-      "description": "Preset powerup, as is.",
+      "description": "Power-up collected: a fast major arpeggio climbing an octave with a sparkle.",
       "file": "res://assets/generated/audio/sfx/powerup.wav",
       "kind": "sfx",
       "limiting_db": 0.0,
@@ -718,7 +739,7 @@
     "select": {
       "category": "ui",
       "channels": 1,
-      "description": "Preset select, as is.",
+      "description": "Menu confirm: two quick rising triangle notes a fifth apart.",
       "file": "res://assets/generated/audio/sfx/select.wav",
       "kind": "sfx",
       "limiting_db": 0.0,
@@ -732,10 +753,125 @@
       "tags": [],
       "target_lufs": -20.0
     },
+    "shop": {
+      "arrangement": [
+        {
+          "end": 846720,
+          "end_bar": 9.0,
+          "end_seconds": 19.2,
+          "patterns": [
+            "a",
+            "b",
+            "a",
+            "c"
+          ],
+          "section": "main",
+          "start": 0,
+          "start_bar": 1.0,
+          "start_seconds": 0.0
+        }
+      ],
+      "bars": 8.0,
+      "beat_count": 32,
+      "beat_seconds": 0.6,
+      "bpm": 100.0,
+      "category": "music",
+      "channels": 2,
+      "description": "Cosy item-shop loop: F major, 100 bpm, soft FM electric piano and flute over round FM bass and brushed drums; 8 bars, loops seamlessly.",
+      "file": "res://assets/generated/audio/music/shop.wav",
+      "godot_stems": "res://assets/generated/audio/stems/shop.tres",
+      "key": "F major",
+      "kind": "song",
+      "limiting_db": 0.0,
+      "loop": {
+        "end": 952560,
+        "end_seconds": 21.6,
+        "offset": 105840,
+        "section": "main",
+        "start": 105840,
+        "start_seconds": 2.4
+      },
+      "lufs": -16.0,
+      "markers": {},
+      "meter": [
+        4,
+        4
+      ],
+      "sample_rate": 44100,
+      "samples": 952560,
+      "seconds": 21.6,
+      "sections": {
+        "main": {
+          "end": 846720,
+          "end_bar": 9.0,
+          "end_seconds": 19.2,
+          "patterns": [
+            "a",
+            "b",
+            "a",
+            "c"
+          ],
+          "start": 0,
+          "start_bar": 1.0,
+          "start_seconds": 0.0
+        }
+      },
+      "status": "draft",
+      "stems": {
+        "bass": {
+          "channels": 2,
+          "file": "res://assets/generated/audio/stems/shop/bass.wav",
+          "loop": {
+            "end": 952560,
+            "start": 105840
+          },
+          "samples": 952560,
+          "seconds": 21.6
+        },
+        "drums": {
+          "channels": 2,
+          "file": "res://assets/generated/audio/stems/shop/drums.wav",
+          "loop": {
+            "end": 952560,
+            "start": 105840
+          },
+          "samples": 952560,
+          "seconds": 21.6
+        },
+        "keys": {
+          "channels": 2,
+          "file": "res://assets/generated/audio/stems/shop/keys.wav",
+          "loop": {
+            "end": 952560,
+            "start": 105840
+          },
+          "samples": 952560,
+          "seconds": 21.6
+        },
+        "lead": {
+          "channels": 2,
+          "file": "res://assets/generated/audio/stems/shop/lead.wav",
+          "loop": {
+            "end": 952560,
+            "start": 105840
+          },
+          "samples": 952560,
+          "seconds": 21.6
+        }
+      },
+      "steps_per_beat": 4,
+      "style_version": 1,
+      "tags": [
+        "music",
+        "shop",
+        "loop"
+      ],
+      "target_lufs": -16.0
+    },
     "step": {
       "category": "foley",
       "channels": 1,
-      "description": "Preset step, as is.",
+      "description": "Footstep on stone: a short filtered tap, four variations so repeats don't sound robotic.",
       "file": "res://assets/generated/audio/sfx/step.wav",
       "godot_randomizer": "res://assets/generated/audio/sfx/step.tres",
       "kind": "sfx",
@@ -791,9 +927,11 @@
     "music/overworld.calm.wav",
     "music/overworld.danger.wav",
     "music/overworld.wav",
+    "music/shop.wav",
     "sfx/blip.wav",
     "sfx/coin.wav",
     "sfx/door.wav",
+    "sfx/door_creak.wav",
     "sfx/explosion.wav",
     "sfx/hit.wav",
     "sfx/hurt.wav",
@@ -816,7 +954,12 @@
     "stems/overworld/bass.wav",
     "stems/overworld/drums.wav",
     "stems/overworld/harmony.wav",
-    "stems/overworld/lead.wav"
+    "stems/overworld/lead.wav",
+    "stems/shop.tres",
+    "stems/shop/bass.wav",
+    "stems/shop/drums.wav",
+    "stems/shop/keys.wav",
+    "stems/shop/lead.wav"
   ],
   "generator": "segan 0.0.0",
   "note": "Generated by `segan build`. Do not edit: change the sources and rebuild. Loop ends and section ends are exclusive sample indices."

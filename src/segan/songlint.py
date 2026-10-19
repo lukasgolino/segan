@@ -56,6 +56,6 @@ def _clashes(song: Song) -> list[Finding]:
                         hits.append(f"step {step + 1} {a.track}/{b.track} {CLASHES[interval]} ({song.key.name(ma)}-{song.key.name(mb)})")
         if hits:
             more = f" and {len(hits) - 3} more" if len(hits) > 3 else ""
-            out.append(Finding("W009", f"pattern {pattern.name!r}: tracks clash on the beat: {'; '.join(hits[:3])}{more}. Often intended (tension); "
-                               "if not, move one note a step", song.path, pattern.line, f"patterns.{pattern.name}"))  # fmt: skip
+            out.append(Finding("W009", f"pattern {pattern.name!r}: tracks clash on the beat: {'; '.join(hits[:3])}{more}. Notes held from earlier count; the beats are steps 1, 1+steps_per_beat, ... "
+                               "Often intended (a V7 chord's tritone, tension): then `lint: { disable: [W009] }`; if not, move or shorten one note", song.path, pattern.line, f"patterns.{pattern.name}"))  # fmt: skip
     return out

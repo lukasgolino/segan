@@ -26,7 +26,10 @@ You will never hear what you make. SEGAN gives you two substitutes, and you must
    - LUFS curve (songs): loudness over time; the green line is the target.
 2. **The numbers** (`segan preview --json`): `lufs` vs. `target_lufs`, `true_peak_dbtp`, `leading_silence_ms`,
    `seam_click`, `onsets_s` (when each hit starts), `pitch_hz` (SFX start/end/min/max), `pitch_check` (songs:
-   every note's detected pitch vs. the written one, in cents), `centroid_hz` (brightness), `clipped_samples`.
+   every note's detected pitch vs. the written one, in cents; only tracks that play one note at a time),
+   `notes_per_pattern` (songs: compare with what you meant to write; a dropped note shows here first),
+   `centroid_hz` (brightness), `clipped_samples`, `normalisation_gain_db` (how much the build had to raise or
+   lower it: large values are fine, the level is set by the target either way).
 
 What the sheet and numbers **can** show: timing, rhythm, pitch and pitch movement, envelope shape, noise vs.
 tone, loudness, clicks, aliasing, silence, a wrong row. What they **cannot** show: whether a melody is good,
@@ -50,7 +53,9 @@ whether a sound is pleasant or fits the game, whether the mix balance feels righ
    - `segan.toml` - default kit, the shared `[mix]` (room, crush, oversample...), `[loudness]` targets, output dir
    - `kits/`, `music/`, `sfx/` - the sources; every asset has a `description`
 3. **Always read BRIEF.md and SOUND.md and run `segan status` before making or changing anything.** They are
-   your memory between sessions.
+   your memory between sessions. `segan status` also lists every kit with its instrument keys and names, and says
+   when BRIEF.md or SOUND.md is missing: then write short ones (what the game needs; which kit and instrument
+   does what, keys and tempos per mood, loudness) from what you know, and list your assumptions for the owner.
 4. No `segan.toml` yet -> first-time setup (section 2).
 
 **SEGAN as MCP tools:** if you have SEGAN tools (`status`, `write_asset`, `preview`...), use them instead of
@@ -78,6 +83,9 @@ mood, loudness). Log the owner's answers in BRIEF.md's feedback log.
 
 ## 3. Kits (the palette)
 
+Pick the kit per song from SOUND.md (e.g. a soft kit for shops, a punchy one for combat); `segan new song`
+uses `default_kit` unless you pass `--kit`.
+
 A kit maps one-character keys to instruments; songs write those keys in their grids, so every song made with
 a kit sounds like the same game. Keep kits small (6-10 instruments) and give each a job: one or two leads, a
 bass, maybe a pad or arpeggio, 3-5 drums.
@@ -93,8 +101,9 @@ bass, maybe a pad or arpeggio, 3-5 drums.
 
 1. Start from the closest **preset**: `segan new sfx <name> --preset <coin|jump|laser|explosion|hit|hurt|powerup|blip|select|door|step> --description "..."`
    (no preset fits: `segan new sfx <name>` gives a one-layer starter). Presets are good starting points;
-   change one preset layer by its `id` (only the fields you give change), add layers, or `segan bake sfx <name>
-   --in-place` to write every field out and edit freely.
+   change one preset layer by its `id` (only the fields you give change; the scaffold lists the preset's layer
+   ids), add layers, drop layers with `remove: [id]`, or `segan bake sfx <name> --in-place` to write every field
+   out and edit freely.
 2. Think in layers: a **body** (pitched tone: pulse/saw/triangle/sine/fm) + a **transient** (short noise
    burst for the attack) + sometimes a **tail** or **sub** (low drum/sine thump). Recipes:
    | Sound | Recipe |
@@ -117,9 +126,12 @@ bass, maybe a pad or arpeggio, 3-5 drums.
      `length`/release.
    - Sounds that repeat a lot (steps, shots, hits) get `variations: { count: 4, pitch: 1, timbre: 0.3 }`;
      Godot gets an AudioStreamRandomizer that cycles them.
+   - The file is `duration` plus the shared room's tail (the sheet shows "1.10s + 0.26s room tail").
    - `category` picks the loudness target: `sfx` -14, `ui` -20, `foley` -22 LUFS (segan.toml `[loudness]`).
      A sound too short and spiky to reach its target gets W001: give it more body or a quieter category.
-4. `segan lint <file>` -> fix errors; `segan preview <name>` -> **open the listen sheet** and check: the pitch
+4. `segan lint <file>` -> fix every error and every warning that's a real problem (a warning you keep on
+   purpose goes in the file's `lint: { disable: [...] }` with a comment why); hand over with a clean lint.
+   `segan preview <name>` -> **open the listen sheet** and check: the pitch
    movement you wanted (white lines, cyan dots), the attack is instant, the tail decays smoothly, LUFS on
    target, nothing red. Iterate (about 4 rounds at most), then hand the WAV to a human.
 
@@ -143,10 +155,18 @@ bass, maybe a pad or arpeggio, 3-5 drums.
    - **Harmony/arpeggio**: chord tones in eighths, quieter (track `gain: -3`).
    - **Drums**: kick on 1 and 3 (or every beat for driving music), snare on 2 and 4 (steps 5 and 13), hats in
      eighths; `X` accents and `o` ghosts give groove; a fill in the last bar of a section.
-   - W009 flags minor-second/tritone clashes between tracks on a beat: fix them unless you want the tension.
-5. **Loops**: `loop: main` (from the start of that section to the end). SEGAN writes the loop's own tail into
-   the file so the seam is clean; check `seam_click` and the seam view (`<name>.seam.png`). Intros are their own
-   section before the loop.
+   - W009 flags minor-second/tritone clashes between tracks on a beat (notes held from earlier count): fix them
+     unless you want the tension. A dominant seventh (V7, e.g. C7 going to F) contains a tritone on purpose:
+     there it's a judgement call between shortening a note and `lint: { disable: [W009] }`.
+   - Many similar patterns, or tired of counting dots: generate lanes with `segan.api` (reference.md has a worked
+     example) instead of an ad-hoc script.
+5. **Loops**: `loop: main` (from the start of that section to the end). The file is the whole song **plus the
+   first bar(s) of the loop again**, and the loop points sit that many whole bars later (`loop.offset` in the
+   manifest; usually one bar: enough bars to cover the longest release + the room tail). So the loop's own end
+   rings into its start, the seam is clean and the intro flows naturally into the first pass. The file is
+   therefore longer than the arrangement (8 bars at 100 bpm = 19.2 s, the file 21.6 s): that's expected; engines
+   use the loop points. Check `seam_click` and the seam view (`<name>.seam.png`). Intros are their own section
+   before the loop.
 6. **Variants** in one line each: `danger: { tempo: 150, instrument_swap: { q: r } }`, `calm: { kit: soft_kit }`,
    `night: { semitones: -2 }`, `major: { key: A major }`; combinations with `variant_axes`. Adaptive layering:
    add `"stems"` to `export` (one WAV per track, Godot AudioStreamSynchronized).

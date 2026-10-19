@@ -1,5 +1,5 @@
 name: jump
-description: "Preset jump, as is."
+description: "Platformer jump: a quick square sweep upwards, springy and short."
 preset: jump
 status: draft
 style_version: 1

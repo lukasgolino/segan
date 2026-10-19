@@ -1,5 +1,5 @@
 name: coin
-description: "Preset coin, as is."
+description: "Bright two-note pickup chime for coins: a square blip stepping up a fourth, short, no tail."
 preset: coin
 status: draft
 style_version: 1

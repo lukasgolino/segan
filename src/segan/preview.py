@@ -57,6 +57,8 @@ def analyze(output: Output, kind: str) -> dict[str, Any]:
         "centroid_hz": round(spectral_centroid(audio, rate), 1),
         "onsets_s": onsets(audio, rate),
     }
+    if kind == "sfx" and not output.info.get("loop"):
+        result["room_tail_s"] = round(max(0.0, output.seconds - float(output.info.get("duration", output.seconds))), 3)
     if kind == "sfx":
         result["leading_silence_ms"] = round(leading_silence(audio, rate) * 1000.0, 2)
         result["sounding_at_end"] = output.info.get("sounding_at_end", [])
@@ -75,12 +77,13 @@ def level_stats(analysis: dict[str, Any], threshold_click: float | None = None) 
     target = analysis.get("target_lufs")
     lufs = analysis["lufs"]
     off = abs(lufs - target) if target is not None else 0.0
+    tail = analysis.get("room_tail_s")
     stats: list[tuple[str, str, Colour]] = [
-        ("length", f"{analysis['seconds']:.3f}s", TEXT),
+        ("length", f"{analysis['seconds']:.3f}s" + (f" ({analysis['seconds'] - tail:.2f}s + {tail:.2f}s room tail)" if tail else ""), TEXT),
         ("peak", f"{analysis['peak_dbfs']:.1f} dBFS", TEXT),
         ("true peak", f"{analysis['true_peak_dbtp']:.1f} dBTP", TEXT),
         ("LUFS", f"{lufs:.1f}" + (f" (target {target:g})" if target is not None else " (not normalised)"), GOOD if off <= 1 else WARN),
-        ("limiter", f"-{analysis['limiter_reduction_db']:.1f} dB", GOOD if analysis["limiter_reduction_db"] <= 3 else WARN),
+        ("limiter", f"{analysis["limiter_reduction_db"]:.1f} dB off", GOOD if analysis["limiter_reduction_db"] <= 3 else WARN),
     ]
     if "leading_silence_ms" in analysis:
         silence = analysis["leading_silence_ms"]
@@ -179,6 +182,8 @@ def write_preview(asset: Any, render: Render, project: Project, start: float | N
             from segan.songpreview import pitch_check
 
             analysis["pitch_check"] = pitch_check(asset, project)
+            analysis["notes_per_pattern"] = {name: {t: sum(n.track == t for n in pat.notes) for t in sorted({n.track for n in pat.notes})}
+                                             for name, pat in asset.patterns.items()}  # fmt: skip
         if render.kind == "sfx":
             spec = sfx_sheet(asset, output, analysis, project, click)
         else:

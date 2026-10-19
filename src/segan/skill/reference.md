@@ -72,7 +72,7 @@ layers:
     slide: false              # true: glide between keyframes; false: jump
     env: [0.001, 0.08, 0.55, 0.22]
     length: 0.16              # seconds held before the release (default: so the release ends at duration)
-    gain: -6                  # dB, or keyframes [[t, dB], ...]
+    gain: -6                  # dB, or keyframes [[t, dB], ...] (multiplied with the envelope, not replacing it)
   - { id: click, osc: noise, filter: { type: hp, cutoff: 6000 }, env: [0, 0.02, 0, 0.01], gain: -18 }
 variations: { count: 4, seed: 7, pitch: 0.5, timbre: 0.1, gain: 1 }   # -> coin.1.wav ... coin.4.wav (+ Godot randomizer)
 ```
@@ -92,7 +92,11 @@ More SFX fields:
 - `extends: <template>`: start from a file with `template: true` in sfx/ (templates aren't built). Layers merge by
   `id` (fields you give change, the rest stays), other layers are added, `remove: [ids]` drops template layers.
   Own fields (name, description, tags, status, style_version) aren't inherited.
-- `preset` works like `extends` with a built-in template. `segan bake sfx <name> [--in-place]` writes everything out.
+- `preset` works like `extends` with a built-in template (layers merge by id, `remove: [ids]` drops preset layers;
+  `segan new sfx --preset P` lists the preset's layer ids). `segan bake sfx <name> [--in-place]` writes everything out.
+- The output is `duration` plus the room tail (trimmed at -70 dB). Every output is normalised to its category
+  target, however quiet or loud the layers are written (`normalisation_gain_db` in the analysis); write gains for
+  the balance between layers, not for the absolute level.
 
 ## Song - `music/<name>.song.yaml`
 
@@ -270,8 +274,9 @@ Turn warnings off for one asset with `lint: { disable: [...] }`, project-wide wi
 - SFX: `variations` (list, + `pitch_offset_semitones`), `godot_randomizer`, `phases` (name -> file entry);
 - songs: `bpm`, `meter`, `steps_per_beat`, `key`, `beat_seconds`, `beat_count`, `bars`, `sections` (name ->
   start/end in samples, seconds and bars, first occurrence), `arrangement` (every section in order), `markers`
-  (name -> sample, seconds, bar), `loop` (+ `offset`: loops start that many samples after the loop section's
-  start, so the loop's own tail rings into its start; `section`), `variants` (name -> file entry + timing),
+  (name -> sample, seconds, bar), `loop` (`start`/`end` in the file + `offset`: the loop points sit that many
+  samples (whole bars, usually one) after the loop section's start and the song's end, because the file carries
+  that much of the loop's start again with the end's tail ringing into it; `section`), `variants` (name -> file entry + timing),
   `stems` (track -> file entry) and `godot_stems`.
 Files: `music/<song>.wav`, `music/<song>.<variant>.wav`, `stems/<song>/<track>.wav`, `sfx/<name>.wav`,
 `sfx/<name>.<n>.wav`, `sfx/<name>.<phase>.wav`. WAVs are 16-bit PCM with a `smpl` loop chunk and `cue` markers.
@@ -300,3 +305,26 @@ For many similar sounds or procedural music, write a Python script with `segan.a
 key)` / `.hit(track, step, drum, mark)` / `.row(track, drum, "x...x...")` / `.lane(track)`,
 `song_yaml(name, tracks=..., patterns=..., sections=..., arrangement=..., key=..., tempo=..., loop=...)`,
 `sfx_yaml(name, layers=[...], ...)`. Write the result to a file, then lint and preview it like any other.
+
+```python
+from pathlib import Path
+from segan import api
+
+key = "F major"
+lead = api.Track.roll("lead", key, "F4", "A5")
+bass = api.Track.roll("bass", key, "F2", "F3")
+drums = api.Track.drums("drums", ["k", "s", "h"])
+patterns = {}
+for name, numeral in (("a", "I"), ("b", "vi"), ("c", "IV"), ("d", "V")):
+    p = api.Pattern(16)
+    chord = api.progression(numeral, key, octave=4)[0]
+    for step, midi, length in api.arpeggiate(chord, 16, rate=4):
+        p.note(lead, step, midi, length, "f")
+    p.note(bass, 0, chord[0] - 24, 8, "a").note(bass, 8, chord[0] - 24, 8, "a")
+    p.row(drums, "k", "x.......x.......").row(drums, "s", "....x.......x...").row(drums, "h", api.humanize("x.x.x.x.x.x.x.x.", name))
+    patterns[name] = p
+text = api.song_yaml("shop", kit="fm_soft", key=key, tempo=100, tracks=[lead, bass, drums], patterns=patterns,
+                     sections={"main": ["a", "b", "c", "d"]}, arrangement=["main"], loop="main",
+                     description="cosy shop loop")
+Path("music/shop.song.yaml").write_text(text)
+```
