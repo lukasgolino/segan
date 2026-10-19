@@ -28,6 +28,8 @@ def main(folder: str) -> int:
         status, path = line[:2], line[3:]
         if status.strip() != "M" or not path.endswith(".wav"):
             problems.append(f"{status.strip()} {path}")
+            if status.strip() == "M":
+                print(git("diff", "--", str(top / path)).decode()[:3000])
             continue
         old = read_wav(git("show", f"HEAD:{path}"))
         new = read_wav((top / path).read_bytes())
