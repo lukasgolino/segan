@@ -1,0 +1,3 @@
+The VSCO 2 Community Edition samples are by Versilian Studios, released under CC0 1.0 Universal
+(https://github.com/sgossner/VSCO-2-CE). SEGAN doesn't ship them: `segan samples fetch vsco2` downloads them.
+The .sfz maps in this folder are part of SEGAN (MIT).

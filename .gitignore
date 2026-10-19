@@ -26,3 +26,4 @@ previews/
 
 # Website (lives in its own repo)
 /website/
+.samples/

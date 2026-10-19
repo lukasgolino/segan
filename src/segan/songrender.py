@@ -22,7 +22,7 @@ from segan.project import Project
 from segan.render import Output, Render, level_dict
 from segan.sequence import Timeline, build_timeline, song_events
 from segan.song import Song, Variant
-from segan.voices import event_end, render_events
+from segan.voices import assign_cuts, event_end, render_events
 from segan.wavio import to_pcm16
 
 
@@ -54,12 +54,13 @@ def render_variant(song: Song, project: Project, variant: Variant | None, stems:
     rate = ctx.rate
     channels = 2 if mix.music_channels == "stereo" else 1
     timeline = build_timeline(song, variant)
-    kit = variant.kit if variant is not None and variant.kit is not None else song.kit
-    tail = max([0.0, *(i.tail() for i in kit.instruments.values())]) + room_tail(mix) + 0.05
-    offset_steps = loop_offset_steps(song, timeline, tail)
     end_frame = timeline.frame(timeline.total, rate)
-    file_end = timeline.frame(timeline.total + offset_steps, rate) if timeline.loop is not None else None
     events = song_events(song, timeline, rate, variant, repeat_loop=timeline.loop is not None)
+    # how long the song's last notes really ring past its end (voice cuts included), plus the room
+    ring = max([end_frame, *(event_end(e, ctx) for e in assign_cuts(events, ctx) if e.start < end_frame)]) - end_frame
+    tail = ring / rate + room_tail(mix) + 0.05
+    offset_steps = loop_offset_steps(song, timeline, tail)
+    file_end = timeline.frame(timeline.total + offset_steps, rate) if timeline.loop is not None else None
     if file_end is not None:
         events = [e for e in events if e.start < file_end]
     total = max([end_frame, *(event_end(e, ctx) for e in events)]) + round(room_tail(mix) * rate) + 1

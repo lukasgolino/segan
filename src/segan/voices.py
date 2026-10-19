@@ -37,7 +37,7 @@ def pan_gains(pan: float) -> tuple[float, float]:
 
 def event_end(event: NoteEvent, ctx: Context) -> int:
     """Last frame (exclusive) a note can sound."""
-    length = round(note_length(event.inst, event.gate, ctx) * ctx.rate)
+    length = round(note_length(event.inst, event.gate, ctx, event.midi) * ctx.rate)
     if event.cut is not None:
         length = min(length, event.cut + round(DECLICK_RELEASE * ctx.rate))
     return event.start + length

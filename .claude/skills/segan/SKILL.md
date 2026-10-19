@@ -44,7 +44,7 @@ whether a sound is pleasant or fits the game, whether the mix balance feels righ
 ## 1. Setup check
 
 1. `segan --version`. If it's missing, install it the way the project pins it (its requirements file / tag,
-   e.g. `pip install "git+https://github.com/lukasgolino/segan.git@v0.1.0"`). Never swap a pinned install for an
+   e.g. `pip install "git+https://github.com/lukasgolino/segan.git@v0.2.0"`). Never swap a pinned install for an
    editable checkout unless you are developing SEGAN itself.
 2. Find the audio project: `segan status` (it says so if there's no `segan.toml` here or above), or
    `find . -name segan.toml -not -path '*/node_modules/*'`. That folder is the game's **audio home**:
@@ -69,8 +69,9 @@ asset name, files and loop points from `manifest.json`, the listen sheet path, t
 
 Ask once, in one message, with defaults:
 1. **The game**: genre, mood, setting (for BRIEF.md).
-2. **Sound style**: chiptune (default: pulse/triangle/noise, NES/Game Boy era) or 80s synth (filtered saws,
-   square bass, punchy drums). Realistic instruments aren't supported (synth only).
+2. **Sound style**: chiptune (default: pulse/triangle/noise, NES/Game Boy era), 80s synth (filtered saws,
+   square bass, punchy drums) or orchestral (sampled strings, brass, woodwinds, harp, timpani: the `vsco2`
+   library, ~1 GB to download; or the game's own SoundFont/SFZ).
 3. **References**: games or soundtracks it should evoke.
 4. **Engine**: Godot 4 (default; path to the project) or plain WAVs + manifest.
 5. **Mix**: dry or roomy (`[mix] room`, default 0.15), lo-fi crush or clean (default clean).
@@ -94,6 +95,12 @@ bass, maybe a pad or arpeggio, 3-5 drums.
 - `voices: 1` (default) is a chip channel: a new note cuts the old. Chords need `voices: 3` or more (E014).
 - Arpeggio instruments (`arp:`) use fixed semitone offsets, so make them mode-neutral (`[0, 7, 12]`) unless
   every song is in a major key.
+- **Sampled instruments** (`sample: vsco2/violins_sus`, `.sfz`, `.sf2`, `.wav`; reference "Samples"): `segan
+  samples list` shows the library, `segan samples fetch vsco2 <instruments>` downloads what the kit uses (lint
+  names any that are missing). Sections need `voices` for chords; `_sus` instruments hold while the note does
+  (W014 if a note outlasts its sample: re-strike long notes), `pizz`/`stac`/harp/percussion ring by themselves.
+  Mix them like an orchestra: strings hold chords, one lead line (horn, flute, solo violin), harp or pizz for
+  motion, timpani and crash only on downbeats; a bigger room (`[mix] room = 0.3`, `room_decay = 1.6`).
 - After any kit edit: `segan kit show <kit>`, look at the sheet (each instrument's segment: pitch lines on the
   white targets, attack/decay shape, no red), check `W010` aliasing, then a human listens.
 

@@ -49,7 +49,7 @@ def phrase_root(inst: Instrument) -> int:
 
 def aliasing_of(inst: Instrument, midi: int, ctx: Context) -> float | None:
     """Aliasing of a steady tone (modulation off) at `midi`; None for noise/unpitched/inharmonic sources."""
-    if inst.is_drum or inst.wave in ("noise", "bitnoise") or (inst.wave == "fm" and inst.fm is not None and inst.fm.ratio != round(inst.fm.ratio)):
+    if inst.is_drum or inst.is_sample or inst.wave in ("noise", "bitnoise") or (inst.wave == "fm" and inst.fm is not None and inst.fm.ratio != round(inst.fm.ratio)):
         return None
     steady = replace(inst, env=Env(0.0, 0.0, 1.0, 0.0), pitch_env=(), vibrato=None, tremolo=None, arp=(), pwm=None,
                      unison=1, detune=0.0, filter=None, crush=None, fm=replace(inst.fm, env=None) if inst.fm else None)  # fmt: skip
@@ -142,3 +142,10 @@ def write_kit_show(show: KitShow, folder: Path, threshold: float) -> tuple[Path,
         path.write_bytes(wav_bytes(to_pcm16(show.audio[a:b]), show.rate))
         wavs.append(path)
     return sheet, wavs
+
+
+def library_needs(kit_path: Path) -> list[str]:
+    """Library instruments (`vsco2/<name>`) a kit file names, in order (what `segan samples fetch` needs)."""
+    import re
+
+    return list(dict.fromkeys(re.findall(r"sample:\s*vsco2/(\w+)", kit_path.read_text(encoding="utf-8"))))

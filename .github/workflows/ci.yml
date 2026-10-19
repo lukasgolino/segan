@@ -68,3 +68,31 @@ jobs:
         run: segan build --verify-godot
       - name: Godot end-to-end tests
         run: pytest tests/test_godot.py -v
+
+  orchestra:
+    # The sampled-orchestra example: fetches the VSCO 2 CE instruments its kit uses (pinned, checked; cached
+    # between runs), then lints and builds it.
+    runs-on: ubuntu-latest
+    env:
+      SEGAN_SAMPLES: ${{ github.workspace }}/.samples
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install
+        run: pip install -e ".[dev]"
+      - name: Cache samples
+        uses: actions/cache@v4
+        with:
+          path: .samples
+          key: samples-${{ hashFiles('src/segan/libraries/*/library.json', 'examples/orchestra/kits/*.yaml') }}
+          restore-keys: samples-
+      - name: Fetch the kit's instruments
+        working-directory: examples/orchestra
+        run: segan samples fetch vsco2 $(python -c "from pathlib import Path; from segan.kitshow import library_needs; print(' '.join(library_needs(Path('kits/orchestra.kit.yaml'))))")
+      - name: Lint and build
+        working-directory: examples/orchestra
+        run: |
+          segan lint --warnings-as-errors
+          segan build

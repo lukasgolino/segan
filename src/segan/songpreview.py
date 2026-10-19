@@ -79,7 +79,9 @@ def song_sheet(song: Song, output: Output, analysis: dict[str, Any], project: Pr
 
 def pitch_check(song: Song, project: Project) -> dict[str, Any]:
     """Each roll note of a monophonic track: median detected pitch on the track's dry render vs. the written
-    pitch (cents, octaves folded). Instruments with arpeggios are skipped; pitch envelopes are waited out."""
+    pitch (cents, octaves folded). Instruments with arpeggios and one-shot samples (they ring over the next
+    notes) are skipped; pitch envelopes, sample attacks and the previous note's release are waited out."""
+    from segan.synth import is_one_shot
     from segan.kitshow import context_for
     from segan.sequence import song_events
     from segan.voices import render_events
@@ -98,12 +100,15 @@ def pitch_check(song: Song, project: Project) -> dict[str, Any]:
         audio = dry[track.name][:, 0]
         checked, worst = 0, 0.0
         off: list[dict[str, Any]] = []
+        previous_end = -1.0
         for p in mine:
             inst = song.kit.instruments.get(p.key)
-            if inst is None or inst.arp or inst.is_drum or inst.wave in ("noise", "bitnoise"):
+            ringing_until = previous_end + (inst.env.release if inst is not None else 0.0)
+            previous_end = timeline.seconds(p.step + p.note.length)
+            if inst is None or inst.arp or inst.is_drum or inst.wave in ("noise", "bitnoise") or is_one_shot(inst):
                 continue
-            settle = max([0.015, *(t for t, _ in inst.pitch_env)])
-            start = timeline.seconds(p.step) + settle
+            settle = max([0.08 if inst.is_sample else 0.015, *(t for t, _ in inst.pitch_env)])
+            start = max(timeline.seconds(p.step) + settle, ringing_until)
             end = min(timeline.seconds(p.step + p.note.length), start + 0.2)
             if end - start < 0.05:
                 continue

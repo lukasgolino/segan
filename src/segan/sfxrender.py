@@ -98,6 +98,8 @@ def render_layer(layer: Layer, ctx: Context, available: float, seed: int, pitch_
     """One layer at the output rate, at most `available` seconds long; and whether it was still sounding
     when it got cut off (W011)."""
     inst = _jitter(layer.inst, timbre, seed_of(seed, "timbre"))
+    if layer.length is not None and inst.sample is not None and inst.sample.one_shot is not False:
+        inst = replace(inst, sample=replace(inst.sample, one_shot=False))  # an explicit length chokes a one-shot (then its release)
     gate = layer.length if layer.length is not None else max(0.001, available - layer.start - inst.tail())
     base = layer.base_midi()
     pitch_curve = None
@@ -117,7 +119,7 @@ def render_layer(layer: Layer, ctx: Context, available: float, seed: int, pitch_
         reference = inst.filter.cutoff
         hz = _keyframe_curve(layer.cutoff, True)
         cutoff_curve = lambda t: hz(t) / reference  # noqa: E731
-    full = note_length(inst, gate, ctx)
+    full = note_length(inst, gate, ctx, base)
     room = available - layer.start
     if room <= 0:
         return np.zeros(0), False

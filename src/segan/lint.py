@@ -34,6 +34,7 @@ WARNING_RULES = {
     "W011": "SFX still sounding at its duration",
     "W012": "note held past the end of its pattern",
     "W013": "loudness off target (normalisation off)",
+    "W014": "note held longer than its (unlooped) sample",
 }
 
 

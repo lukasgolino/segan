@@ -499,8 +499,14 @@ scope, W009 wording, preset layer ids, API example) was folded into the skill, t
 `import midi` (hand-written SMF parser): quantize to the grid, snap pitches to the key (≈ snap to palette) and
 instruments to the kit (GM program → nearest kit instrument), with a change report (notes moved, dropped, merged).
 
+### ☑ Milestone 8 — Samples (owner request, 2026-10-19)
+`sample:` source (WAV, SFZ subset, SF2 via hand-written readers) for kit instruments and SFX layers; the `vsco2`
+library (VSCO 2 CE, CC0) mapped by SEGAN and fetched on demand (pinned, verified, user cache);
+`segan init --style orchestral`; `examples/orchestra` (CI fetches and builds it). Plus ORCHESTRATOR_PLAN S1-S3
+(stem groups/mixes, stems-only/variations-only builds, room sends and tail trim) and the bug reports. v0.2.0.
+
 ### Later (don't start unless asked)
-Sampled instruments (`sample:` + SoundFont `.sf2` via a pure reader; licensing!), OGG/Opus export, MIDI export,
+OGG/Opus export, MIDI export,
 `segan play` (local playback), audio-to-SFX parameter fitting, tracker (`.xm`) export, other engines, and a
 **PAGAN ↔ SEGAN link**: PAGAN animation frame events (`footstep` on `walk_2`) referencing SEGAN SFX, merged
 by the orchestrator via both manifests.
@@ -548,3 +554,11 @@ The owner is away and won't review as you go. Build SEGAN **to completion (Miles
   you need a reference implementation. **Never modify the PAGAN repo.**
 - "Done" means: every milestone's done-criteria met, by your own judgement where the plan says "the owner
   approves by ear" (you can't hear: use the listen sheets + analysis, and record which assets need the owner's ear in QUESTIONS.md).
+
+---
+
+## 15. Feedback from games (2026-10-19)
+
+Game orchestrators file bug/feature reports in [ORCHESTRATOR_PLAN.md](ORCHESTRATOR_PLAN.md) (append-only, like
+PAGAN's). First consumer: Age of Boom (S1–S11, segan v0.1.0). Highest value: S1 (layer groups for adaptive stems,
+normalised by the mixes a game actually plays), S2 (skip unused outputs), S3 (per-category room / tail trim).

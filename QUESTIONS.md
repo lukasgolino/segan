@@ -21,7 +21,10 @@ checked (pitch, loudness on target, no clicks, seamless loops); taste was not.
 ## Decided by default (say if you disagree)
 
 5. **scipy** is a core dependency (filters, decimation, LUFS, room). (Recommended: keep.)
-6. **Synth only in v1**, no samples/SoundFonts. (Recommended: keep; samples are the obvious v2 if a game needs realism.)
+6. **Samples/SoundFonts** — decided 2026-10-19 (owner): WAV + SFZ + SF2 readers; orchestral sounds from VSCO 2 CE
+    (CC0) fetched on demand (nothing bundled); an orchestral kit and example project. Done in v0.2.0. Open: the
+    orchestral example's balance and the VSCO maps need the owner's ear (`examples/orchestra`, `segan kit show`).
+
 7. **44.1 kHz** default sample rate (48 kHz is one setting away). (Recommended: keep.)
 8. **Golden tolerance**: ±1 LSB across machines, byte-identical on one machine. (Recommended: keep; CI agrees so far.)
 9. **Demo WAVs aren't committed** (~40 MB per rebuild); manifest/.tres/.import are, and CI fails if a rebuild changes

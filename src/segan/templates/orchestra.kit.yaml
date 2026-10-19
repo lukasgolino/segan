@@ -1,0 +1,26 @@
+name: orchestra
+description: "Chamber orchestra from VSCO 2 Community Edition samples (CC0): strings, horn, trumpet, woodwinds, harp, timpani, percussion."
+instruments:
+  # strings (sections)
+  v: { name: violins, sample: vsco2/violins_sus, voices: 4, env: [0.04, 0.0, 1.0, 0.35] }
+  a: { name: violas, sample: vsco2/violas_sus, voices: 4, env: [0.04, 0.0, 1.0, 0.35] }
+  c: { name: cellos, sample: vsco2/cellos_sus, voices: 4, env: [0.04, 0.0, 1.0, 0.4] }
+  b: { name: basses, sample: vsco2/basses_sus, voices: 2, env: [0.05, 0.0, 1.0, 0.4] }
+  z: { name: cello_pizz, sample: vsco2/cellos_pizz, voices: 4 }
+  s: { name: violin_spic, sample: vsco2/violins_spic, voices: 4, gain: -3 }
+  # brass and woodwinds
+  h: { name: horn, sample: vsco2/horn_sus, voices: 2, env: [0.03, 0.0, 1.0, 0.3] }
+  t: { name: trumpet, sample: vsco2/trumpet_sus, env: [0.02, 0.0, 1.0, 0.25], gain: -3 }
+  f: { name: flute, sample: vsco2/flute_sus, env: [0.03, 0.0, 1.0, 0.25] }
+  o: { name: oboe, sample: vsco2/oboe_sus, env: [0.03, 0.0, 1.0, 0.25], gain: -2 }
+  # plucked and struck
+  r: { name: harp, sample: vsco2/harp, voices: 8, gain: -2 }
+  g: { name: glockenspiel, sample: vsco2/glockenspiel, voices: 4, gain: -6 }
+  T: { name: timpani, sample: vsco2/timpani, voices: 2 }
+  # unpitched percussion (drum lanes)
+  B: { name: bass_drum, sample: vsco2/bass_drum }
+  X: { name: crash, sample: vsco2/crash, gain: -4 }
+  S: { name: snare, sample: vsco2/snare, gain: -6 }
+groups:
+  strings: [v, a, c, b]
+  winds: [f, o]

@@ -43,6 +43,8 @@ generated text files.
   - `render.py` outputs + render cache (`.segan-cache/renders/`); `preview.py` / `songpreview.py` listen sheets + analysis;
   - `lint.py` lint (errors from parsing, warnings from source and rendered audio); `yamlwrite.py` YAML writer;
   - `manage.py` long-term management: catalogue (`segan status`), `mark`, `style bump`, `mix adjust` (text edits keep comments);
+  - `samples.py` sampled instruments: WAV/SFZ/SF2 readers, zones, variable-rate Hermite playback;
+    `libraries/` sample libraries (`vsco2/`: SEGAN's SFZ maps + library.json; audio fetched on demand into the user cache);
   - `api.py` stable Python API for generator scripts (keys, chords, progressions, euclid, arpeggios, Pattern builder, YAML writers);
   - `midi.py` hand-written SMF reader + `segan import midi` (quantize, snap to key, GM -> kit, change report);
   - `mcp_server.py` `segan mcp`: MCP tools/resources/prompts over the CLI handlers (stdout captured, cwd pinned, one lock);
@@ -54,6 +56,8 @@ generated text files.
 - `tests/fixtures/golden/` — golden project (22.05 kHz mono so files stay small); `expected/*.wav` are checked
   renders. After an intended rendering change, look at the output, then `SEGAN_UPDATE_GOLDEN=1 pytest tests/test_golden.py`.
 - `examples/demo/` — the demo project (kits: nes, fm_soft, arcade_synth).
+- `examples/orchestra/` — sampled-orchestra example (needs `segan samples fetch`; CI job `orchestra` fetches and builds it).
+- `scripts/make_vsco2_library.py` — regenerates `src/segan/libraries/vsco2/` (downloads ~1.3 GB once).
 
 ## Conventions
 
@@ -133,3 +137,17 @@ generated text files.
 - 2026-10-19: `segan.api` is versioned (`API_VERSION = 1`); its writers use `yamlwrite.py`, so generated sources
   look hand-written (block style, flow leaves, `|` lanes).
 - 2026-10-19: Release v0.1.0 tagged and pushed (owner directive §14 allows tags; not published to PyPI).
+- 2026-10-19: Samples (owner): WAV + SFZ subset + SF2, hand-written readers. Zones are read at a variable rate with
+  4-point Hermite at the oversampled rate (high harp notes carry -23 dB above 16 kHz: rendering at the output rate
+  would alias when pitched up). Samples are mixed to mono (tracks pan, the room widens). Note velocity 1.0 = MIDI 80.
+- 2026-10-19: Orchestral sounds = VSCO 2 Community Edition (CC0), fetched on demand from a pinned commit and checked
+  by git blob id into `$SEGAN_SAMPLES` / `~/.cache/segan/samples` (shared by projects); nothing bundled. SEGAN ships
+  its own SFZ maps (the repo has none): folder octave labels measured with YIN (most VSCO folders call middle C
+  "C3"), timpani tuned from their rolls, lead-in silence skipped, each instrument levelled to -20 LUFS (median
+  sample) so kit gains are balance only.
+- 2026-10-19: One-shot samples ring to their audible end (-40 dB); an SFX layer's explicit `length` chokes them.
+  A looping song's loop offset now comes from how long its last notes actually ring (voice cuts included), not the
+  kit's longest tail (a harp or crash in the kit made every loop file twice as long).
+- 2026-10-19: ORCHESTRATOR_PLAN S1-S3: song `stems: { groups, mixes, main_mix }` (stems normalised over the loudest
+  listed mix; the full mix is normalised on its own), `variations.include_main`, `[room]` sends, `tail_trim_db`.
+  S4 unison phases within a quarter turn. Release v0.2.0.

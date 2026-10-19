@@ -1,0 +1,21 @@
+name: sting
+description: "Orchestral hit for a discovery: timpani and bass drum under a crash, with a short horn stab."
+category: jingle
+duration: 4.5
+layers:
+  - id: timpani
+    sample: vsco2/timpani
+    pitch: D2
+    length: 3.0                 # choke the drum after 3 s (then its 0.5 s release)
+  - id: bass_drum
+    sample: vsco2/bass_drum
+    gain: -3
+  - id: crash
+    sample: vsco2/crash
+    length: 3.2
+    env: [0, 0, 1, 1.0]
+    gain: -6
+  - id: horn
+    sample: vsco2/horn_stac
+    pitch: D4
+    gain: -2

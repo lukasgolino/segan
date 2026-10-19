@@ -76,6 +76,7 @@ def project_for(targets: list[str]) -> Project:
 STYLES = {
     "chiptune": ("chip", "chiptune: pulse/triangle/noise voices, mono channels, NES/Game Boy era"),
     "synth": ("synth", "synth: filtered saws, square bass, arpeggios, punchy drums (80s arcade)"),
+    "orchestral": ("orchestra", "orchestral: sampled strings, brass, woodwinds, harp and timpani (VSCO 2 CE samples, CC0)"),
 }
 
 
@@ -117,6 +118,10 @@ def cmd_init(args: argparse.Namespace, out: Output) -> int:
         output_dir = Path(os.path.relpath((godot_root / "assets" / "generated" / "audio").resolve(), root.resolve())).as_posix()
         config_text = set_in_toml(config_text, "output_dir", output_dir)
         config_text = set_in_toml(config_text, "export", ["wav", "godot"])
+    if style == "orchestral":  # a hall, and an orchestra's worth of instruments per song
+        config_text = set_in_toml(config_text, "mix.room", 0.3)
+        config_text = set_in_toml(config_text, "mix.room_decay", 1.6)
+        config_text = set_in_toml(config_text, "lint.max_instruments", 16)
     config_path.write_text(config_text, encoding="utf-8")
     created.append(config_path)
 
@@ -157,6 +162,11 @@ def cmd_init(args: argparse.Namespace, out: Output) -> int:
     if clash is not None:
         out.say(f"  warning: {display_path(clash)} writes to the same output_dir; both tools write manifest.json there. "
                 "Point one of them at its own folder (e.g. .../generated/audio).")  # fmt: skip
+    if style == "orchestral":
+        from segan.kitshow import library_needs
+
+        needs = library_needs(kit_path)
+        out.say(f"The kit plays sampled instruments: `segan samples fetch vsco2 {' '.join(needs)}` downloads them first.")
     out.say(f"Next: `segan kit show {kit_name}` and look at previews/kits/{kit_name}.listen.png; fill in BRIEF.md and SOUND.md.")
     out.result(
         {
@@ -223,6 +233,57 @@ def _resolve_kit(target: str, project: Project) -> Kit:
     if project.config_path is None:
         raise usage_error(f"{target!r} isn't a file, and there's no {CONFIG_NAME} to look up kit names in")
     return project.load_kit(target)
+
+
+def cmd_samples_list(args: argparse.Namespace, out: Output) -> int:
+    from segan import libraries
+    from segan.samples import SampleError, sf2_presets
+
+    target = args.target
+    if target and target.lower().endswith(".sf2"):
+        try:
+            presets = sf2_presets(Path(target))
+        except SampleError as exc:
+            raise usage_error(str(exc)) from None
+        for bank, program, name in presets:
+            out.say(f"  bank {bank:3d} preset {program:3d}  {name}")
+        out.result({"sf2": target, "presets": [{"bank": b, "preset": p, "name": n} for b, p, n in presets]})
+        return 0
+    result: list[dict[str, Any]] = []
+    for name in [target] if target else libraries.names():
+        try:
+            lib = libraries.library(name)
+        except libraries.LibraryError as exc:
+            raise usage_error(str(exc)) from None
+        out.say(f"{lib.name}: {lib.title} ({lib.license}; {lib.url}), cache {display_path(lib.cache)}")
+        rows = []
+        for inst, info in sorted(lib.instruments.items()):
+            fetched = not lib.missing(inst)
+            rows.append({"instrument": inst, "sample": f"{lib.name}/{inst}", "description": info["description"], "kind": info["kind"],
+                         "mb": round(lib.size(inst) / 1e6, 1), "fetched": fetched})  # fmt: skip
+            out.say(f"  {'*' if fetched else ' '} {inst:<15} {lib.size(inst) / 1e6:6.1f} MB  {info['description']}")
+        out.say("  (* = downloaded; `segan samples fetch " + lib.name + " <instrument...>` gets the rest)")
+        result.append({"library": lib.name, "title": lib.title, "license": lib.license, "url": lib.url, "cache": str(lib.cache), "instruments": rows})
+    out.result({"libraries": result})
+    return 0
+
+
+def cmd_samples_fetch(args: argparse.Namespace, out: Output) -> int:
+    from segan import libraries
+
+    try:
+        lib = libraries.library(args.library)
+        wanted = sorted(lib.instruments) if args.all or not args.instruments else args.instruments
+        if not args.all and not args.instruments:
+            raise usage_error(f"name the instruments to fetch, or --all ({sum(lib.size(i) for i in wanted) / 1e6:.0f} MB): {', '.join(wanted)}")
+        size = sum(lib.files[f][0] for f in {f for i in wanted if i in lib.instruments for f in lib.missing(i)})
+        out.say(f"fetching {', '.join(wanted)} from {lib.repo}@{lib.commit[:12]} ({size / 1e6:.0f} MB to download, {lib.license}) into {display_path(lib.cache)}")
+        count, fetched = libraries.fetch(lib, wanted, progress=lambda p: progress.note(f"got {p}"))
+    except libraries.LibraryError as exc:
+        raise usage_error(str(exc)) from None
+    out.say(f"fetched {count} files ({fetched / 1e6:.0f} MB); use them as sample: {lib.name}/<instrument>")
+    out.result({"library": lib.name, "instruments": wanted, "files": count, "bytes": fetched, "cache": str(lib.cache)})
+    return 0
 
 
 def cmd_kit_show(args: argparse.Namespace, out: Output) -> int:
@@ -911,7 +972,7 @@ def build_parser() -> argparse.ArgumentParser:
     init = commands.add_parser("init", parents=[common], help="create a SEGAN project")
     init.add_argument("dir", nargs="?", default=".", help="project directory (default: current)")
     init.add_argument("--open", action="store_true", help="open mode: songs and SFX may define instruments inline")
-    init.add_argument("--style", choices=list(STYLES), help="starter kit: chiptune (default) or synth")
+    init.add_argument("--style", choices=list(STYLES), help="starter kit: chiptune (default), synth or orchestral (sampled; needs `segan samples fetch`)")
     init.add_argument("--godot", metavar="DIR", help="Godot project dir: build into DIR/assets/generated/audio with Godot resources")
     init.set_defaults(handler=cmd_init)
 
@@ -1025,6 +1086,17 @@ def build_parser() -> argparse.ArgumentParser:
     imp_midi.add_argument("--out", help="output path (default: music/<name>.song.yaml)")
     imp_midi.add_argument("--force", action="store_true", help="overwrite an existing file")
     imp_midi.set_defaults(handler=cmd_import_midi)
+
+    samples = commands.add_parser("samples", help="sample libraries (orchestral instruments) and SoundFonts")
+    samples_cmds = samples.add_subparsers(title="samples commands", metavar="<command>")
+    samples_list = samples_cmds.add_parser("list", parents=[common], help="library instruments (and what's downloaded), or a .sf2's presets")
+    samples_list.add_argument("target", nargs="?", help="a library name (default: all) or a .sf2 file")
+    samples_list.set_defaults(handler=cmd_samples_list)
+    samples_fetch = samples_cmds.add_parser("fetch", parents=[common], help="download library instruments (pinned, checked) into the user cache")
+    samples_fetch.add_argument("library", help="library name, e.g. vsco2")
+    samples_fetch.add_argument("instruments", nargs="*", help="instrument names (see `segan samples list`)")
+    samples_fetch.add_argument("--all", action="store_true", help="every instrument in the library")
+    samples_fetch.set_defaults(handler=cmd_samples_fetch)
 
     kit = commands.add_parser("kit", help="kit tools")
     kit_cmds = kit.add_subparsers(title="kit commands", metavar="<command>")

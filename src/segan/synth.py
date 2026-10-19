@@ -178,10 +178,19 @@ def _keyframes(t: Signal, frames: tuple[tuple[float, float], ...]) -> Signal:
     return np.asarray(np.interp(t, times, values), dtype=np.float64)
 
 
-def note_length(inst: Instrument, gate: float, ctx: Context) -> float:
-    """Seconds a note sounds: gate + release (drums: their decay)."""
+def note_length(inst: Instrument, gate: float, ctx: Context, midi: float | None = None) -> float:
+    """Seconds a note sounds: gate + release (drums: their decay; one-shot samples: the sample, longer when
+    pitched down)."""
     if inst.is_drum:
         return inst.tail() + 0.01
+    if inst.sample is not None:
+        from segan.samples import audible_seconds, load_set
+
+        sset = load_set(inst.sample)
+        if sset.one_shot:
+            key = round(midi) if midi is not None else None
+            zones = [z for z in sset.zones if key is None or z.lokey <= key <= z.hikey] or list(sset.zones)
+            return float(max(audible_seconds(z) * 2.0 ** (max(0.0, z.root - (midi if midi is not None else z.root)) / 12.0) for z in zones)) + 0.01
     release = max(inst.env.release, DECLICK_RELEASE) if ctx.declick else inst.env.release
     return gate + release
 
@@ -201,7 +210,7 @@ def render_note(
     """One note at the output rate: `gate` seconds held, then the release. Curves (SFX keyframes) are
     functions of time: pitch in semitones added to `midi`, gain as a multiplier, cutoff as a multiplier."""
     rate = ctx.os_rate
-    total = length if length is not None else note_length(inst, gate, ctx)
+    total = length if length is not None else note_length(inst, gate, ctx, midi)
     n = max(1, round(total * rate))
     n_gate = max(1, round(gate * rate))
     t = np.arange(n, dtype=np.float64) / rate
@@ -220,6 +229,13 @@ def render_note(
 
     if inst.is_drum:
         signal = _drum(inst, ctx, n, t, semis, seed)
+    elif inst.sample is not None:
+        signal = _sampled(inst, ctx, midi, semis, velocity, seed)
+        one_shot = is_one_shot(inst)
+        signal = signal * adsr(inst.env, n if one_shot else n_gate, n, rate, ctx.declick)
+        if one_shot and ctx.declick:  # the sample may still ring where the note is cut
+            fade = min(n, round(DECLICK_RELEASE * rate))
+            signal[n - fade :] *= np.linspace(1.0, 0.0, fade, endpoint=False) ** 2
     else:
         signal = _tone(inst, ctx, n, n_gate, t, semis, seed)
         signal = signal * adsr(inst.env, n_gate, n, rate, ctx.declick)
@@ -274,6 +290,27 @@ def _tone(inst: Instrument, ctx: Context, n: int, n_gate: int, t: Signal, semis:
         else:
             out += oscillator(inst.wave, inc, duty, seed_of(seed, "osc", k), start)
     return out / np.sqrt(voices) if voices > 1 else out
+
+
+# --- samples -----------------------------------------------------------------------------------
+
+VELOCITY_SCALE = 80  # note velocity 1.0 -> MIDI velocity 80 (picks the sample layer; accents 1.5 -> 120)
+
+
+def is_one_shot(inst: Instrument) -> bool:
+    from segan.samples import load_set
+
+    return inst.sample is not None and load_set(inst.sample).one_shot
+
+
+def _sampled(inst: Instrument, ctx: Context, midi: float, semis: Signal, velocity: float, seed: int) -> Signal:
+    from segan.samples import load_set, play
+
+    assert inst.sample is not None
+    vel = inst.sample.velocity or max(1, min(127, round(velocity * VELOCITY_SCALE)))
+    if ctx.measure:
+        return np.zeros(len(semis))
+    return play(load_set(inst.sample), semis, round(midi), vel, seed, ctx.os_rate, ctx.tuning)
 
 
 # --- drums -------------------------------------------------------------------------------------

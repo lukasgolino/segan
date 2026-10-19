@@ -1,7 +1,8 @@
 """Instrument patches: the synth parameters shared by kit instruments, inline instruments and SFX layers.
 
-A patch is a sound source (`osc: sine|triangle|saw|pulse|noise|bitnoise|fm` or `drum: kick|snare|hat|clap|tom|
-cymbal`) plus envelope, pitch modulation, filter, gain and crush. Parsing collects every problem as a Finding.
+A patch is a sound source (`osc: sine|triangle|saw|pulse|noise|bitnoise|fm`, `drum: kick|snare|hat|clap|tom|
+cymbal` or `sample:` a WAV / SFZ / SoundFont / sample library) plus envelope, pitch modulation, filter, gain
+and crush. Parsing collects every problem as a Finding.
 """
 
 from __future__ import annotations
@@ -14,6 +15,7 @@ from typing import Any
 
 from segan.findings import Finding
 from segan.notes import note_name, parse_note
+from segan.samples import SampleSpec
 from segan.yamlio import LineMap
 
 OSCILLATORS = ("sine", "triangle", "saw", "pulse", "noise", "bitnoise", "fm")
@@ -33,7 +35,7 @@ DRUM_DEFAULTS: dict[str, dict[str, float]] = {
 DRUM_PARAMS = ("tune", "decay", "tone", "noise", "click", "punch")
 
 PATCH_FIELDS = (
-    "name", "osc", "drum", "duty", "pwm", "fm", "detune", "unison", "env", "pitch_env", "vibrato", "tremolo",
+    "name", "osc", "drum", "sample", "duty", "pwm", "fm", "detune", "unison", "env", "pitch_env", "vibrato", "tremolo",
     "arp", "arp_rate", "filter", "gain", "pan", "range", "voices", "crush", "note", *DRUM_PARAMS,
 )  # fmt: skip
 
@@ -97,6 +99,8 @@ class Instrument:
     crush: Crush | None = None
     note: int = 60  # pitch for one-shot hits (drum lanes, SFX layers without a pitch)
     drum: dict[str, float] = field(default_factory=dict)  # drum parameters (tune, decay, ...)
+    sample: SampleSpec | None = None  # source "sample"
+    sample_text: Any = field(default=None, compare=False)  # the `sample:` value as written (for `segan bake sfx`)
     line: int | None = None
 
     @property
@@ -106,8 +110,17 @@ class Instrument:
     def drum_param(self, name: str) -> float:
         return self.drum.get(name, DRUM_DEFAULTS[self.wave][name]) if self.is_drum else DRUM_DEFAULTS["kick"][name]
 
+    @property
+    def is_sample(self) -> bool:
+        return self.sample is not None
+
     def tail(self) -> float:
-        """Seconds the sound keeps going after its gate closes (release, or a drum's decay)."""
+        """Seconds the sound keeps going after its gate closes (release, a drum's decay, a one-shot sample's length)."""
+        if self.sample is not None:
+            from segan.samples import load_set
+
+            sset = load_set(self.sample)
+            return max(self.env.release, sset.longest() if sset.one_shot else 0.0)
         if self.is_drum:
             return self.drum_param("decay") * (1.6 if self.wave in ("snare", "clap") else 1.0)
         return self.env.release
@@ -115,6 +128,8 @@ class Instrument:
     def describe(self) -> str:
         if self.is_drum:
             return f"drum {self.wave}"
+        if self.sample is not None:
+            return f"sample {self.sample.kind} {Path(self.sample.path).stem}"
         return f"{self.wave}" + (f" duty {self.duty:g}" if self.wave == "pulse" else "")
 
     def to_yaml_fields(self) -> dict[str, Any]:
@@ -125,6 +140,9 @@ class Instrument:
         if self.is_drum:
             out["drum"] = self.wave
             out.update({k: v for k, v in sorted(self.drum.items())})
+        elif self.sample is not None:
+            out["sample"] = self.sample_text
+            out["env"] = self.env.as_list()
         else:
             out["osc"] = self.wave
             if self.wave == "pulse":
@@ -280,9 +298,20 @@ def parse_patch(
     inst = base or Instrument()
     changes: dict[str, Any] = {"key": key, "line": line}
 
-    has_osc, has_drum = "osc" in data, "drum" in data
-    if has_osc and has_drum:
-        report.error(rule, "give either osc or drum, not both", line, where)
+    has_osc, has_drum, has_sample = "osc" in data, "drum" in data, "sample" in data
+    if has_osc + has_drum + has_sample > 1:
+        report.error(rule, "give one sound source: osc, drum or sample", line, where)
+    elif has_sample:
+        sline = line_of(data, "sample", line)
+        parsed = parse_sample(data["sample"], report, rule, f"{where}.sample", sline)
+        if parsed is not None:
+            spec, sset = parsed
+            changes.update(source="sample", wave="sample", drum={}, sample=spec, sample_text=data["sample"])
+            if "env" not in data:  # the file's own envelope (SFZ ampeg_*, SF2 volume envelope)
+                e = sset.env
+                changes["env"] = Env(round(e.attack, 6), round(e.hold + e.decay, 6), round(e.sustain, 6), round(min(30.0, e.release), 6))
+            if "range" not in data and base is None and sset.key_span() != (0, 127):
+                changes["range"] = sset.key_span()
     elif has_osc:
         if data["osc"] not in OSCILLATORS:
             report.error(rule, f"osc must be one of {', '.join(OSCILLATORS)}", line_of(data, "osc", line), f"{where}.osc")
@@ -294,7 +323,8 @@ def parse_patch(
         else:
             changes.update(source="drum", wave=data["drum"], drum={} if inst.wave != data["drum"] else dict(inst.drum))
     elif base is None:
-        report.error(rule, "an instrument needs a sound source: osc (sine, triangle, saw, pulse, noise, bitnoise, fm) or drum (kick, snare, hat, clap, tom, cymbal)", line, where)
+        report.error(rule, "an instrument needs a sound source: osc (sine, triangle, saw, pulse, noise, bitnoise, fm), drum (kick, snare, hat, clap, tom, cymbal) "
+                     "or sample (a .wav/.sfz/.sf2 file or a library instrument like vsco2/violins_sus)", line, where)
 
     if "name" in data:
         if not isinstance(data["name"], str) or not data["name"]:
@@ -409,6 +439,84 @@ def parse_patch(
     if len(report.findings) > start and any(f.severity == "error" for f in report.findings[start:]):
         return None
     return replace(inst, **changes)
+
+
+SAMPLE_FIELDS = ("wav", "sfz", "sf2", "library", "instrument", "root", "loop", "one_shot", "preset", "bank", "velocity")
+
+
+def project_root(path: Path | None) -> Path:
+    """The folder with segan.toml above `path` (relative sample paths start there), else the current folder."""
+    if path is not None:
+        for folder in path.resolve().parents:
+            if (folder / "segan.toml").is_file():
+                return folder
+    return Path.cwd()
+
+
+def parse_sample(value: Any, report: Report, rule: str, where: str, line: int | None) -> tuple[SampleSpec, Any] | None:
+    """`sample: path.wav|.sfz|.sf2`, `sample: vsco2/violins_sus`, or the mapping form:
+    `{ wav|sfz|sf2: path, root, loop, one_shot, preset, bank, velocity }` / `{ library: vsco2, instrument: x }`."""
+    from segan.libraries import LibraryError, library_spec
+    from segan.samples import SampleError, file_stamp, load_set
+
+    if isinstance(value, str):
+        suffix = Path(value).suffix.lower()
+        if suffix in (".wav", ".sfz", ".sf2"):
+            value = {suffix[1:]: value}
+        elif "/" in value and not suffix:
+            lib, _, inst = value.partition("/")
+            value = {"library": lib, "instrument": inst}
+        else:
+            report.error(rule, f"sample {value!r} must be a .wav, .sfz or .sf2 path, or a library instrument like vsco2/violins_sus", line, where)
+            return None
+    if not isinstance(value, dict) or any(k not in SAMPLE_FIELDS for k in value):
+        report.error(rule, f"sample must be a path or a mapping of {', '.join(SAMPLE_FIELDS)}", line, where)
+        return None
+    kinds = [k for k in ("wav", "sfz", "sf2", "library") if k in value]
+    if len(kinds) != 1:
+        report.error(rule, "sample needs exactly one of wav, sfz, sf2 or library", line, where)
+        return None
+    kind = kinds[0]
+    root_note = parse_note_value(value.get("root", "C4"))
+    preset, bank, velocity = value.get("preset"), value.get("bank", 0), value.get("velocity")
+    flags = {k: value[k] for k in ("loop", "one_shot") if k in value}
+    if root_note is None:
+        report.error(rule, "sample.root must be the note the WAV was recorded at, e.g. A4", line, f"{where}.root")
+        return None
+    if any(not isinstance(v, bool) for v in flags.values()):
+        report.error(rule, "sample.loop and sample.one_shot must be true or false", line, where)
+        return None
+    if preset is not None and not (isinstance(preset, str) or (isinstance(preset, int) and not isinstance(preset, bool) and 0 <= preset <= 127)):
+        report.error(rule, "sample.preset must be a program number 0-127 or a preset name", line, f"{where}.preset")
+        return None
+    if not (isinstance(bank, int) and not isinstance(bank, bool) and 0 <= bank <= 128):
+        report.error(rule, "sample.bank must be 0-128 (128 = GM percussion)", line, f"{where}.bank")
+        return None
+    if velocity is not None and not (isinstance(velocity, int) and not isinstance(velocity, bool) and 1 <= velocity <= 127):
+        report.error(rule, "sample.velocity must be 1-127 (always play that velocity layer)", line, f"{where}.velocity")
+        return None
+    if kind != "wav" and "root" in value or kind != "sf2" and ("preset" in value or "bank" in value) or kind == "library" and "instrument" not in value:
+        report.error(rule, "sample: root is for wav, preset/bank for sf2, and library needs instrument (e.g. { library: vsco2, instrument: violins_sus })", line, where)
+        return None
+    try:
+        if kind == "library":
+            spec = library_spec(str(value["library"]), str(value["instrument"]))
+        else:
+            path = Path(str(value[kind]))
+            path = path if path.is_absolute() else (project_root(report.path) / path)
+            if not path.is_file():
+                report.error(rule, f"sample file {value[kind]!r} not found (relative paths start at the project folder: {project_root(report.path)})", line, f"{where}.{kind}")
+                return None
+            spec = SampleSpec(kind, str(path.resolve()), base=str(path.resolve().parent), stamp=(file_stamp(path),))
+        from dataclasses import replace as _replace
+
+        spec = _replace(spec, root=root_note, loop=flags.get("loop"), one_shot=flags.get("one_shot"),
+                        preset=preset, bank=bank, velocity=velocity)  # fmt: skip
+        sset = load_set(spec)
+    except (SampleError, LibraryError) as exc:
+        report.error(rule, f"sample: {exc}", line, where)
+        return None
+    return spec, sset
 
 
 def parse_crush(value: Any, report: Report, rule: str, where: str, line: int | None) -> Crush | None:

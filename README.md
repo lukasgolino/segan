@@ -23,14 +23,17 @@ patterns:
   key, so an off-key note can't be written. Row labels are checked, so a missing row can't shift the grid.
 - **SFX are synth layers** with pitch/gain/filter keyframes, 11 presets (coin, jump, laser, explosion, hit, hurt,
   powerup, blip, select, door, step), variations, phases and seamless loops.
+- **Sampled instruments**: `sample:` plays WAVs, SFZ maps and SoundFonts (`.sf2`), and the `vsco2` library
+  (VSCO 2 Community Edition, CC0: string sections, brass, woodwinds, harp, timpani, percussion, piano) downloads
+  on demand with `segan samples fetch`. See [examples/orchestra](examples/orchestra).
 - **One shared mix** (`[mix]`: room, tone, crush, oversampling, loudness targets, true-peak limiter) for every
   asset, so a game's sounds belong together; change it once and everything re-renders.
 - **Deterministic**: same sources, byte-identical WAVs (band-limited oscillators, table-based maths, no RNG
   drift). Every command takes `--json` and exits non-zero on errors; lint findings carry rule id, file, line
   and a fix hint.
 
-> **Status:** v0.1: the full pipeline works (kits, SFX, songs, lint, listen sheets, build, Godot 4, MIDI
-> import, MCP server, Claude skill). Synth sounds only (no samples yet). See [PLAN.md](PLAN.md) and
+> **Status:** v0.2: the full pipeline works (kits, SFX, songs, lint, listen sheets, build, Godot 4, MIDI
+> import, MCP server, Claude skill), with synth and sampled instruments. See [PLAN.md](PLAN.md) and
 > [CHANGELOG.md](CHANGELOG.md).
 
 ## Install
@@ -38,8 +41,8 @@ patterns:
 Requires Python 3.11+. SEGAN isn't on PyPI yet; install a tagged release from GitHub:
 
 ```sh
-pip install "git+https://github.com/lukasgolino/segan.git@v0.1.0"                 # the CLI + library
-pip install "segan[mcp] @ git+https://github.com/lukasgolino/segan.git@v0.1.0"    # + the MCP server
+pip install "git+https://github.com/lukasgolino/segan.git@v0.2.0"                 # the CLI + library
+pip install "segan[mcp] @ git+https://github.com/lukasgolino/segan.git@v0.2.0"    # + the MCP server
 segan --version
 ```
 
@@ -107,7 +110,7 @@ segan skill install          # copies it to <repo>/.claude/skills/segan/
 ## Using SEGAN from any agent (MCP)
 
 ```sh
-pip install "segan[mcp] @ git+https://github.com/lukasgolino/segan.git@v0.1.0"
+pip install "segan[mcp] @ git+https://github.com/lukasgolino/segan.git@v0.2.0"
 segan mcp --project path/to/audio      # stdio MCP server: 22 tools, listen sheets as images, WAVs as audio
 ```
 

@@ -38,6 +38,7 @@ Instrument fields (a source is required; everything else optional):
 |---|---|
 | `osc` | `sine`, `triangle`, `saw`, `pulse` (all band-limited), `noise` (white), `bitnoise` (sample-and-hold noise pitched by the note: NES/sfxr crunch), `fm` (2-operator) |
 | `drum` | `kick`, `snare`, `hat`, `clap`, `tom`, `cymbal` - macros with `tune` (Hz), `decay` (s), `tone` (Hz), `noise` (0-1 mix), `click` (0-1), `punch` (semitones of pitch drop) |
+| `sample` | recorded sound instead of a synth (see Samples below): `vsco2/violins_sus` (library), `samples/x.sfz`, `samples/gm.sf2` + `preset`, `samples/hit.wav` + `root` |
 | `duty` | pulse width 0.01-0.99 (0.5 square, 0.25 and 0.125 thinner, NES-like) |
 | `pwm` | `[rate_hz, depth]` pulse-width modulation |
 | `fm` | `{ ratio, index, env }`: modulator frequency ratio (whole numbers = harmonic, e.g. 1, 2; 3.5 = bell-like), modulation index (brightness), optional index envelope |
@@ -54,6 +55,44 @@ Instrument fields (a source is required; everything else optional):
 | `voices` | notes at once (default 1: a new note cuts the previous one, like a chip channel; E014 if a track stacks more) |
 | `crush` | `{ bits: 1-16, rate: Hz }` lo-fi for this instrument only |
 | `note` | the pitch it plays as a one-shot (drum lanes, SFX layers without `pitch`); default C4 |
+
+### Samples (orchestral and other recorded instruments)
+
+`sample:` replaces `osc`/`drum`; envelope, filter, vibrato, pitch keyframes, gain, voices and crush still apply.
+
+```yaml
+instruments:
+  v: { name: violins, sample: vsco2/violins_sus, voices: 4, env: [0.04, 0, 1, 0.35] }   # library instrument
+  r: { name: harp, sample: vsco2/harp, voices: 8 }                                        # one-shot: rings to its end
+  T: { name: timpani, sample: vsco2/timpani, voices: 2 }
+  B: { name: bass_drum, sample: vsco2/bass_drum }                                        # unpitched: drum lanes
+  g: { sample: { sf2: samples/GeneralUser.sf2, preset: 48, bank: 0 } }                   # SoundFont preset (number or name)
+  k: { sample: { sfz: samples/keys.sfz, velocity: 100 } }                                # always that velocity layer
+  z: { sample: { wav: samples/zap.wav, root: A4, loop: true } }                           # one WAV, pitched from root
+```
+
+- **Library** `vsco2` = VSCO 2 Community Edition (CC0, Versilian Studios): strings (sections: `violins_`, `violas_`,
+  `cellos_` `sus|trem|pizz|spic`, `basses_sus|pizz`, `violin_solo`, `harp`), brass (`horn_`, `trumpet_`, `trombone_`,
+  `tuba_` `sus|stac`), woodwinds (`flute_`, `oboe_`, `clarinet_`, `bassoon_` `sus|stac`, `piccolo`), percussion
+  (`timpani`, `timpani_roll`, `glockenspiel`, `marimba`, `xylophone`, `bass_drum`, `snare`, `crash`, `sus_cymbal`,
+  `tam_tam`, `triangle`, `tambourine`), `piano`. `segan samples list` shows them with sizes; the audio isn't in
+  SEGAN: `segan samples fetch vsco2 violins_sus harp ...` downloads only those (pinned commit, checked) into a
+  user cache shared by every project. Lint says what to fetch if a kit needs more. Every library instrument is
+  levelled to the same loudness, so kit `gain` is pure balance.
+- Paths (wav/sfz/sf2) are relative to the project folder (the one with segan.toml). WAV: PCM 8-32-bit or float,
+  any rate, mono or stereo (mixed to mono; tracks pan and the room widens). `smpl` loops are used.
+- `env` defaults to the file's own (SFZ `ampeg_*`, SF2 volume envelope); `range` defaults to the mapped keys
+  (E007 outside). Note velocity picks the layer: plain notes 80 (mf), accents `X` 120, ghosts `o` 28.
+- Sustained samples (`_sus`) play while the note is held, then release; a note held longer than its sample
+  is silent at the end (W014: shorten it or re-strike). One-shots (`pizz`, `stac`, `harp`, percussion, SFZ
+  `loop_mode=one_shot`, `one_shot: true`) ring to their natural end whatever the note length; `voices` caps how
+  many ring at once. In an SFX layer, `length:` chokes a one-shot (then its `env` release).
+- SFZ subset: `<control> <global> <master> <group> <region>`, `sample default_path key lokey hikey
+  pitch_keycenter lovel hivel tune transpose volume amplitude offset end loop_mode loop_start loop_end
+  seq_length seq_position lorand hirand trigger ampeg_*`, `#define`. SF2: key/velocity zones, root key, tuning,
+  loops, attenuation, volume envelope (modulators, filters and effects are ignored).
+  `segan samples list file.sf2` lists a SoundFont's presets.
+- Sampled songs render slower than synth ones (a 30 s orchestral loop ~20 s cold); renders are cached.
 
 ## SFX - `sfx/<name>.sfx.yaml`
 
@@ -241,6 +280,7 @@ loudness_tolerance = 1.0      # W001/W013, LU
 |---|---|
 | `segan init [dir] [--open] [--style chiptune\|synth] [--godot DIR]` | create a project with a starter kit |
 | `segan new kit <name>` / `new song <name> [--kit K] [--key "A minor"] [--tempo 120] [--bars 2]` / `new sfx <name> [--preset P] [--kit K]` | starter files (always pass `--description`) |
+| `segan samples list [library\|file.sf2]` / `segan samples fetch <library> <instrument...> [--all]` | sample libraries: instruments and what's downloaded / download instruments |
 | `segan kit show [kits]` | every instrument playing a test phrase: `previews/kits/<kit>.listen.png` + WAVs |
 | `segan lint [paths] [--warnings-as-errors] [--no-render]` | errors + warnings (audio warnings render the asset; cached) |
 | `segan preview <asset...> [--output main\|variant:X\|variation:N\|phase:X\|stem:T\|mix:M ...] [--from 5 --to 8]` | WAV + listen sheet (+ seam view for loops) per output in `previews/<asset>/`, analysis in `--json` |
@@ -282,7 +322,8 @@ give it body or a quieter category), W002 unused pattern or section, W003 too ma
 W004 silent pattern or sound, W005 lead-in silence in an SFX, W006 made under an older style version, W007
 click at a loop point, W008 DC offset, W009 tracks clash (minor 2nd/tritone) on a beat, W010 aliasing (raise
 `[mix] oversample` or play lower), W011 SFX still sounding at `duration`, W012 note cut at the end of its
-pattern, W013 loudness off target with `normalize: false`.
+pattern, W013 loudness off target with `normalize: false`, W014 a note held longer than its sample (no loop):
+it goes silent before it ends.
 Turn warnings off for one asset with `lint: { disable: [...] }`, project-wide with `[lint] disable`.
 
 ## Build output (any engine)

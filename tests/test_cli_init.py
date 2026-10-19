@@ -29,6 +29,17 @@ def test_init_synth_style_and_open_mode(in_tmp: Path, capsys: pytest.CaptureFixt
     assert load_project(in_tmp / "a").config.mode == "open"
 
 
+def test_init_orchestral_style(in_tmp: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    from segan.kitshow import library_needs
+
+    code, data = run_json(["init", "o", "--style", "orchestral"], capsys)
+    assert code == 0 and data["default_kit"] == "orchestra"
+    config = load_project(in_tmp / "o").config
+    assert config.mix.room == 0.3 and config.mix.room_decay == 1.6 and config.lint.max_instruments == 16
+    needs = library_needs(in_tmp / "o" / "kits" / "orchestra.kit.yaml")
+    assert "violins_sus" in needs and "timpani" in needs
+
+
 def test_init_into_godot_project(in_tmp: Path, capsys: pytest.CaptureFixture[str]) -> None:
     (in_tmp / "game").mkdir()
     (in_tmp / "game" / "project.godot").write_text("config_version=5\n")

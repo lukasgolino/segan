@@ -23,7 +23,7 @@ def test_skill_frontmatter() -> None:
     assert text.startswith("---\nname: segan\ndescription: ")
 
 
-@pytest.mark.parametrize("rule", [f"E{n:03d}" for n in range(16)] + sorted(WARNING_RULES))
+@pytest.mark.parametrize("rule", [f"E{n:03d}" for n in range(17)] + sorted(WARNING_RULES))
 def test_reference_documents_every_rule(rule: str) -> None:
     assert rule in (SKILL / "reference.md").read_text()
 

@@ -1,0 +1,26 @@
+# SEGAN orchestra example: sampled instruments from VSCO 2 Community Edition (CC0).
+# The samples aren't in the repo: `segan samples fetch vsco2 <instruments>` downloads what kits/orchestra.kit.yaml
+# uses (see README.md), then `segan preview music/overture.song.yaml` / `segan build`.
+mode = "strict"
+default_kit = "orchestra"
+output_dir = "build/audio"
+preview_dir = "previews"
+export = ["wav"]
+style_version = 1
+
+[mix]
+sample_rate = 44100
+oversample = 2
+music_channels = "stereo"
+sfx_channels = "mono"
+room = 0.3                # a hall, not a chip-tune room
+room_decay = 1.6
+limiter = -1.0
+
+[loudness]
+music = -16.0
+sfx = -14.0
+jingle = -18.0           # orchestral hits: peaky by nature
+
+[lint]
+max_instruments = 16       # an orchestra needs more than a chip band
