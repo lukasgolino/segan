@@ -154,12 +154,25 @@ def finish(x: Signal, rate: int, target: float | None, measure: str, ceiling_db:
             if over > max_limiting_db:
                 gain_db -= over - max_limiting_db
     gain = db_to_gain(gain_db)
-    curve = limiter_gain(peaks * gain, ceiling_db, rate)
-    # the gain curve is smooth (8 ms), so the limited signal's true peaks are the envelope times the curve
-    excess = float((peaks * gain * curve).max()) / db_to_gain(ceiling_db) if len(data) else 0.0
-    if excess > 1.0:
-        curve = curve / excess
+    curve = limit_curve(peaks, gain, ceiling_db, rate)
     limited = data * (gain * curve)[:, None]
     reduction = -20.0 * math.log10(float(curve.min())) if len(curve) and curve.min() > 0 else 0.0
     level = Level(measured, gain_db, target, reduction, loudness(limited, rate, measure))
     return limited, level, curve * gain
+
+
+def limit_curve(peaks: Signal, gain: float, ceiling_db: float, rate: int) -> Signal:
+    """The limiter's gain curve for a signal with true-peak envelope `peaks` after a static `gain`."""
+    curve = limiter_gain(peaks * gain, ceiling_db, rate)
+    # the gain curve is smooth (8 ms), so the limited signal's true peaks are the envelope times the curve
+    excess = float((peaks * gain * curve).max()) / db_to_gain(ceiling_db) if len(peaks) else 0.0
+    return curve / excess if excess > 1.0 else curve
+
+
+def gain_and_limit(x: Signal, gain_db: float, ceiling_db: float, rate: int) -> Signal:
+    """A fixed gain (e.g. the whole song's normalisation) and the true-peak limiter, for clips of a song."""
+    data = frames_of(x)
+    if not len(data):
+        return data
+    gain = db_to_gain(gain_db)
+    return data * (gain * limit_curve(true_peak_envelope(data), gain, ceiling_db, rate))[:, None]

@@ -1,6 +1,6 @@
 ---
 name: segan
-description: Make and maintain game audio with SEGAN (Sound Effect Grammar And Notation) - sound effects (coin, jump, laser, explosion, hit, footsteps, doors, UI blips, engine hums), music loops (exploration, combat, menus, shops, jingles), instrument kits, adaptive stems and variants - and change a game's sound over time (brighter, warmer, more reverb, lo-fi, louder or quieter). Use whenever a user or an orchestrating agent asks for game audio, a sound, an SFX, music, a song, a loop, a jingle or a kit, or mentions segan / segan.toml.
+description: Make and maintain game audio with SEGAN (Sound Effect Grammar And Notation) - sound effects (coin, jump, laser, explosion, hit, footsteps, doors, UI blips, engine hums), music loops and long-form soundtracks (exploration, combat, menus, shops, jingles; section graphs, game states, transitions), instrument kits, adaptive stems and variants - and change a game's sound over time (brighter, warmer, more reverb, lo-fi, louder or quieter). Use whenever a user or an orchestrating agent asks for game audio, a sound, an SFX, music, a song, a loop, a jingle or a kit, or mentions segan / segan.toml.
 ---
 
 # SEGAN: making game audio as text
@@ -44,7 +44,7 @@ whether a sound is pleasant or fits the game, whether the mix balance feels righ
 ## 1. Setup check
 
 1. `segan --version`. If it's missing, install it the way the project pins it (its requirements file / tag,
-   e.g. `pip install "git+https://github.com/lukasgolino/segan.git@v0.2.0"`). Never swap a pinned install for an
+   e.g. `pip install "git+https://github.com/lukasgolino/segan.git@v0.3.0"`). Never swap a pinned install for an
    editable checkout unless you are developing SEGAN itself.
 2. Find the audio project: `segan status` (it says so if there's no `segan.toml` here or above), or
    `find . -name segan.toml -not -path '*/node_modules/*'`. That folder is the game's **audio home**:
@@ -175,6 +175,13 @@ bass, maybe a pad or arpeggio, 3-5 drums.
    therefore longer than the arrangement (8 bars at 100 bpm = 19.2 s, the file 21.6 s): that's expected; engines
    use the loop points. Check `seam_click` and the seam view (`<name>.seam.png`). Intros are their own section
    before the loop.
+   **Music the player hears for minutes (exploration, towns, combat) must not be one 8-16 bar loop**: players
+   tire of it fast. Write 5-10 contrasting sections (derive most with section changes: `{ from: verse,
+   semitones: 2 }`, `{ from: chorus, mute: [drums], velocity: 0.7 }`, a breakdown, a bridge) and a `flow:` graph
+   so the game picks the next section at run time; preview `--output walk` and look at the whole walk. Plan the
+   game's music as a soundtrack (`music/<name>.soundtrack.yaml`): states with song pools, play times and
+   silence gaps (silence between songs is what keeps music fresh), and transitions (sync point, fades,
+   stingers). reference.md: "Long-form music" and "Soundtrack".
 6. **Variants** in one line each: `danger: { tempo: 150, instrument_swap: { q: r } }`, `calm: { kit: soft_kit }`,
    `night: { semitones: -2 }`, `major: { key: A major }`; combinations with `variant_axes`. Adaptive layering:
    add `"stems"` to `export` (one WAV per track, Godot AudioStreamSynchronized), or a `stems:` block with `groups`
@@ -195,7 +202,9 @@ resources into `output_dir`. Report what the game needs, from `manifest.json`:
   `stems` (+ `godot_stems`, an AudioStreamSynchronized: set each stream's volume to bring layers in and out);
 - SFX: `variations` (+ `godot_randomizer`: play that one stream, it picks a variation each time), `phases`.
 In Godot, loops already loop (SEGAN writes the loop points into each WAV's `.import`); play SFX with an
-AudioStreamPlayer/2D/3D on an "SFX" bus and music on a "Music" bus.
+AudioStreamPlayer/2D/3D on an "SFX" bus and music on a "Music" bus. Flow songs and soundtracks are played by
+the director `segan_music.gd` (written next to the manifest): autoload it as `SeganMusic`, then
+`SeganMusic.play_soundtrack("main")` / `set_state("combat")` / `play_song(...)` / `stop(...)` (reference.md, Godot).
 
 ## 7. Changing the sound over time
 

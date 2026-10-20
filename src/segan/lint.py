@@ -7,17 +7,18 @@ build always judge the same samples. `render=False` skips them for a fast format
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
 from segan.analysis import dc_offset, leading_silence, seam_click
-from segan.asset import ASSET_SUFFIXES, load_asset
+from segan.asset import ASSET_SUFFIXES, SFX_SUFFIX, SONG_SUFFIX, load_asset
 from segan.findings import Finding, SeganError
 from segan.kit import KIT_SUFFIX, Kit, load_kit_file
 from segan.kitshow import aliasing_of, context_for
 from segan.patch import Instrument
 from segan.project import Project
+from segan.soundtrack import SOUNDTRACK_SUFFIX, Soundtrack, check_soundtrack, load_soundtrack
 from segan.synth import Context
 
 WARNING_RULES = {
@@ -35,6 +36,8 @@ WARNING_RULES = {
     "W012": "note held past the end of its pattern",
     "W013": "loudness off target (normalisation off)",
     "W014": "note held longer than its (unlooped) sample",
+    "W015": "flow section shorter than the ring-out before it",
+    "W016": "soundtrack cross-fade between clashing keys",
 }
 
 
@@ -44,6 +47,7 @@ class LintResult:
     findings: list[Finding]
     assets: list[Any]
     kits: list[Kit]
+    soundtracks: list[Soundtrack] = field(default_factory=list)
 
     @property
     def errors(self) -> list[Finding]:
@@ -55,9 +59,9 @@ class LintResult:
 
 
 def source_files(project: Project, paths: list[Path] | None = None) -> list[Path]:
-    """Kit, song and SFX files under `paths` (default: the project's kits/, music/ and sfx/)."""
+    """Kit, song, SFX and soundtrack files under `paths` (default: the project's kits/, music/ and sfx/)."""
     roots = paths or [project.kits_dir, project.music_dir, project.sfx_dir]
-    suffixes = (KIT_SUFFIX, *ASSET_SUFFIXES)
+    suffixes = (KIT_SUFFIX, SOUNDTRACK_SUFFIX, *ASSET_SUFFIXES)
     found: set[Path] = set()
     for root in roots:
         if root.is_file():
@@ -85,7 +89,14 @@ def lint_paths(project: Project, paths: list[Path] | None = None, render: bool =
     kits: list[Kit] = []
     ctx = context_for(project.config.mix)
     threshold = project.config.lint.max_aliasing_db
+    soundtracks: list[Soundtrack] = []
     for path in files:
+        if path.name.endswith(SOUNDTRACK_SUFFIX):
+            soundtrack, st_findings = load_soundtrack(path)
+            findings.extend(st_findings)
+            if soundtrack is not None:
+                soundtracks.append(soundtrack)
+            continue
         if path.name.endswith(KIT_SUFFIX):
             try:
                 kit = load_kit_file(path)
@@ -112,9 +123,29 @@ def lint_paths(project: Project, paths: list[Path] | None = None, render: bool =
             for asset in group:
                 others = ", ".join(o.path.name for o in group if o is not asset and o.path)
                 findings.append(Finding("E012", f"asset name {name!r} is also used by {others}; names must be unique across songs and SFX (outputs would overwrite each other)", asset.path, None, "name"))
+    if soundtracks:
+        songs = _project_assets(project, assets, "song")
+        sfx = set(_project_assets(project, assets, "sfx"))
+        for soundtrack in soundtracks:
+            findings.extend(check_soundtrack(soundtrack, songs, sfx))
     disabled = set(project.config.lint.disable)
     findings = [f for f in dict.fromkeys(findings) if f.rule not in disabled]
-    return LintResult(files, findings, assets, kits)
+    return LintResult(files, findings, assets, kits, soundtracks)
+
+
+def _project_assets(project: Project, loaded: list[Any], kind: str) -> dict[str, Any]:
+    """Every song (or SFX) of the project by name: the ones this lint loaded, plus the rest parsed quietly (a
+    soundtrack linted on its own still needs the songs it names)."""
+    found = {a.name: a for a in loaded if a.kind == kind}
+    folder, suffix = (project.music_dir, SONG_SUFFIX) if kind == "song" else (project.sfx_dir, SFX_SUFFIX)
+    if folder.is_dir():
+        for path in sorted(folder.rglob(f"*{suffix}")):
+            name = path.name[: -len(suffix)]
+            if name not in found:
+                asset, _ = load_asset(path, project)
+                if asset is not None:
+                    found[asset.name] = asset
+    return found
 
 
 def _kit_aliasing(kit: Kit, ctx: Context, threshold: float) -> list[Finding]:
@@ -153,8 +184,14 @@ def lint_audio(asset: Any, project: Project) -> list[Finding]:
     found: list[Finding] = []
     path = asset.path
     render = render_asset(asset, project)
+    short: set[tuple[str, str]] = set()
     for output in render.outputs:
-        if output.id.startswith(("stem:", "mix:")):
+        if output.id.startswith(("stem:", "mix:", "flow")):
+            if output.info.get("cut") and (output.id.split(":", 1)[0], output.info["section"]) not in short:
+                short.add((output.id.split(":", 1)[0], output.info["section"]))
+                found.append(Finding("W015", f"flow section {output.info['section']!r} is shorter than the ring-out of the section before it "
+                                     f"({output.info['from']!r}): the rest of that ring-out is cut when the game plays it after "
+                                     f"{output.info['from']!r}. Lengthen the section or shorten the releases / room", path, None, f"sections.{output.info['section']}"))  # fmt: skip
             continue
         label = output.stem
         level = output.level
@@ -208,7 +245,7 @@ def _asset_aliasing(asset: Any, ctx: Context, threshold: float) -> list[Finding]
 
         for variant in [None, *asset.all_variants().values()]:
             kit = variant.kit if variant is not None and variant.kit is not None else asset.kit
-            for p in placed_notes(asset, build_timeline(asset, variant), variant):
+            for p in placed_notes(asset, build_timeline(asset, variant, asset.played_sections()), variant):
                 inst = kit.instruments.get(p.key)
                 if inst is None or asset.tracks[p.note.track].drums:
                     continue

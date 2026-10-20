@@ -25,11 +25,13 @@ from segan.analysis import (
     true_peak_db,
     yin,
 )
-from segan.dsp import midi_to_hz_scalar
-from segan.listen import BAD, DIM, GOOD, TEXT, TRACK_COLOURS, WARN, RollNote, RollTrack, SheetSpec, listen_sheet, seam_sheet
+from segan.dsp import Signal, midi_to_hz_scalar
+from segan.listen import BAD, DIM, GOOD, TEXT, TRACK_COLOURS, WARN, Block, RollNote, RollTrack, SheetSpec, listen_sheet, seam_sheet
 from segan.project import Project
 from segan.render import Output, Render
 from segan.sfx import Layer, Sfx
+
+JOIN_ERROR = 1e-3  # a walk may differ this much from a straight render of its path (16-bit rounding, limiter at clip edges)
 
 Colour = tuple[int, int, int]
 
@@ -174,11 +176,18 @@ def write_preview(asset: Any, render: Render, project: Project, start: float | N
     folder.mkdir(parents=True, exist_ok=True)
     result = PreviewResult(asset.name, folder)
     click = project.config.lint.max_seam_click
-    for output in render.outputs:
+    outputs = list(render.outputs)
+    walks = [o for o in (only or ["walk"]) if o == "walk" or o.startswith("walk:")]
+    if render.kind == "song" and asset.flow is not None:
+        outputs += [walk_output(asset, render, project, int(w.split(":", 1)[1]) if ":" in w else 1) for w in walks]
+    for output in outputs:
+        if output.id.startswith("walk"):
+            result.files.append(_write_walk(asset, output, folder, click))
+            continue
         if only and not {output.id or "main", output.stem} & set(only):
             continue
-        if not only and output.id.startswith(("stem:", "mix:")):
-            continue  # stems are build outputs; preview them with --output stem:<name> / mix:<name>
+        if not only and output.id.startswith(("stem:", "mix:", "flow")):
+            continue  # build outputs; preview them with --output stem:<name> / mix:<name> / flow:<clip>
         base = output.stem.replace("/", ".")
         wav = folder / f"{base}.wav"
         wav.write_bytes(output.wav())
@@ -210,3 +219,36 @@ def write_preview(asset: Any, render: Render, project: Project, start: float | N
             entry["seam"] = seam
         result.files.append(entry)
     return result
+
+
+def walk_output(song: Any, render: Render, project: Project, seed: int) -> Output:
+    """A seeded walk through a flow song's sections, from its flow clips (what the director plays)."""
+    from segan.flowrender import path_reference, walk, walk_audio
+    from segan.wavio import to_pcm16
+
+    path = walk(song, seed)
+    audio, starts = walk_audio(render.outputs, None, path)
+    gain = float(render.main.level.get("gain_db") or 0.0)
+    error = float(np.abs(path_reference(song, project, None, path, len(audio), gain) - audio).max())
+    level = {"target": render.main.level.get("target")}
+    return Output(f"walk:{seed}", f"{song.name}.walk{seed}", to_pcm16(audio), render.main.rate, None, starts, level, {"path": path, "join_error": error})
+
+
+def _write_walk(song: Any, output: Output, folder: Path, threshold_click: float) -> dict[str, Any]:
+    path: list[str] = output.info["path"]
+    wav = folder / f"{output.stem}.wav"
+    wav.write_bytes(output.wav())
+    analysis = analyze(output, "song")
+    audio = output.audio
+    analysis["walk"] = path
+    analysis["join_error"] = round(float(output.info["join_error"]), 6)
+    ends = [at for _, at in output.cues[1:]] + [output.frames]
+    blocks = [Block(name, at / output.rate, end / output.rate) for (name, at), end in zip(output.cues, ends, strict=True)]
+    notes = [f"a walk through the flow (seed {output.id.split(':')[1]}): {' > '.join(path)}",
+             f"clip joins: max difference from a straight render of this path {analysis['join_error']:g} of full scale "
+             f"(limit {JOIN_ERROR:g}; 16-bit rounding and the limiter at clip edges); the last section rings out"]  # fmt: skip
+    title = f"song {song.name} walk" + (f"  - {song.meta.description}" if song.meta.description else "")
+    spec = SheetSpec(title[:150], level_stats(analysis, threshold_click), audio, output.rate, blocks=blocks, notes=notes)
+    sheet = folder / f"{output.stem}.listen.png"
+    listen_sheet(spec, analysis.get("target_lufs")).save(sheet)
+    return {"output": output.id, "wav": wav, "sheet": sheet, "analysis": analysis}

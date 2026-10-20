@@ -13,3 +13,8 @@ config/features=PackedStringArray("4.7")
 
 window/size/viewport_width=960
 window/size/viewport_height=600
+
+[autoload]
+
+; SEGAN's music director (written by `segan build` next to manifest.json): flow songs and soundtracks.
+SeganMusic="*res://assets/generated/audio/segan_music.gd"

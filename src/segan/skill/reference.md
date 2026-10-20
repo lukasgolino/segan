@@ -7,7 +7,7 @@ digits, `_`, `-`; they must match the file name and be unique across songs and S
 
 ```
 segan.toml   BRIEF.md   SOUND.md
-kits/<name>.kit.yaml     music/<name>.song.yaml     sfx/<name>.sfx.yaml
+kits/<name>.kit.yaml     music/<name>.song.yaml     sfx/<name>.sfx.yaml     music/<name>.soundtrack.yaml
 previews/  (scratch: WAVs, listen sheets; gitignored)    .segan-cache/ (render cache; gitignored)
 ```
 
@@ -220,6 +220,88 @@ lists every mix's LUFS (`stem_mixes_lufs`). Without `mixes` the stems follow the
 More song fields: `category` (default `music`: loudness target), `normalize: false`, `extends` (a song with
 `template: true`; tracks, patterns, sections, variants merge by name), and the common fields below.
 
+### Long-form music: section changes and `flow`
+
+An 8-bar loop on repeat wears players out within minutes. Write more material cheaply, and let the game walk it:
+
+**Section changes.** A section is a pattern list or a mapping that changes its patterns' notes as they play:
+
+```yaml
+sections:
+  verse: [a, b, a, c]
+  verse_up: { from: verse, semitones: 2 }                  # same section a tone higher (a key change)
+  chorus: { patterns: [d, d, e, f] }
+  chorus_soft: { from: chorus, mute: [drums], velocity: 0.7, instrument_swap: { p: q } }
+  breakdown: { patterns: [a, b], mute: [lead, harmony] }
+  bridge: { patterns: [g, h], key: A major }               # same scale degrees in another key/mode
+```
+
+`patterns` or `from` (another section: its patterns and changes, then this one's fields over them), `transpose`
+(scale steps), `semitones`, `key`, `instrument_swap`, `group_swap`, `mute` (tracks), `velocity` (0.05-2, or
+`{ track: scale }`). Pitch changes apply at play time, so `semitones: 2` doesn't need the rows to exist; a song
+variant applies first, the section's changes on top. Ranges (E007) and voices (E014) are checked per section.
+
+**Flow (the game picks the next section).** Without `flow`, a song is one arrangement with one loop. With it,
+the game (SEGAN's Godot director, or your own player from the manifest) chains sections at run time:
+
+```yaml
+arrangement: [intro, verse, chorus, verse_up, chorus, bridge, chorus]   # still the linear version (preview, simple games)
+flow:
+  start: intro                       # or a list: one is picked
+  next:                              # which sections may follow which: a list, or weights
+    intro: [verse]
+    verse: { chorus: 3, breakdown: 1 }
+    verse_up: [chorus]
+    chorus: { verse: 2, verse_up: 1, bridge: 1, chorus_soft: 1 }
+    chorus_soft: [verse, bridge]
+    breakdown: [chorus]
+    bridge: { chorus: 1, verse_up: 1 }
+  end: outro                         # optional: played when the game ends the song (any section may go to it)
+  no_repeat: true                    # never the same section twice in a row unless it's the only way on (default)
+  variants: [danger]                 # variants that get flow clips too (default: none)
+```
+
+Every flow section must be whole bars (E017); every section reachable from `start` and able to go on (or be
+the `end`). Each section is built as clips: `flow/<song>/<section>.head.wav` (its first bar(s), cold),
+`<section>.from.<prev>.wav` (the same bars with the previous section's ring-out baked in), `<section>.wav` (the
+rest) and `<section>.tail.wav` (its ring-out when the music stops after it). Chained back to back they equal a
+linear render of that path, so every seam is clean whatever order the game picks. W015: a section shorter than
+the ring-out before it (that ring-out gets cut).
+
+Writing for flow: 5-10 sections of 4-8 bars with real contrast (a breakdown, a bridge, a key change, a soft
+chorus) give minutes before an order repeats; derive most of them with section changes. Keep each section's
+first bar playable after any of its predecessors (the harmony joins), and end each section on a cadence that
+can lead into all of its `next` sections. `segan preview <song> --output walk` (or `walk:<seed>`) renders a
+3-minute seeded walk from the clips (`<song>.walk1.wav`, sections marked on the sheet, `join_error` in
+the analysis: max difference from a straight render of the path, < 0.001): listen to that, not just the arrangement.
+
+## Soundtrack - `music/<name>.soundtrack.yaml`
+
+Which songs a game plays in which state, and how it moves between states (played by the Godot director):
+
+```yaml
+name: main
+start: explore
+states:
+  explore: { songs: { overworld: 2, village: 1 }, play: [120, 240], gap: [10, 40], fade_out: 3 }
+  combat: { songs: [combat, overworld.danger] }      # `song.variant`
+  menu: [title]                                      # a list = songs only
+transitions:                                         # most specific wins: "from>to", "from>*", "*>to", "*"
+  "*": { at: bar, fade: 2 }                          # the default is { at: bar, fade: 2 }
+  explore>combat: { at: beat, fade: 0.5, stinger: hit, start: main }
+  combat>explore: { at: section, fade: 4, fade_in: 2 }
+```
+
+State: `songs` (list, or weights; never the same song twice in a row when there are others), `play` (seconds a
+song plays before it ends, a number or [min, max]; a flow song then finishes its section and plays `end` or
+its tail, a looping song fades out over `fade_out`; default: forever when the state has one song and no gap,
+else [120, 240]), `gap` (seconds of silence between songs, number or [min, max]: silence makes music last).
+Transition: `at` (`now`, `beat`, `bar`, `section`, `end`: when the switch happens, on the old song's grid),
+`fade` (seconds the old song fades out; 0 with `at: section` lets a flow song ring out naturally), `fade_in`,
+`stinger` (an SFX played at the switch), `start` (a section of the new song to start at). E018: unknown
+state/song/variant/SFX/section or a bad field; W016: a cross-fade between songs whose keys clash (keep fades
+between related keys, or use a short fade with a stinger).
+
 ## Common fields (songs and SFX)
 
 `description` (always), `tags: [...]`, `status: draft|approved` (approved only after a human listened),
@@ -283,7 +365,7 @@ loudness_tolerance = 1.0      # W001/W013, LU
 | `segan samples list [library\|file.sf2]` / `segan samples fetch <library> <instrument...> [--all]` | sample libraries: instruments and what's downloaded / download instruments |
 | `segan kit show [kits]` | every instrument playing a test phrase: `previews/kits/<kit>.listen.png` + WAVs |
 | `segan lint [paths] [--warnings-as-errors] [--no-render]` | errors + warnings (audio warnings render the asset; cached) |
-| `segan preview <asset...> [--output main\|variant:X\|variation:N\|phase:X\|stem:T\|mix:M ...] [--from 5 --to 8]` | WAV + listen sheet (+ seam view for loops) per output in `previews/<asset>/`, analysis in `--json` |
+| `segan preview <asset...> [--output main\|variant:X\|variation:N\|phase:X\|stem:T\|mix:M\|flow:CLIP\|walk[:SEED] ...] [--from 5 --to 8]` | WAV + listen sheet (+ seam view for loops) per output in `previews/<asset>/`, analysis in `--json`; flow songs also get a walk |
 | `segan render <asset...>` | WAVs only |
 | `segan gallery` | every asset's waveform + spectrum and a loudness chart by category |
 | `segan bake sfx <name> [--in-place]` | expand a preset/template into every field |
@@ -315,7 +397,9 @@ problem (unknown key/group, group sizes differ, a key with no instrument), E007 
 range (also in variants), E008 bad loop/phase/crossfade, E009 inline instruments in strict mode, E010 derived
 pattern problem, E011 row label doesn't match its row, E012 duplicate asset name, E013 SFX problem, E014 more
 notes at once than an instrument's voices, E015 hold with nothing to hold, E016 `stems:` problem (a track in no
-group or two, unknown stem in a mix).
+group or two, unknown stem in a mix), E017 `flow:` problem (unknown or unreachable section, dead end, bad weight,
+a section that isn't whole bars), E018 soundtrack problem (unknown state, song, variant, stinger SFX or start
+section; a bad field).
 
 Warnings: W001 loudness target out of reach without more limiting than `max_limiting_db` (too short/spiky:
 give it body or a quieter category), W002 unused pattern or section, W003 too many instruments in one song,
@@ -323,7 +407,8 @@ W004 silent pattern or sound, W005 lead-in silence in an SFX, W006 made under an
 click at a loop point, W008 DC offset, W009 tracks clash (minor 2nd/tritone) on a beat, W010 aliasing (raise
 `[mix] oversample` or play lower), W011 SFX still sounding at `duration`, W012 note cut at the end of its
 pattern, W013 loudness off target with `normalize: false`, W014 a note held longer than its sample (no loop):
-it goes silent before it ends.
+it goes silent before it ends, W015 a flow section shorter than the ring-out of a section before it, W016 a
+soundtrack cross-fade between songs in clashing keys.
 Turn warnings off for one asset with `lint: { disable: [...] }`, project-wide with `[lint] disable`.
 
 ## Build output (any engine)
@@ -340,8 +425,17 @@ Turn warnings off for one asset with `lint: { disable: [...] }`, project-wide wi
   that much of the loop's start again with the end's tail ringing into it; `section`), `variants` (name -> file entry + timing),
   `stems` (stem -> file entry + `tracks`), `stem_mixes` (mix -> `stems`, `lufs`), `stems_normalised_over` and
   `godot_stems`. With `main_mix: false` / `include_main: false` the entry has no `file` (timing and loop stay).
-Files: `music/<song>.wav`, `music/<song>.<variant>.wav`, `stems/<song>/<track>.wav`, `sfx/<name>.wav`,
-`sfx/<name>.<n>.wav`, `sfx/<name>.<phase>.wav`. WAVs are 16-bit PCM with a `smpl` loop chunk and `cue` markers.
+- flow songs: `flow` = `start`, `next` (section -> {successor: weight}), `end`, `no_repeat`, `head_bars`, `sections`
+  (name -> `samples` (its length: play the next section exactly this many samples after it starts), `seconds`,
+  `bars`, `head_samples`, `head`/`rest`/`tail` files and `from` (previous section -> head file; when the previous
+  section isn't listed, the cold `head`)), `variants` (variant -> the same clips). A walk plays, per section, the
+  head (`from[prev]` or `head`) for `head_samples` samples, then `rest` for `samples - head_samples`; after the
+  last section, its `tail`. Clip files carry 32 extra samples (Godot stops a WAV a few samples before its end):
+  play each for its stated length, not to its end.
+Top level: `soundtracks` (name -> `start`, `states` (state -> `songs` [{song, variant, weight}], `play`, `gap`,
+`fade_out`), `transitions` ("from>to" -> `at`, `fade`, `fade_in`, `stinger`, `start`), `default_transition`).
+Files: `music/<song>.wav`, `music/<song>.<variant>.wav`, `stems/<song>/<track>.wav`, `flow/<song>[.<variant>]/<clip>.wav`,
+`sfx/<name>.wav`, `sfx/<name>.<n>.wav`, `sfx/<name>.<phase>.wav`. WAVs are 16-bit PCM with a `smpl` loop chunk and `cue` markers.
 The build only rewrites files that changed and deletes outputs (and their `.import`) it no longer produces.
 
 ## Godot
@@ -357,6 +451,25 @@ $Music.play()
 $Coin.stream = load("res://assets/generated/audio/sfx/coin.tres")          # a random variation each play
 $Coin.play()
 ```
+
+**Music director** (`segan_music.gd`, written next to `manifest.json` when the project has a flow song or a
+soundtrack). Add it as an autoload named `SeganMusic` (Project Settings > Globals > Autoload), then:
+
+```gdscript
+SeganMusic.play_soundtrack("main")             # the soundtrack's start state
+SeganMusic.set_state("combat")                 # its transitions decide when and how (beat/bar/section, fades, stinger)
+SeganMusic.play_song("overworld", "danger")    # one song directly; a flow song walks its sections until stopped
+SeganMusic.queue_section("bridge")             # a flow song's next section, instead of a random pick
+SeganMusic.stop(2.0)                           # fade out over 2 s (stop(0.0, "section") lets a flow song ring out)
+SeganMusic.section_started.connect(func(song, section): print(song, " ", section))
+```
+
+Signals: `song_started(song, variant)`, `section_started(song, section)`, `song_finished(song)`,
+`state_changed(state)`. Properties: `bus` (default `Master`), `buffer_seconds` (0.3: audio queued ahead; changes
+land after it), `random_seed` (0 = a different walk every run). It chains sections sample-exactly (an
+AudioStreamGenerator fed from the clips); a new song starts on the old one's grid within one audio mix chunk.
+Native `AudioStreamInteractive`/`AudioStreamPlaylist` aren't generated: in Godot 4.7 the first switches a mix
+chunk early and cuts tails, the second clicks at every seam.
 
 ## Generator scripts: `segan.api`
 

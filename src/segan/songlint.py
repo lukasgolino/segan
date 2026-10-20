@@ -14,10 +14,11 @@ CLASHES = {1: "minor 2nd", 6: "tritone"}
 def lint_song_source(song: Song, project: Project) -> list[Finding]:
     found: list[Finding] = []
     path = song.path
-    used_sections = set(song.arrangement)
+    used_sections = set(song.played_sections())
+    templates = set(song.section_sources.values())
     for name in song.sections:
-        if name not in used_sections:
-            found.append(Finding("W002", f"section {name!r} isn't in the arrangement: add it or delete it", path, None, f"sections.{name}"))
+        if name not in used_sections and name not in templates:
+            found.append(Finding("W002", f"section {name!r} isn't played (not in the arrangement or the flow, and no section derives from it): add it or delete it", path, None, f"sections.{name}"))
     used_patterns = {p for s in used_sections for p in song.sections.get(s, [])}
     sources = set()
     frontier = list(used_patterns)

@@ -31,7 +31,8 @@ def song_cache_parts(song: Song, project: Project) -> tuple[object, ...]:
     return ("song", song.name, song.kit, song.tempo, song.meter, song.steps_per_beat, song.swing, song.key, sorted(song.tracks.items()),
             patterns, sorted(song.sections.items()), song.arrangement, song.loop, sorted(song.markers.items()),
             sorted(song.all_variants().items()), song.normalize, song.category, project.config.mix_for(song.category),
-            project.config.target(song.category), project.config.lint.max_limiting_db, wants_stems(song, project), song.stems)  # fmt: skip
+            project.config.target(song.category), project.config.lint.max_limiting_db, wants_stems(song, project), song.stems,
+            sorted(song.section_changes.items()), song.flow)  # fmt: skip
 
 
 def wants_stems(song: Song, project: Project) -> bool:
@@ -120,4 +121,13 @@ def render_song(song: Song, project: Project) -> Render:
     outputs = [main]
     for variant in song.all_variants().values():
         outputs.append(render_variant(song, project, variant)[0])
-    return Render(song.name, "song", outputs + stems)
+    flow: list[Output] = []
+    if song.flow is not None:
+        from segan.flowrender import render_flow
+
+        flow += render_flow(song, project, None, float(main.level.get("gain_db") or 0.0))
+        for name in song.flow.variants:
+            variant = song.all_variants()[name]
+            level = next(o for o in outputs if o.id == f"variant:{name}").level
+            flow += render_flow(song, project, variant, float(level.get("gain_db") or 0.0))
+    return Render(song.name, "song", outputs + stems + flow)

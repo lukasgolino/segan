@@ -549,7 +549,8 @@ def cmd_preview(args: argparse.Namespace, out: Output) -> int:
     for asset in assets:
         render = render_asset(asset, project)
         result = write_preview(asset, render, project, _position(args.start, asset), _position(args.end, asset), args.output)
-        missing = [o for o in args.output or [] if not any(o in (r.id or "main", r.stem) for r in render.outputs)]
+        walks = asset.kind == "song" and asset.flow is not None
+        missing = [o for o in args.output or [] if not any(o in (r.id or "main", r.stem) for r in render.outputs) and not (walks and o.split(":")[0] == "walk")]
         if missing or not result.files:
             raise usage_error(f"{asset.name} has no output {', '.join(map(repr, missing or args.output or []))} (outputs: {', '.join(o.id or 'main' for o in render.outputs)})")
         for entry in result.files:
@@ -1005,7 +1006,7 @@ def build_parser() -> argparse.ArgumentParser:
     preview.add_argument("--from", dest="start", help="start of the shown window: bar number (songs) or seconds (2.5s)")
     preview.add_argument("--to", dest="end", help="end of the shown window")
     preview.add_argument("--output", action="append", help="only this output (repeat for several; one render): main, variant:<name>, variation:<n>, "
-                         "phase:<name>, stem:<name>, mix:<name>")  # fmt: skip
+                         "phase:<name>, stem:<name>, mix:<name>, flow:<clip>, walk (a flow song: a seeded walk through its sections; walk:<seed>)")  # fmt: skip
     preview.set_defaults(handler=cmd_preview)
 
     gallery = commands.add_parser("gallery", parents=[common], help="every asset side by side + loudness by category")

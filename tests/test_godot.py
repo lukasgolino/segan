@@ -107,3 +107,124 @@ def test_loops_are_seamless_and_the_randomizer_cycles(copies: tuple[Path, Path],
     assert diff < 1e-3, output  # playing across the loop point = playing the loop's start
     picks = json.loads(output.split("PICKS ")[1].split("\n")[0])
     assert len(set(picks)) >= 2 and all(a != b for a, b in zip(picks, picks[1:]))  # random, no repeats
+
+
+DIRECTOR_RENDER = """\
+extends SceneTree
+func _init():
+	var script = load("res://audio/segan_music.gd")
+	if script == null:
+		quit(1)
+		return
+	var music = script.new()
+	music.offline = true
+	music.load_manifest("res://audio/manifest.json")
+	music.rng.seed = 7
+	music.play_song("f")
+	for s in ["verse", "up", "verse", "verse"]:
+		music.queue_section(s)
+	var f := FileAccess.open(OS.get_cmdline_user_args()[0], FileAccess.WRITE)
+	var total := 0
+	while total < 44100 * 20:
+		var chunk: PackedVector2Array = music.render(4096)
+		for v in chunk:
+			f.store_float(v.x)
+			f.store_float(v.y)
+		total += chunk.size()
+	f.close()
+	print("MIXRATE ", AudioServer.get_mix_rate())
+	music.free()
+	quit()
+"""
+
+DIRECTOR_LIVE = """\
+extends SceneTree
+func _init():
+	var music = load("res://audio/segan_music.gd").new()
+	music.random_seed = 3
+	root.add_child(music)
+	var t0 := Time.get_ticks_msec()
+	music.state_changed.connect(func(s): print("EVENT state ", s))
+	music.song_started.connect(func(s, v): print("EVENT song ", s))
+	music.section_started.connect(func(s, sec): print("EVENT section ", s, " ", sec))
+	music.play_soundtrack("main")
+	for step in [[1.5, "tense"], [3.0, "stop"], [4.0, "end"]]:
+		while (Time.get_ticks_msec() - t0) / 1000.0 < step[0]:
+			await process_frame
+		if step[1] == "stop":
+			music.stop(0.5)
+		elif step[1] == "tense":
+			music.set_state("tense")
+	print("LIVE_OK")
+	quit()
+"""
+
+
+@pytest.fixture
+def flow_game(tmp_path: Path) -> Path:
+    """A Godot project with a flow song, a looping song, a stinger SFX and a soundtrack built into res://audio."""
+    from test_flow import FLOW_SONG, G_SONG, SOUNDTRACK
+
+    from conftest import CONFIG, make_project, write
+
+    game = tmp_path / "game"
+    game.mkdir()
+    (game / "project.godot").write_text('config_version=5\n\n[application]\n\nconfig/name="flow"\n')
+    config = CONFIG.replace("sample_rate = 22050", "sample_rate = 44100").replace(
+        'mode = "strict"', 'mode = "strict"\noutput_dir = "../game/audio"\nexport = ["wav", "godot"]'
+    )
+    (tmp_path / "src").mkdir()
+    project = make_project(tmp_path / "src", config + '\n[godot]\ncompress = "none"\n')
+    write(project, "song", "f", FLOW_SONG + "variants:\n  night: { semitones: -2 }\n")
+    write(project, "song", "g", G_SONG)
+    write(project, "sfx", "hit", "name: hit\npreset: hit\n")
+    (project.music_dir / "main.soundtrack.yaml").write_text(SOUNDTRACK)
+    result = build(project)
+    assert not result.errors, result.errors
+    assert GODOT is not None
+    check = verify_with_godot(GODOT, game, "res://audio/manifest.json")
+    assert check.ok, check.output
+    return game
+
+
+def test_director_chains_flow_clips_sample_exactly(flow_game: Path, tmp_path: Path) -> None:
+    import wave
+
+    import numpy as np
+
+    script = tmp_path / "director_render.gd"
+    script.write_text(DIRECTOR_RENDER)
+    raw = tmp_path / "out.raw"
+    assert GODOT is not None
+    run = subprocess.run([GODOT, "--headless", "--path", str(flow_game), "-s", str(script), "--", str(raw)], capture_output=True, text=True, timeout=300)
+    output = run.stdout + run.stderr
+    assert "SCRIPT ERROR" not in output and "MIXRATE 44100" in output, output
+    sections = json.loads((flow_game / "audio" / "manifest.json").read_text())["assets"]["f"]["flow"]["sections"]
+
+    def pcm(res: str, frames: int) -> np.ndarray:
+        with wave.open(str(flow_game / res.removeprefix("res://"))) as w:
+            data = np.frombuffer(w.readframes(w.getnframes()), dtype="<i2").reshape(-1, w.getnchannels())
+        return data[:frames] / 32767.0  # Godot decodes 16-bit PCM as x / 32767
+
+    path = ["intro", "verse", "up", "verse", "verse", "up"]
+    parts = []
+    for i, name in enumerate(path):
+        section = sections[name]
+        head = section["from"].get(path[i - 1], section["head"]) if i else section["head"]
+        parts.append(pcm(head, section["head_samples"]))
+        if section["rest"] is not None:
+            parts.append(pcm(section["rest"], section["samples"] - section["head_samples"]))
+    expected = np.concatenate(parts)
+    got = np.fromfile(raw, dtype="<f4").reshape(-1, 2)[: len(expected)]
+    assert len(got) == len(expected)
+    assert np.abs(got - expected).max() < 1e-6  # every seam exact: no lost, doubled or late frames
+
+
+def test_director_plays_a_soundtrack_live(flow_game: Path, tmp_path: Path) -> None:
+    script = tmp_path / "director_live.gd"
+    script.write_text(DIRECTOR_LIVE)
+    output = run_script(flow_game, script)
+    assert "LIVE_OK" in output and "SCRIPT ERROR" not in output, output
+    events = [line for line in output.splitlines() if line.startswith("EVENT")]
+    assert events[:3] == ["EVENT state calm", "EVENT song f", "EVENT section f intro"], events
+    assert "EVENT state tense" in events and any(e.startswith("EVENT song g") or e == "EVENT song f" for e in events[3:]), events

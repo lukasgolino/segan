@@ -22,7 +22,7 @@ from segan.mix import Level
 from segan.project import Project
 from segan.wavio import FULL_SCALE, wav_bytes
 
-RENDERER_VERSION = 2  # bump when rendering changes, so cached renders are redone
+RENDERER_VERSION = 3  # bump when rendering changes, so cached renders are redone
 
 
 @dataclass

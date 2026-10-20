@@ -51,6 +51,42 @@ func _check_wav(entry: Dictionary, rate: int) -> void:
 	_plays(wav, path)
 	checked += 1
 
+func _check_clip(path: String, rate: int) -> void:
+	_check_wav({"file": path, "channels": 2 if (load(path) is AudioStreamWAV and load(path).stereo) else 1, "loop": null}, rate)
+
+func _check_flow(flow: Dictionary, rate: int) -> void:
+	var sets: Array = [flow]
+	for v in flow.get("variants", {}):
+		sets.append(flow["variants"][v])
+	for clips in sets:
+		for name in clips["sections"]:
+			var section: Dictionary = clips["sections"][name]
+			for part in ["head", "rest", "tail"]:
+				if section[part] != null:
+					_check_clip(section[part], rate)
+			for prev in section["from"]:
+				_check_clip(section["from"][prev], rate)
+
+func _check_director(manifest_path: String, manifest: Dictionary) -> void:
+	var path := manifest_path.get_base_dir().path_join("segan_music.gd")
+	var script = load(path)
+	if script == null or not script.can_instantiate():
+		_fail("the director " + path + " doesn't load")
+		return
+	var music = script.new()
+	music.offline = true
+	music.manifest = manifest
+	music.rng.seed = 1
+	for name in manifest["assets"]:
+		var entry: Dictionary = manifest["assets"][name]
+		if entry.get("kind") == "song" and (entry.has("file") or entry.has("flow")):
+			music.play_song(name)
+			var frames: PackedVector2Array = music.render(4096)
+			if frames.size() != 4096:
+				_fail("the director rendered " + str(frames.size()) + " frames of " + name + ", expected 4096")
+			checked += 1
+	music.free()
+
 func _walk(value, rate: int) -> void:
 	if typeof(value) == TYPE_DICTIONARY:
 		if value.has("file") and typeof(value["file"]) == TYPE_STRING:
@@ -73,6 +109,8 @@ func _check() -> int:
 		var entry: Dictionary = manifest["assets"][name]
 		var rate: int = int(entry.get("sample_rate", 44100))
 		_walk(entry, rate)
+		if entry.has("flow"):
+			_check_flow(entry["flow"], rate)
 		if entry.has("godot_randomizer"):
 			var randomizer = load(entry["godot_randomizer"])
 			if randomizer == null or not (randomizer is AudioStreamRandomizer):
@@ -91,6 +129,8 @@ func _check() -> int:
 			else:
 				_plays(stems, entry["godot_stems"])
 				checked += 1
+	if FileAccess.file_exists(manifest_path.get_base_dir().path_join("segan_music.gd")):
+		_check_director(manifest_path, manifest)
 	finished = true
 	if failures > 0:
 		printerr("SEGAN_VERIFY_FAIL ", failures, " problems")

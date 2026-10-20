@@ -1,0 +1,11 @@
+name: main
+description: "The demo game's music: exploring walks the dungeon (and sometimes the overworld) with silences between songs; combat cuts in on the beat with a hit."
+start: explore
+states:
+  explore: { songs: { dungeon: 2, overworld: 1 }, play: [90, 150], gap: [4, 12], fade_out: 3 }
+  combat: [combat]
+  shop: [shop]
+transitions:
+  "*": { at: bar, fade: 2 }
+  "*>combat": { at: beat, fade: 0, stinger: hit }     # E minor clashes with the others: cut, don't cross-fade
+  "combat>*": { at: bar, fade: 0, fade_in: 2 }

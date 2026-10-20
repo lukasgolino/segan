@@ -320,6 +320,445 @@
       ],
       "target_lufs": -14.0
     },
+    "dungeon": {
+      "arrangement": [
+        {
+          "end": 392000,
+          "end_bar": 5.0,
+          "end_seconds": 8.888889,
+          "patterns": [
+            "a",
+            "b"
+          ],
+          "section": "intro",
+          "start": 0,
+          "start_bar": 1.0,
+          "start_seconds": 0.0
+        },
+        {
+          "end": 1176000,
+          "end_bar": 13.0,
+          "end_seconds": 26.666667,
+          "patterns": [
+            "a",
+            "b",
+            "a",
+            "f"
+          ],
+          "section": "verse",
+          "start": 392000,
+          "start_bar": 5.0,
+          "start_seconds": 8.888889
+        },
+        {
+          "end": 1960000,
+          "end_bar": 21.0,
+          "end_seconds": 44.444444,
+          "patterns": [
+            "c",
+            "d",
+            "c",
+            "d"
+          ],
+          "section": "chorus",
+          "start": 1176000,
+          "start_bar": 13.0,
+          "start_seconds": 26.666667
+        },
+        {
+          "end": 2352000,
+          "end_bar": 25.0,
+          "end_seconds": 53.333333,
+          "patterns": [
+            "a",
+            "b"
+          ],
+          "section": "breakdown",
+          "start": 1960000,
+          "start_bar": 21.0,
+          "start_seconds": 44.444444
+        },
+        {
+          "end": 3136000,
+          "end_bar": 33.0,
+          "end_seconds": 71.111111,
+          "patterns": [
+            "c",
+            "d",
+            "c",
+            "d"
+          ],
+          "section": "chorus",
+          "start": 2352000,
+          "start_bar": 25.0,
+          "start_seconds": 53.333333
+        },
+        {
+          "end": 3920000,
+          "end_bar": 41.0,
+          "end_seconds": 88.888889,
+          "patterns": [
+            "c",
+            "d",
+            "c",
+            "d"
+          ],
+          "section": "bridge",
+          "start": 3136000,
+          "start_bar": 33.0,
+          "start_seconds": 71.111111
+        },
+        {
+          "end": 4704000,
+          "end_bar": 49.0,
+          "end_seconds": 106.666667,
+          "patterns": [
+            "c",
+            "d",
+            "c",
+            "d"
+          ],
+          "section": "chorus_soft",
+          "start": 3920000,
+          "start_bar": 41.0,
+          "start_seconds": 88.888889
+        },
+        {
+          "end": 5488000,
+          "end_bar": 57.0,
+          "end_seconds": 124.444444,
+          "patterns": [
+            "a",
+            "b",
+            "a",
+            "f"
+          ],
+          "section": "verse",
+          "start": 4704000,
+          "start_bar": 49.0,
+          "start_seconds": 106.666667
+        },
+        {
+          "end": 6272000,
+          "end_bar": 65.0,
+          "end_seconds": 142.222222,
+          "patterns": [
+            "c",
+            "d",
+            "c",
+            "d"
+          ],
+          "section": "chorus",
+          "start": 5488000,
+          "start_bar": 57.0,
+          "start_seconds": 124.444444
+        },
+        {
+          "end": 6370000,
+          "end_bar": 66.0,
+          "end_seconds": 144.444444,
+          "patterns": [
+            "z"
+          ],
+          "section": "outro",
+          "start": 6272000,
+          "start_bar": 65.0,
+          "start_seconds": 142.222222
+        }
+      ],
+      "bars": 65.0,
+      "beat_count": 260,
+      "beat_seconds": 0.555556,
+      "bpm": 108.0,
+      "category": "music",
+      "channels": 2,
+      "description": "Long-form dungeon crawl for the director: D harmonic minor, 108 bpm, NES pulses. Seven sections the game walks at run time (a verse, a chorus, a quiet breakdown, a major-key bridge, a soft chorus), so no order repeats for minutes.",
+      "file": "res://assets/generated/audio/music/dungeon.wav",
+      "flow": {
+        "end": "outro",
+        "head_bars": 1,
+        "next": {
+          "breakdown": {
+            "chorus": 1.0
+          },
+          "bridge": {
+            "chorus": 1.0
+          },
+          "chorus": {
+            "bridge": 1.0,
+            "chorus_soft": 1.0,
+            "verse": 2.0
+          },
+          "chorus_soft": {
+            "bridge": 1.0,
+            "verse": 1.0
+          },
+          "intro": {
+            "verse": 1.0
+          },
+          "verse": {
+            "breakdown": 1.0,
+            "chorus": 3.0
+          }
+        },
+        "no_repeat": true,
+        "sections": {
+          "breakdown": {
+            "bars": 4.0,
+            "from": {
+              "verse": "res://assets/generated/audio/flow/dungeon/breakdown.from.verse.wav"
+            },
+            "head": "res://assets/generated/audio/flow/dungeon/breakdown.head.wav",
+            "head_samples": 98000,
+            "rest": "res://assets/generated/audio/flow/dungeon/breakdown.wav",
+            "samples": 392000,
+            "seconds": 8.888889,
+            "tail": "res://assets/generated/audio/flow/dungeon/breakdown.tail.wav"
+          },
+          "bridge": {
+            "bars": 8.0,
+            "from": {
+              "chorus": "res://assets/generated/audio/flow/dungeon/bridge.from.chorus.wav",
+              "chorus_soft": "res://assets/generated/audio/flow/dungeon/bridge.from.chorus_soft.wav"
+            },
+            "head": "res://assets/generated/audio/flow/dungeon/bridge.head.wav",
+            "head_samples": 98000,
+            "rest": "res://assets/generated/audio/flow/dungeon/bridge.wav",
+            "samples": 784000,
+            "seconds": 17.777778,
+            "tail": "res://assets/generated/audio/flow/dungeon/bridge.tail.wav"
+          },
+          "chorus": {
+            "bars": 8.0,
+            "from": {
+              "breakdown": "res://assets/generated/audio/flow/dungeon/chorus.from.breakdown.wav",
+              "bridge": "res://assets/generated/audio/flow/dungeon/chorus.from.bridge.wav",
+              "verse": "res://assets/generated/audio/flow/dungeon/chorus.from.verse.wav"
+            },
+            "head": "res://assets/generated/audio/flow/dungeon/chorus.head.wav",
+            "head_samples": 98000,
+            "rest": "res://assets/generated/audio/flow/dungeon/chorus.wav",
+            "samples": 784000,
+            "seconds": 17.777778,
+            "tail": "res://assets/generated/audio/flow/dungeon/chorus.tail.wav"
+          },
+          "chorus_soft": {
+            "bars": 8.0,
+            "from": {
+              "chorus": "res://assets/generated/audio/flow/dungeon/chorus_soft.from.chorus.wav"
+            },
+            "head": "res://assets/generated/audio/flow/dungeon/chorus_soft.head.wav",
+            "head_samples": 98000,
+            "rest": "res://assets/generated/audio/flow/dungeon/chorus_soft.wav",
+            "samples": 784000,
+            "seconds": 17.777778,
+            "tail": "res://assets/generated/audio/flow/dungeon/chorus_soft.tail.wav"
+          },
+          "intro": {
+            "bars": 4.0,
+            "from": {},
+            "head": "res://assets/generated/audio/flow/dungeon/intro.head.wav",
+            "head_samples": 98000,
+            "rest": "res://assets/generated/audio/flow/dungeon/intro.wav",
+            "samples": 392000,
+            "seconds": 8.888889,
+            "tail": "res://assets/generated/audio/flow/dungeon/intro.tail.wav"
+          },
+          "outro": {
+            "bars": 1.0,
+            "from": {
+              "breakdown": "res://assets/generated/audio/flow/dungeon/outro.from.breakdown.wav",
+              "bridge": "res://assets/generated/audio/flow/dungeon/outro.from.bridge.wav",
+              "chorus": "res://assets/generated/audio/flow/dungeon/outro.from.chorus.wav",
+              "chorus_soft": "res://assets/generated/audio/flow/dungeon/outro.from.chorus_soft.wav",
+              "intro": "res://assets/generated/audio/flow/dungeon/outro.from.intro.wav",
+              "verse": "res://assets/generated/audio/flow/dungeon/outro.from.verse.wav"
+            },
+            "head": "res://assets/generated/audio/flow/dungeon/outro.head.wav",
+            "head_samples": 98000,
+            "rest": null,
+            "samples": 98000,
+            "seconds": 2.222222,
+            "tail": "res://assets/generated/audio/flow/dungeon/outro.tail.wav"
+          },
+          "verse": {
+            "bars": 8.0,
+            "from": {
+              "chorus": "res://assets/generated/audio/flow/dungeon/verse.from.chorus.wav",
+              "chorus_soft": "res://assets/generated/audio/flow/dungeon/verse.from.chorus_soft.wav",
+              "intro": "res://assets/generated/audio/flow/dungeon/verse.from.intro.wav"
+            },
+            "head": "res://assets/generated/audio/flow/dungeon/verse.head.wav",
+            "head_samples": 98000,
+            "rest": "res://assets/generated/audio/flow/dungeon/verse.wav",
+            "samples": 784000,
+            "seconds": 17.777778,
+            "tail": "res://assets/generated/audio/flow/dungeon/verse.tail.wav"
+          }
+        },
+        "start": [
+          "intro"
+        ]
+      },
+      "godot_stems": "res://assets/generated/audio/stems/dungeon.tres",
+      "key": "D harmonic_minor",
+      "kind": "song",
+      "limiting_db": 0.0,
+      "loop": null,
+      "lufs": -16.0,
+      "markers": {},
+      "meter": [
+        4,
+        4
+      ],
+      "sample_rate": 44100,
+      "samples": 6391467,
+      "seconds": 144.931224,
+      "sections": {
+        "breakdown": {
+          "end": 2352000,
+          "end_bar": 25.0,
+          "end_seconds": 53.333333,
+          "patterns": [
+            "a",
+            "b"
+          ],
+          "start": 1960000,
+          "start_bar": 21.0,
+          "start_seconds": 44.444444
+        },
+        "bridge": {
+          "end": 3920000,
+          "end_bar": 41.0,
+          "end_seconds": 88.888889,
+          "patterns": [
+            "c",
+            "d",
+            "c",
+            "d"
+          ],
+          "start": 3136000,
+          "start_bar": 33.0,
+          "start_seconds": 71.111111
+        },
+        "chorus": {
+          "end": 1960000,
+          "end_bar": 21.0,
+          "end_seconds": 44.444444,
+          "patterns": [
+            "c",
+            "d",
+            "c",
+            "d"
+          ],
+          "start": 1176000,
+          "start_bar": 13.0,
+          "start_seconds": 26.666667
+        },
+        "chorus_soft": {
+          "end": 4704000,
+          "end_bar": 49.0,
+          "end_seconds": 106.666667,
+          "patterns": [
+            "c",
+            "d",
+            "c",
+            "d"
+          ],
+          "start": 3920000,
+          "start_bar": 41.0,
+          "start_seconds": 88.888889
+        },
+        "intro": {
+          "end": 392000,
+          "end_bar": 5.0,
+          "end_seconds": 8.888889,
+          "patterns": [
+            "a",
+            "b"
+          ],
+          "start": 0,
+          "start_bar": 1.0,
+          "start_seconds": 0.0
+        },
+        "outro": {
+          "end": 6370000,
+          "end_bar": 66.0,
+          "end_seconds": 144.444444,
+          "patterns": [
+            "z"
+          ],
+          "start": 6272000,
+          "start_bar": 65.0,
+          "start_seconds": 142.222222
+        },
+        "verse": {
+          "end": 1176000,
+          "end_bar": 13.0,
+          "end_seconds": 26.666667,
+          "patterns": [
+            "a",
+            "b",
+            "a",
+            "f"
+          ],
+          "start": 392000,
+          "start_bar": 5.0,
+          "start_seconds": 8.888889
+        }
+      },
+      "status": "draft",
+      "stems": {
+        "bass": {
+          "channels": 2,
+          "file": "res://assets/generated/audio/stems/dungeon/bass.wav",
+          "loop": null,
+          "samples": 6391467,
+          "seconds": 144.931224,
+          "tracks": [
+            "bass"
+          ]
+        },
+        "drums": {
+          "channels": 2,
+          "file": "res://assets/generated/audio/stems/dungeon/drums.wav",
+          "loop": null,
+          "samples": 6391467,
+          "seconds": 144.931224,
+          "tracks": [
+            "drums"
+          ]
+        },
+        "harmony": {
+          "channels": 2,
+          "file": "res://assets/generated/audio/stems/dungeon/harmony.wav",
+          "loop": null,
+          "samples": 6391467,
+          "seconds": 144.931224,
+          "tracks": [
+            "harmony"
+          ]
+        },
+        "lead": {
+          "channels": 2,
+          "file": "res://assets/generated/audio/stems/dungeon/lead.wav",
+          "loop": null,
+          "samples": 6391467,
+          "seconds": 144.931224,
+          "tracks": [
+            "lead"
+          ]
+        }
+      },
+      "steps_per_beat": 4,
+      "style_version": 1,
+      "tags": [
+        "music",
+        "exploration",
+        "flow"
+      ],
+      "target_lufs": -16.0
+    },
     "explosion": {
       "category": "sfx",
       "channels": 1,
@@ -958,12 +1397,50 @@
     }
   },
   "files": [
+    "flow/dungeon/breakdown.from.verse.wav",
+    "flow/dungeon/breakdown.head.wav",
+    "flow/dungeon/breakdown.tail.wav",
+    "flow/dungeon/breakdown.wav",
+    "flow/dungeon/bridge.from.chorus.wav",
+    "flow/dungeon/bridge.from.chorus_soft.wav",
+    "flow/dungeon/bridge.head.wav",
+    "flow/dungeon/bridge.tail.wav",
+    "flow/dungeon/bridge.wav",
+    "flow/dungeon/chorus.from.breakdown.wav",
+    "flow/dungeon/chorus.from.bridge.wav",
+    "flow/dungeon/chorus.from.verse.wav",
+    "flow/dungeon/chorus.head.wav",
+    "flow/dungeon/chorus.tail.wav",
+    "flow/dungeon/chorus.wav",
+    "flow/dungeon/chorus_soft.from.chorus.wav",
+    "flow/dungeon/chorus_soft.head.wav",
+    "flow/dungeon/chorus_soft.tail.wav",
+    "flow/dungeon/chorus_soft.wav",
+    "flow/dungeon/intro.head.wav",
+    "flow/dungeon/intro.tail.wav",
+    "flow/dungeon/intro.wav",
+    "flow/dungeon/outro.from.breakdown.wav",
+    "flow/dungeon/outro.from.bridge.wav",
+    "flow/dungeon/outro.from.chorus.wav",
+    "flow/dungeon/outro.from.chorus_soft.wav",
+    "flow/dungeon/outro.from.intro.wav",
+    "flow/dungeon/outro.from.verse.wav",
+    "flow/dungeon/outro.head.wav",
+    "flow/dungeon/outro.tail.wav",
+    "flow/dungeon/verse.from.chorus.wav",
+    "flow/dungeon/verse.from.chorus_soft.wav",
+    "flow/dungeon/verse.from.intro.wav",
+    "flow/dungeon/verse.head.wav",
+    "flow/dungeon/verse.tail.wav",
+    "flow/dungeon/verse.wav",
     "music/combat.boss.wav",
     "music/combat.wav",
+    "music/dungeon.wav",
     "music/overworld.calm.wav",
     "music/overworld.danger.wav",
     "music/overworld.wav",
     "music/shop.wav",
+    "segan_music.gd",
     "sfx/blip.wav",
     "sfx/coin.wav",
     "sfx/door.wav",
@@ -986,6 +1463,11 @@
     "stems/combat/bass.wav",
     "stems/combat/drums.wav",
     "stems/combat/lead.wav",
+    "stems/dungeon.tres",
+    "stems/dungeon/bass.wav",
+    "stems/dungeon/drums.wav",
+    "stems/dungeon/harmony.wav",
+    "stems/dungeon/lead.wav",
     "stems/overworld.tres",
     "stems/overworld/bass.wav",
     "stems/overworld/drums.wav",
@@ -997,6 +1479,97 @@
     "stems/shop/keys.wav",
     "stems/shop/lead.wav"
   ],
-  "generator": "segan 0.2.0",
-  "note": "Generated by `segan build`. Do not edit: change the sources and rebuild. Loop ends and section ends are exclusive sample indices."
+  "generator": "segan 0.3.0",
+  "note": "Generated by `segan build`. Do not edit: change the sources and rebuild. Loop ends and section ends are exclusive sample indices.",
+  "soundtracks": {
+    "main": {
+      "default_transition": {
+        "at": "bar",
+        "fade": 2.0,
+        "fade_in": 0.0,
+        "start": null,
+        "stinger": null
+      },
+      "description": "The demo game's music: exploring walks the dungeon (and sometimes the overworld) with silences between songs; combat cuts in on the beat with a hit.",
+      "start": "explore",
+      "states": {
+        "combat": {
+          "fade_out": 3.0,
+          "gap": [
+            0.0,
+            0.0
+          ],
+          "play": null,
+          "songs": [
+            {
+              "song": "combat",
+              "variant": null,
+              "weight": 1.0
+            }
+          ]
+        },
+        "explore": {
+          "fade_out": 3.0,
+          "gap": [
+            4.0,
+            12.0
+          ],
+          "play": [
+            90.0,
+            150.0
+          ],
+          "songs": [
+            {
+              "song": "dungeon",
+              "variant": null,
+              "weight": 2.0
+            },
+            {
+              "song": "overworld",
+              "variant": null,
+              "weight": 1.0
+            }
+          ]
+        },
+        "shop": {
+          "fade_out": 3.0,
+          "gap": [
+            0.0,
+            0.0
+          ],
+          "play": null,
+          "songs": [
+            {
+              "song": "shop",
+              "variant": null,
+              "weight": 1.0
+            }
+          ]
+        }
+      },
+      "transitions": {
+        "*": {
+          "at": "bar",
+          "fade": 2.0,
+          "fade_in": 0.0,
+          "start": null,
+          "stinger": null
+        },
+        "*>combat": {
+          "at": "beat",
+          "fade": 0.0,
+          "fade_in": 0.0,
+          "start": null,
+          "stinger": "hit"
+        },
+        "combat>*": {
+          "at": "bar",
+          "fade": 0.0,
+          "fade_in": 2.0,
+          "start": null,
+          "stinger": null
+        }
+      }
+    }
+  }
 }

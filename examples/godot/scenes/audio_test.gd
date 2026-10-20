@@ -1,6 +1,7 @@
 # Lists every asset from SEGAN's manifest with buttons to play it: SFX (and their variations through the
-# AudioStreamRandomizer, and their phases), songs with a loop toggle, their variants, and the stems as an
-# AudioStreamSynchronized with one volume slider per layer (adaptive music).
+# AudioStreamRandomizer, and their phases), songs with a loop toggle, their variants, the stems as an
+# AudioStreamSynchronized with one volume slider per layer (adaptive music), flow songs walked by the SeganMusic
+# director, and each soundtrack with a button per game state.
 extends Control
 
 const MANIFEST := "res://assets/generated/audio/manifest.json"
@@ -54,12 +55,63 @@ func _ready() -> void:
 			loop.button_pressed = true
 			loop.toggled.connect(_set_loop.bind(entry))
 			row.add_child(loop)
+		if entry.has("flow"):
+			var walk := Button.new()
+			walk.text = "walk sections"
+			walk.pressed.connect(_walk.bind(asset_name))
+			row.add_child(walk)
 		if entry.has("godot_stems"):
 			_stems(list, entry)
+	for soundtrack in manifest.get("soundtracks", {}):
+		_soundtrack(list, soundtrack, manifest["soundtracks"][soundtrack])
 	var stop := Button.new()
 	stop.text = "stop"
-	stop.pressed.connect(func(): player.stop(); stems_player.stop())
+	stop.pressed.connect(_stop)
 	list.add_child(stop)
+
+
+func _director() -> Node:
+	return get_node_or_null("/root/SeganMusic")
+
+
+func _stop() -> void:
+	player.stop()
+	stems_player.stop()
+	if _director():
+		_director().stop(1.0)
+
+
+func _walk(song: String) -> void:
+	player.stop()
+	stems_player.stop()
+	_director().play_song(song, "", 0.5, "now")
+	status.text = "walking " + song
+
+
+func _soundtrack(list: VBoxContainer, soundtrack: String, entry: Dictionary) -> void:
+	var row := HBoxContainer.new()
+	rows["soundtrack:" + soundtrack] = row
+	list.add_child(row)
+	var label := Label.new()
+	label.text = "%s [soundtrack]" % soundtrack
+	label.custom_minimum_size = Vector2(220, 0)
+	row.add_child(label)
+	for state in entry["states"]:
+		var button := Button.new()
+		button.text = state
+		button.pressed.connect(_state.bind(soundtrack, state))
+		row.add_child(button)
+
+
+func _state(soundtrack: String, state: String) -> void:
+	player.stop()
+	stems_player.stop()
+	var music := _director()
+	if music.soundtrack_name != soundtrack:
+		music.play_soundtrack(soundtrack, state)
+	else:
+		music.set_state(state)
+	status.text = "soundtrack %s: %s" % [soundtrack, state]
 
 
 func _button(row: HBoxContainer, text: String, path: String) -> void:
@@ -71,6 +123,8 @@ func _button(row: HBoxContainer, text: String, path: String) -> void:
 
 func _play(path: String) -> void:
 	stems_player.stop()
+	if _director():
+		_director().stop(0.2)
 	player.stream = load(path)
 	player.play()
 	status.text = "playing " + path

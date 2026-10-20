@@ -1,4 +1,4 @@
-# Headless check: the demo scene builds a row for every asset in the manifest, and every stream plays a few frames.
+# Headless check: the demo scene builds a row for every asset and soundtrack in the manifest, and the director autoload exists.
 extends SceneTree
 
 func _init() -> void:
@@ -11,6 +11,11 @@ func _init() -> void:
 	for asset_name in manifest["assets"]:
 		if not root.rows.has(asset_name):
 			missing.append(asset_name)
+	for soundtrack in manifest.get("soundtracks", {}):
+		if not root.rows.has("soundtrack:" + soundtrack):
+			missing.append("soundtrack:" + soundtrack)
+	if get_root().get_node_or_null("SeganMusic") == null:
+		missing.append("the SeganMusic autoload")
 	if missing.size() > 0:
 		printerr("CHECK_FAIL rows missing for ", missing)
 		quit(1)

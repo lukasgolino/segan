@@ -505,6 +505,72 @@ library (VSCO 2 CE, CC0) mapped by SEGAN and fetched on demand (pinned, verified
 `segan init --style orchestral`; `examples/orchestra` (CI fetches and builds it). Plus ORCHESTRATOR_PLAN S1-S3
 (stem groups/mixes, stems-only/variations-only builds, room sends and tail trim) and the bug reports. v0.2.0.
 
+### ☑ Milestone 9 — Long-form music and soundtracks (owner request, 2026-10-20)
+
+Problem: a song is one linear arrangement with one loop, so a game hears the same 8-16 bars back to back.
+Owner decisions: section shuffling + cheap long forms; a SEGAN Godot director + manifest; a soundtrack file.
+
+**Measured on Godot 4.7.2 (why a director, not native resources):** `AudioStreamWAV` has no bpm, so
+`AudioStreamInteractive` ignores next-bar/beat timing on WAV clips (a 10-line GDScript `AudioStream` wrapper fixes
+that). But Interactive auto-advance switches one mix chunk early (~11.6 ms, cumulative per section), cuts the
+previous clip's tail, and ignores `next_clip` changes made while a clip plays (no runtime branching).
+`AudioStreamPlaylist` with no fade has a 2-frame glitch at every seam. The director instead feeds an
+`AudioStreamGenerator` from clip playbacks via `mix_audio` (sample-exact, chosen at runtime). Native Interactive /
+Playlist `.tres` for flows and soundtracks are not generated.
+
+1. **Section changes (long forms without long grids).** A section is a pattern list (as before) or a mapping:
+   `{ patterns: [...] | from: <section>, transpose, semitones, key, instrument_swap, group_swap, mute: [tracks],
+   velocity: 0.8 | {track: x} }`. Pitch changes apply at play time (like variants), so `semitones: 2` modulates
+   without leaving the roll's rows; a song variant applies on top. E007/E014 are checked per section × variant.
+2. **Flow (section graph).** Song field
+   `flow: { start: intro | [..], next: { intro: [verse], verse: { chorus: 2, bridge: 1 }, ... }, end: outro, no_repeat: true, variants: [danger] }`.
+   The game walks the graph: weighted random successor at every section end, never the same section twice in a
+   row when `no_repeat` (unless it's the only successor). `end` (optional) is the section played when the game ends
+   the song; every section may go to it.
+   Rendering (sample-exact seams, minimal size): every section has its own local timeline (length `L` frames,
+   positions rounded from its own start, so concatenation never drifts or jitters). `H` = whole bars covering the
+   longest ring-out (releases + room) of any flow section, capped at each section's length. Per section S:
+   `rest` = S's frames [H, L) rendered cold; `head` = [0, H) rendered cold (start of the song); `from.<P>` = [0, H) of
+   the linear render P→S for each predecessor P (P's tail baked in; deduped when identical to the cold head);
+   `tail` = S's ring-out after L (used when the song stops after S). A walk plays `head(P→S) + rest(S)` back to back:
+   exactly a linear render of that path, up to the -70 dB tail trim and the limiter at clip edges. All clips use one
+   static gain (the linear song's normalisation), then the true-peak limiter. W015: a section shorter than `H`
+   (a predecessor's ring-out is cut). E017: flow problems (unknown section, unreachable section, dead end, bad weight,
+   a section that isn't whole bars). Head/rest clips carry 32 frames of continuation (Godot ends WAV playback early).
+   Files: `flow/<song>[.<variant>]/<section>.wav`, `.head.wav`, `.from.<p>.wav`, `.tail.wav`; manifest `flow`.
+   Variants get flow clips only when listed in `flow.variants`. Flow stems: later.
+   `segan preview <song> --output walk` renders a seeded walk (~3 min) from the clips, so a human can hear it.
+3. **Soundtrack** — `music/<name>.soundtrack.yaml`, asset kind `soundtrack`:
+   ```yaml
+   name: main
+   start: explore
+   states:
+     explore: { songs: { overworld: 2, village: 1 }, play: [120, 240], gap: [10, 40], fade_out: 3 }
+     combat:  { songs: [combat, overworld.danger] }      # song.variant
+   transitions:                                          # "from>to", "*>to", "from>*", "*"
+     "*": { at: bar, fade: 2 }
+     explore>combat: { at: beat, fade: 0.5, stinger: hit, start: main }
+   ```
+   `songs` (list or weights; no immediate repeat), `play` seconds per song before it ends (flow: at the next section
+   end, via `end` or the section's tail; loop: fade out over `fade_out`; default: forever when the state has one
+   song and no gap, else [120, 240]), `gap` seconds of silence between songs. Transition: `at`
+   (now|beat|bar|section|end), `fade` (old song out, s), `fade_in` (s), `stinger` (SFX at the switch), `start` (flow
+   section to start at). E018: unknown state/song/variant/SFX/section, bad fields. W016: a cross-fade (fade > 0)
+   between songs in clashing keys (not the same key, relative, or a fifth apart). Soundtracks are a source type of
+   their own (like kits), not assets; manifest top-level `soundtracks`.
+4. **Director** — `segan_music.gd`, written into the output dir when exporting to Godot and the project has a flow
+   or soundtrack. Autoload-able Node: `play_soundtrack(name, state)`, `set_state(state)`, `play_song(song, variant)`,
+   `stop(fade, at)`, signals `section_started`, `song_started`, `song_finished`, `state_changed`; seedable RNG.
+   Two decks (AudioStreamPlayer + AudioStreamGenerator) fed with `mix_audio`; song changes fade the old deck by
+   volume and start the new one at the sync point (± one mix chunk; the old one is fading). Verified headless:
+   its output for a forced walk equals the concatenated clip files exactly.
+
+**Done when:** a test song with a flow and section changes builds; the walk preview is seamless (W007-style seam
+check on every edge); the director's output in headless Godot equals the clips; the soundtrack lints and lands in
+the manifest; reference.md documents all of it. v0.3.0.
+*(Done 2026-10-20: walk of clips = linear render within 1e-3; director output = concatenated clip files within
+1e-6 in headless Godot 4.7.2; no seam clicks with QOA or a 48 kHz mix rate. Musical quality of flows: owner's ear.)*
+
 ### Later (don't start unless asked)
 OGG/Opus export, MIDI export,
 `segan play` (local playback), audio-to-SFX parameter fitting, tracker (`.xm`) export, other engines, and a

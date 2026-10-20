@@ -130,3 +130,9 @@ Fixed on `main`; they ship in the next tag (v0.2.0).
 - **S3** done: `[room]` per-category send (`ui = 0`), SFX `room:` field, `[mix] tail_trim_db` (default -70).
 - Docs: the variation-gain / W001 interaction (S5) and "unlisted categories fall back to `sfx` for songs too"
   (S10) are in the reference.
+
+## From LOOSE! (2026-10-20, music pool on 0.2.0)
+- Loop pools / playlists: LOOSE! now ships 16 battle + 6 menu 8-bar loops shuffled by the game. Metadata (mood, key/tempo family, intensity 0..1, level trim) travels as `tags: ["mood=battle", "family=d", ...]` the game parses. Wanted: a first-class `pool:` (members, families, weights, transition rules: crossfade inside a family, fade across) in the manifest.
+- Stem mix levels: a bed-only mix can sit 13 dB under bed+drive (drums-only loops). Wanted: a per-mix loudness target or max gap between mixes.
+- Size: no OGG/Vorbis output and no per-song sample rate / mono; 22 loops = 136 MB WAV (Godot QOA ~23 MB).
+- W001 for percussive orchestral songs: songs had to move to a custom quieter category; a hint in W001 for songs would help.

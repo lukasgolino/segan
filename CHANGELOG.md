@@ -4,7 +4,7 @@ All notable changes to SEGAN are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Game projects should pin a release tag
-(e.g. `pip install "git+https://github.com/lukasgolino/segan.git@v0.2.0"`).
+(e.g. `pip install "git+https://github.com/lukasgolino/segan.git@v0.3.0"`).
 
 A new version (and tag) is cut for **any** change to:
 - the notation (kit, song or SFX files),
@@ -18,6 +18,36 @@ check before upgrading. Patch bumps never change existing behaviour. Every relea
 `generator` (`"segan X.Y.Z"`), so expect every manifest to change once per upgrade.
 
 ## [Unreleased]
+
+## [0.3.0] - 2026-10-20
+
+Long-form music: songs the game walks section by section, and soundtracks of game states.
+
+### Added
+
+- Section changes: a section can be `{ patterns | from, transpose, semitones, key, instrument_swap, group_swap,
+  mute, velocity }`, applied at play time (key changes without new rows), on top of a variant. E004/E007/E014
+  checked per section.
+- Song `flow: { start, next, end, no_repeat, variants }`: a weighted section graph the game walks at run time.
+  Each flow section builds as clips (`flow/<song>/<section>.head.wav`, `.from.<prev>.wav` with the previous
+  section's ring-out baked in, the rest, `.tail.wav`); chained, they equal a linear render of the path. Manifest
+  `flow`. E017 (graph problems, sections not whole bars), W015 (a section shorter than the ring-out before it).
+- `segan preview <song> --output walk[:seed]`: a 3-minute seeded walk through the flow from its clips, with the
+  sections on the sheet and `join_error` (max difference from a straight render of the path).
+- Soundtracks (`music/<name>.soundtrack.yaml`): game states with weighted song pools, play times and silence gaps,
+  and transitions (`at` now/beat/bar/section/end, `fade`, `fade_in`, `stinger`, `start`). Manifest
+  `soundtracks`. E018, W016 (a cross-fade between clashing keys).
+- Godot music director `segan_music.gd`, written next to the manifest when the project has a flow song or a
+  soundtrack: `play_soundtrack`, `set_state`, `play_song`, `queue_section`, `stop`, signals. Chains clips
+  sample-exactly through an AudioStreamGenerator (checked against the clip files in headless Godot).
+  `--verify-godot` also loads every flow clip and runs the director.
+- Demo: `dungeon` (a seven-section flow song) and the `main` soundtrack; the example Godot project autoloads the
+  director (`SeganMusic`) and has a "walk sections" button per flow song and a button per soundtrack state.
+
+### Changed
+
+- `manifest.json` always has a top-level `soundtracks` object (empty without soundtracks).
+- W002 no longer flags sections that only the flow plays or that other sections derive `from`.
 
 ## [0.2.0] - 2026-10-19
 

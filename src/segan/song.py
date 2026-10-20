@@ -4,11 +4,14 @@ Roll lanes have one row per scale note in the track's range (highest first): a k
 `-` holds it, `.` rests. Drum lanes have one row per drum key: `x` hit, `X` accent, `o` ghost. `|` is a
 bar line (ignored). Trailing row labels (`A5`, `k`) are checked, so a missing row can't shift the grid.
 Patterns are arranged into sections, sections into the arrangement; `loop` names where the loop starts.
+A section can change its patterns' notes at play time (key change, transposition, swaps, mutes, velocity), and
+`flow` lets the game walk the sections as a weighted graph instead of one fixed arrangement.
 """
 
 from __future__ import annotations
 
 import fnmatch
+import itertools
 import re
 from dataclasses import dataclass, field, replace
 from pathlib import Path
@@ -17,7 +20,7 @@ from typing import TYPE_CHECKING, Any
 from segan.asset import META_FIELDS, SONG_SUFFIX, Meta, load_source, parse_meta, resolve_extends, resolve_kit
 from segan.findings import Finding
 from segan.kit import Kit
-from segan.notes import Key, parse_key, parse_note
+from segan.notes import Key, parse_key, parse_note, transpose_key
 from segan.patch import Instrument, Report, is_number, line_of, parse_note_value
 from segan.yamlio import LineMap
 
@@ -25,11 +28,14 @@ if TYPE_CHECKING:
     from segan.project import Project
 
 SONG_FIELDS = (*META_FIELDS, "kit", "instruments", "groups", "tempo", "meter", "steps_per_beat", "swing", "key", "tracks",
-               "patterns", "sections", "arrangement", "loop", "variants", "variant_axes", "markers", "normalize", "category", "stems")  # fmt: skip
+               "patterns", "sections", "arrangement", "loop", "variants", "variant_axes", "markers", "normalize", "category", "stems",
+               "flow")  # fmt: skip
 STEM_FIELDS = ("groups", "mixes", "main_mix")
 TRACK_FIELDS = ("roll", "drums", "chromatic", "gain", "pan")
 DERIVE_FIELDS = ("from", "transpose", "semitones", "shift", "reverse", "mute", "swap")
 VARIANT_FIELDS = ("tempo", "swing", "instrument_swap", "group_swap", "kit", "transpose", "semitones", "key")
+SECTION_FIELDS = ("patterns", "from", "transpose", "semitones", "key", "instrument_swap", "group_swap", "mute", "velocity")
+FLOW_FIELDS = ("start", "next", "end", "no_repeat", "variants")
 DRUM_MARKS = {"x": 1.0, "X": 1.5, "o": 0.35}
 TRACK_RE = re.compile(r"^[a-z][a-z0-9_]*$")
 MAX_STEPS = 1024
@@ -92,6 +98,47 @@ class Variant:
 
 
 @dataclass(frozen=True)
+class SectionChange:
+    """What a section changes about its patterns' notes, at play time and before a song variant: pitch (key,
+    transpose, semitones), instrument swaps, muted tracks and velocity scales."""
+
+    pitch: Variant
+    mute: tuple[str, ...] = ()
+    velocity: tuple[tuple[str, float], ...] = ()  # track -> scale
+
+
+@dataclass(frozen=True)
+class Flow:
+    """`flow:` - the sections as a graph the game walks: weighted successors, where it starts, the optional
+    ending section (reachable from every section) and the variants that get flow clips too."""
+
+    start: tuple[str, ...]
+    next: tuple[tuple[str, tuple[tuple[str, float], ...]], ...]  # section -> ((successor, weight), ...)
+    end: str | None = None
+    no_repeat: bool = True
+    variants: tuple[str, ...] = ()
+
+    @property
+    def sections(self) -> list[str]:
+        """Every section the flow can play, in a stable order (starts, then as listed, then the ending)."""
+        out = list(self.start)
+        for name, succ in self.next:
+            out += [name, *(s for s, _ in succ)]
+        if self.end:
+            out.append(self.end)
+        return list(dict.fromkeys(out))
+
+    def successors(self, section: str) -> tuple[tuple[str, float], ...]:
+        return dict(self.next).get(section, ())
+
+    def predecessors(self, section: str) -> list[str]:
+        """Sections that can be followed by `section` (every other section, for the ending)."""
+        if section == self.end:
+            return [s for s in self.sections if s != section]
+        return [p for p in self.sections if any(s == section for s, _ in self.successors(p))]
+
+
+@dataclass(frozen=True)
 class Stems:
     """`stems:` - which tracks share a stem WAV (groups), the stem combinations the game plays (mixes: the
     stems are normalised so the loudest mix hits the target), and whether the full mix is built at all."""
@@ -121,10 +168,20 @@ class Song:
     normalize: bool = True
     category: str = "music"
     stems: Stems | None = None
+    section_changes: dict[str, SectionChange] = field(default_factory=dict)
+    flow: Flow | None = None
+    section_sources: dict[str, str] = field(default_factory=dict)  # section -> the section it derives from
 
     @property
     def name(self) -> str:
         return self.meta.name
+
+    def played_sections(self) -> list[str]:
+        """The arrangement's sections, then the flow's sections the arrangement doesn't play."""
+        out = list(dict.fromkeys(self.arrangement))
+        if self.flow is not None:
+            out += [s for s in self.flow.sections if s not in out]
+        return out
 
     @property
     def kind(self) -> str:
@@ -516,6 +573,172 @@ def _variant(name: str, raw: Any, song_kit: Kit, project: Project, report: Repor
                    kit_name, transpose, semitones, key, vline)  # fmt: skip
 
 
+def _section_fields(name: str, raw_sections: dict[str, Any], report: Report, line: int | None, chain: tuple[str, ...] = ()) -> dict[str, Any] | None:
+    """A section's fields as a mapping, with `from` resolved (the section's own fields over its source's)."""
+    raw = raw_sections[name]
+    iline = line_of(raw_sections, name, line)
+    where = f"sections.{name}"
+    if isinstance(raw, list):
+        return {"patterns": raw}
+    if not isinstance(raw, dict):
+        _bad(report, "E004", f"section {name!r} must be a list of patterns or a mapping of {', '.join(SECTION_FIELDS)}", iline, where)
+        return None
+    if unknown := [k for k in raw if k not in SECTION_FIELDS]:
+        _bad(report, "E004", f"section {name!r}: unknown field(s) {', '.join(map(repr, unknown))}; allowed: {', '.join(SECTION_FIELDS)}", iline, where)
+        return None
+    if ("patterns" in raw) == ("from" in raw):
+        _bad(report, "E004", f"section {name!r} needs exactly one of patterns: [...] or from: <section>", iline, where)
+        return None
+    if "patterns" in raw:
+        return dict(raw)
+    source = raw["from"]
+    if not isinstance(source, str) or source not in raw_sections:
+        _bad(report, "E004", f"section {name!r}: from {source!r} isn't a section (sections: {', '.join(raw_sections)})", iline, f"{where}.from")
+        return None
+    if source in (*chain, name):
+        _bad(report, "E004", f"section {name!r}: sections derived with from form a cycle ({' -> '.join((*chain, name, source))})", iline, f"{where}.from")
+        return None
+    base = _section_fields(source, raw_sections, report, line, (*chain, name))
+    if base is None:
+        return None
+    return {**base, **{k: v for k, v in raw.items() if k != "from"}}
+
+
+def _section_change(name: str, fields: dict[str, Any], tracks: dict[str, Track], kit: Kit, project: Project, report: Report, line: int | None) -> SectionChange | None:
+    where = f"sections.{name}"
+    pitch_fields = {k: fields[k] for k in ("transpose", "semitones", "key", "instrument_swap", "group_swap") if k in fields}
+    pitch = _variant(name, pitch_fields, kit, project, report, line, where)
+    if pitch is None:
+        return None
+    mute = fields.get("mute", [])
+    if not isinstance(mute, list) or not all(isinstance(m, str) and m in tracks for m in mute):
+        _bad(report, "E004", f"section {name!r}: mute must list track names ({', '.join(tracks)})", line, f"{where}.mute")
+        return None
+    velocity = fields.get("velocity", {})
+    if is_number(velocity):
+        velocity = {t: velocity for t in tracks}
+    if not (isinstance(velocity, dict) and all(k in tracks and is_number(v) and 0.05 <= v <= 2 for k, v in velocity.items())):
+        _bad(report, "E004", f"section {name!r}: velocity must be a scale 0.05-2 or {{ track: scale }} (tracks: {', '.join(tracks)})", line, f"{where}.velocity")
+        return None
+    return SectionChange(pitch, tuple(mute), tuple((str(k), float(v)) for k, v in velocity.items() if v != 1))
+
+
+def parse_sections(raw_sections: Any, raw_patterns: dict[str, Any], tracks: dict[str, Track], kit: Kit, project: Project, report: Report,
+                   line: int | None) -> tuple[dict[str, list[str]], dict[str, SectionChange], dict[str, str]]:  # fmt: skip
+    """Sections -> pattern lists, the changes of sections that make any (key, swaps, mutes, velocity), and which
+    section each derived section comes `from`."""
+    sections: dict[str, list[str]] = {}
+    changes: dict[str, SectionChange] = {}
+    sources: dict[str, str] = {}
+    if not isinstance(raw_sections, dict) or not raw_sections:
+        _bad(report, "E004", "sections must map section names to lists of patterns, e.g. main: [a, b, a, fill]", line, "sections")
+        return sections, changes, sources
+    for sname in raw_sections:
+        where = f"sections.{sname}"
+        iline = line_of(raw_sections, sname, line)
+        if not isinstance(sname, str) or not TRACK_RE.match(sname):
+            _bad(report, "E004", f"section name {sname!r} must be lowercase letters, digits or '_'", iline, where)
+            continue
+        fields = _section_fields(sname, raw_sections, report, line)
+        if fields is None:
+            continue
+        items = fields["patterns"]
+        if not isinstance(items, list) or not items or not all(isinstance(i, str) for i in items):
+            _bad(report, "E004", f"section {sname!r} must be a non-empty list of pattern names", iline, where)
+            continue
+        missing = [i for i in items if i not in raw_patterns]
+        if missing:
+            _bad(report, "E004", f"section {sname!r} uses unknown pattern(s) {', '.join(map(repr, missing))} (patterns: {', '.join(raw_patterns)})", iline, where)
+            continue
+        sections[sname] = list(items)
+        if isinstance(raw_sections[sname], dict) and isinstance(raw_sections[sname].get("from"), str):
+            sources[sname] = raw_sections[sname]["from"]
+        if any(k in fields for k in SECTION_FIELDS[2:]) and tracks:
+            change = _section_change(sname, fields, tracks, kit, project, report, iline)
+            if change is not None:
+                changes[sname] = change
+    return sections, changes, sources
+
+
+def _axis_names(axes: dict[str, dict[str, Variant]]) -> list[tuple[str, ...]]:
+    """Option-name combinations of the variant axes (`calm+night`), none without axes."""
+    return list(itertools.product(*(list(options) for options in axes.values()))) if axes else []
+
+
+def parse_flow(raw: Any, sections: dict[str, list[str]], song_variants: set[str], report: Report, line: int | None) -> Flow | None:
+    """E017: `flow:` - known sections, positive weights, every section reachable from a start and able to go on
+    (or be the ending)."""
+    def bad(message: str, where: str = "flow") -> None:
+        _bad(report, "E017", message, line, where)
+
+    if not isinstance(raw, dict) or any(k not in FLOW_FIELDS for k in raw):
+        bad(f"flow must be a mapping of {', '.join(FLOW_FIELDS)}, e.g. {{ start: intro, next: {{ intro: [verse], verse: {{ chorus: 2, bridge: 1 }} }} }}")
+        return None
+    known = ", ".join(sections)
+    start = raw.get("start")
+    starts = [start] if isinstance(start, str) else start
+    if not isinstance(starts, list) or not starts or not all(isinstance(s, str) for s in starts):
+        bad("flow.start must be a section name or a list of them (where the game starts the song)", "flow.start")
+        return None
+    if missing := [s for s in starts if s not in sections]:
+        bad(f"flow.start: unknown section(s) {', '.join(map(repr, missing))} (sections: {known})", "flow.start")
+        return None
+    raw_next = raw.get("next")
+    if not isinstance(raw_next, dict) or not raw_next:
+        bad("flow.next must map each section to the sections that may follow it: a list, or { section: weight }", "flow.next")
+        return None
+    graph: list[tuple[str, tuple[tuple[str, float], ...]]] = []
+    for name, succ in raw_next.items():
+        where = f"flow.next.{name}"
+        if name not in sections:
+            bad(f"flow.next: unknown section {name!r} (sections: {known})", where)
+            return None
+        weights = {s: 1 for s in succ} if isinstance(succ, list) else succ
+        if not isinstance(weights, dict) or not weights or not all(isinstance(s, str) and is_number(w) and w > 0 for s, w in weights.items()):
+            bad(f"flow.next.{name} must list sections ([verse, bridge]) or weight them ({{ verse: 2, bridge: 1 }}, weights > 0)", where)
+            return None
+        if missing := [s for s in weights if s not in sections]:
+            bad(f"flow.next.{name}: unknown section(s) {', '.join(map(repr, missing))} (sections: {known})", where)
+            return None
+        if isinstance(succ, list) and len(set(succ)) != len(succ):
+            bad(f"flow.next.{name} lists a section twice (use weights to make one likelier)", where)
+            return None
+        graph.append((str(name), tuple((str(s), float(w)) for s, w in weights.items())))
+    end = raw.get("end")
+    if end is not None and (not isinstance(end, str) or end not in sections):
+        bad(f"flow.end must be a section (the ending, played when the game ends the song); sections: {known}", "flow.end")
+        return None
+    no_repeat = raw.get("no_repeat", True)
+    if not isinstance(no_repeat, bool):
+        bad("flow.no_repeat must be true or false", "flow.no_repeat")
+        return None
+    variants = raw.get("variants", [])
+    if not isinstance(variants, list) or not all(isinstance(v, str) for v in variants):
+        bad("flow.variants must list song variants that get flow clips too", "flow.variants")
+        return None
+    if missing := [v for v in variants if v not in song_variants]:
+        bad(f"flow.variants: unknown variant(s) {', '.join(map(repr, missing))} (variants: {', '.join(sorted(song_variants)) or 'none'})", "flow.variants")
+        return None
+    flow = Flow(tuple(starts), tuple(graph), end, no_repeat, tuple(variants))
+    reached = set(flow.start)
+    frontier = list(flow.start)
+    while frontier:
+        for succ, _ in flow.successors(frontier.pop()):
+            if succ not in reached:
+                reached.add(succ)
+                frontier.append(succ)
+    if unreachable := [s for s in flow.sections if s not in reached and s != end]:
+        bad(f"flow: section(s) {', '.join(map(repr, unreachable))} can't be reached from the start ({', '.join(flow.start)})", "flow.next")
+        return None
+    if dead := [s for s in flow.sections if not flow.successors(s) and s != end]:
+        bad(f"flow: section(s) {', '.join(map(repr, dead))} have no next section (add them to flow.next, or make one the end)", "flow.next")
+        return None
+    if end is not None and flow.successors(end):
+        bad(f"flow: the ending {end!r} can't have next sections (the song stops after it)", "flow.next")
+        return None
+    return flow
+
+
 def load_song(path: Path, project: Project) -> tuple[Song | None, list[Finding]]:
     report = Report(path)
     try:
@@ -637,23 +860,9 @@ def parse_song(data: dict[str, Any], path: Path | None, project: Project, report
             if pattern is not None:
                 patterns[name] = pattern
 
-    sections: dict[str, list[str]] = {}
     raw_sections = data.get("sections")
     sline = line_of(data, "sections", line)
-    if not isinstance(raw_sections, dict) or not raw_sections:
-        _bad(report, "E004", "sections must map section names to lists of patterns, e.g. main: [a, b, a, fill]", sline, "sections")
-    else:
-        for sname, items in raw_sections.items():
-            where = f"sections.{sname}"
-            iline = line_of(raw_sections, sname, sline)
-            if not isinstance(items, list) or not items or not all(isinstance(i, str) for i in items):
-                _bad(report, "E004", f"section {sname!r} must be a non-empty list of pattern names", iline, where)
-                continue
-            missing = [i for i in items if i not in (raw_patterns or {})]
-            if missing:
-                _bad(report, "E004", f"section {sname!r} uses unknown pattern(s) {', '.join(map(repr, missing))} (patterns: {', '.join(raw_patterns or {})})", iline, where)
-                continue
-            sections[str(sname)] = list(items)
+    sections, changes, section_sources = parse_sections(raw_sections, raw_patterns if isinstance(raw_patterns, dict) else {}, tracks, kit, project, report, sline)
     arrangement = data.get("arrangement", list(sections) if isinstance(raw_sections, dict) and len(raw_sections) == 1 else None)
     aline = line_of(data, "arrangement", line)
     if not isinstance(arrangement, list) or not arrangement or not all(isinstance(a, str) for a in arrangement):
@@ -714,10 +923,19 @@ def parse_song(data: dict[str, Any], path: Path | None, project: Project, report
         if clash:
             _bad(report, "E006", f"variant name(s) {', '.join(clash)} are used by variants and variant_axes", xline, "variant_axes")
     stems = parse_stems(data["stems"], tracks, report, line_of(data, "stems", line)) if "stems" in data and tracks else None
+    flow = None
+    if "flow" in data:
+        all_variants = set(variants) | {"+".join(c) for c in _axis_names(axes)}
+        flow = parse_flow(data["flow"], sections, all_variants, report, line_of(data, "flow", line))
     if report.failed or key is None:
         return None, report.findings
     song = Song(meta, kit, float(tempo), (meter[0], meter[1]), steps_per_beat, float(swing), key, tracks, patterns, sections, arrangement, loop,
-                markers, variants, axes, normalize, category, stems)  # fmt: skip
+                markers, variants, axes, normalize, category, stems, changes, flow, section_sources)  # fmt: skip
+    for name in flow.sections if flow is not None else []:
+        steps = sum(patterns[p].length for p in sections[name])
+        if steps % song.steps_per_bar:
+            _bad(report, "E017", f"flow section {name!r} is {steps} steps, not whole bars of {song.steps_per_bar}: the game chains and syncs flow "
+                 "sections on bar lines", line_of(data, "flow", line), f"sections.{name}")  # fmt: skip
     for mname, (section, bar) in markers.items():
         steps = sum(patterns[p].length for p in sections[section])
         if (bar - 1) * song.steps_per_bar >= steps:
@@ -728,23 +946,37 @@ def parse_song(data: dict[str, Any], path: Path | None, project: Project, report
     return song, report.findings
 
 
-def note_midi(song: Song, note: Note, variant: Variant | None = None) -> int | None:
-    """The pitch a roll note plays (after a variant's transpose/semitones/key change); None for drum lanes or
-    when a variant moves it off the scale or out of MIDI range."""
+def _move(midi: int, key: Key, change: Variant) -> tuple[int | None, Key]:
+    """One change's key mapping, scale-degree transposition and semitones; returns the note and the key it's in."""
+    out: int | None = midi
+    if change.key is not None:
+        out = key.map_to(change.key, midi) if key.contains(midi) else midi
+        key = change.key
+    if change.transpose and out is not None:
+        out = key.degree_shift(out, change.transpose) if key.contains(out) else out + change.transpose
+    if change.semitones and out is not None:
+        out += change.semitones
+        key = transpose_key(key, change.semitones)
+    return out, key
+
+
+def note_midi(song: Song, note: Note, variant: Variant | None = None, section: SectionChange | None = None) -> int | None:
+    """The pitch a roll note plays: a variant's key change/transpose/semitones, then the section's on top. None
+    for drum lanes or when a change moves it off the scale or out of MIDI range."""
     track = song.tracks[note.track]
     if track.drums:
         return None
     midi: int | None = int(track.rows[note.row])
-    if variant is None:
-        return midi
-    if variant.key is not None and midi is not None:
-        midi = song.key.map_to(variant.key, midi) if song.key.contains(midi) else midi
-    key = variant.key or song.key
-    if variant.transpose and midi is not None:
-        midi = key.degree_shift(midi, variant.transpose) if key.contains(midi) else midi + variant.transpose
-    if variant.semitones and midi is not None:
-        midi += variant.semitones
+    key = song.key
+    for change in (variant, section.pitch if section is not None else None):
+        if change is not None and midi is not None:
+            midi, key = _move(midi, key, change)
     return midi if midi is not None and 0 <= midi <= 127 else None
+
+
+def section_key(section: SectionChange | None, key: str) -> str:
+    """The kit key a note plays after its section's swaps (a variant's swaps apply after these)."""
+    return dict(section.pitch.swaps).get(key, key) if section is not None else key
 
 
 def instrument_for(song: Song, key: str, variant: Variant | None = None) -> Instrument | None:
@@ -757,22 +989,29 @@ def instrument_for(song: Song, key: str, variant: Variant | None = None) -> Inst
 
 
 def check_notes(song: Song, report: Report, raw_patterns: dict[str, Any]) -> None:
-    """E007 notes outside an instrument's range (also in every variant) and E014 more simultaneous notes
-    on a track than the instrument's voices."""
+    """E007 notes outside an instrument's range (also in every variant and under every section change) and E014
+    more simultaneous notes on a track than the instrument's voices."""
     variants: list[Variant | None] = [None, *song.all_variants().values()]
     for pattern in song.patterns.values():
         pline = line_of(raw_patterns, pattern.name, pattern.line)
         reported: set[tuple[str, str, str]] = set()
-        for variant in variants:
+        # the section changes this pattern plays under (none when a plain section, or no section, plays it)
+        contexts: dict[str, SectionChange | None] = {s: song.section_changes.get(s) for s, items in song.sections.items() if pattern.name in items}
+        changed = {s: c for s, c in contexts.items() if c is not None}
+        under: list[tuple[str, SectionChange | None]] = [("", None)] if len(changed) < len(contexts) or not contexts else []
+        under += list(changed.items())
+        for (section, change), variant in itertools.product(under, variants):
             for note in pattern.notes:
-                inst = instrument_for(song, note.key, variant)
-                vname = f" in variant {variant.name!r}" if variant is not None else ""
+                if change is not None and note.track in change.mute:
+                    continue
+                inst = instrument_for(song, section_key(change, note.key), variant)
+                vname = (f" in variant {variant.name!r}" if variant is not None else "") + (f" in section {section!r}" if section else "")
                 if inst is None:
                     if (pattern.name, note.key, vname) not in reported:
                         reported.add((pattern.name, note.key, vname))
                         report.error("E006", f"pattern {pattern.name!r}: key {note.key!r} has no instrument{vname} (check its kit / instrument_swap)", pline, f"patterns.{pattern.name}")
                     continue
-                midi = note_midi(song, note, variant)
+                midi = note_midi(song, note, variant, change)
                 if midi is None or inst.range is None:
                     if midi is None and not song.tracks[note.track].drums and (pattern.name, "pitch", vname) not in reported:
                         reported.add((pattern.name, "pitch", vname))
@@ -789,7 +1028,8 @@ def check_notes(song: Song, report: Report, raw_patterns: dict[str, Any]) -> Non
                 if note.track == track.name:
                     by_key.setdefault(note.key, []).append(note)
             for key, notes in by_key.items():
-                inst = song.kit.instruments.get(key)
+                insts = [song.kit.instruments.get(section_key(c, key)) for _, c in under]
+                inst = min((i for i in insts if i is not None), key=lambda i: i.voices, default=None)
                 if inst is None or inst.is_drum:
                     continue
                 for step in range(pattern.length):

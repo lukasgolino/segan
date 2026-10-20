@@ -7,10 +7,10 @@ sample-exact and identical in every output (main, variants, stems).
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 
 from segan.dsp import seed_of
-from segan.song import Note, Song, Variant, instrument_for, note_midi
+from segan.song import Note, Song, Variant, instrument_for, note_midi, section_key
 from segan.voices import NoteEvent
 
 
@@ -51,14 +51,15 @@ class Timeline:
         return step / self.steps_per_bar + 1
 
 
-def build_timeline(song: Song, variant: Variant | None = None) -> Timeline:
+def build_timeline(song: Song, variant: Variant | None = None, order: list[str] | None = None) -> Timeline:
+    """The arrangement (or the sections in `order`, e.g. one flow section on its own) on the step grid."""
     tempo = variant.tempo if variant is not None and variant.tempo is not None else song.tempo
     swing = variant.swing if variant is not None and variant.swing is not None else song.swing
     step_seconds = 60.0 / tempo / song.steps_per_beat
     sections: list[SectionSpan] = []
     step = 0
     loop: tuple[int, int] | None = None
-    for name in song.arrangement:
+    for name in song.arrangement if order is None else order:
         start = step
         spans = []
         for pattern in song.sections[name]:
@@ -66,14 +67,15 @@ def build_timeline(song: Song, variant: Variant | None = None) -> Timeline:
             spans.append(PatternSpan(pattern, step, length))
             step += length
         sections.append(SectionSpan(name, start, step, tuple(spans)))
-        if song.loop == name and loop is None:
+        if song.loop == name and loop is None and order is None:
             loop = (start, -1)
     if loop is not None:
         loop = (loop[0], step)
     markers: dict[str, int] = {}
     for marker, (section, bar) in song.markers.items():
-        span = next(s for s in sections if s.name == section)
-        markers[marker] = span.start + (bar - 1) * song.steps_per_bar
+        span = next((s for s in sections if s.name == section), None)
+        if span is not None:
+            markers[marker] = span.start + (bar - 1) * song.steps_per_bar
     return Timeline(step_seconds, swing, song.steps_per_bar, song.steps_per_beat, step, sections, loop, markers)
 
 
@@ -91,15 +93,22 @@ def placed_notes(song: Song, timeline: Timeline, variant: Variant | None = None)
     out: list[Placed] = []
     swaps = dict(variant.swaps) if variant is not None else {}
     for section in timeline.sections:
+        change = song.section_changes.get(section.name)
+        velocity = dict(change.velocity) if change is not None else {}
         for span in section.patterns:
             for note in song.patterns[span.name].notes:
+                if change is not None and note.track in change.mute:
+                    continue
+                if note.track in velocity:
+                    note = replace(note, velocity=note.velocity * velocity[note.track])
                 track = song.tracks[note.track]
-                key = swaps.get(note.key, note.key)
+                own = section_key(change, note.key)
+                key = swaps.get(own, own)
                 if track.drums:
-                    inst = instrument_for(song, note.key, variant)
+                    inst = instrument_for(song, own, variant)
                     midi = float(inst.note) if inst is not None else 60.0
                 else:
-                    pitch = note_midi(song, note, variant)
+                    pitch = note_midi(song, note, variant, change)
                     if pitch is None:
                         continue
                     midi = float(pitch)

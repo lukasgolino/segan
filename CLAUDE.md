@@ -38,8 +38,10 @@ generated text files.
   - `kitshow.py` `segan kit show`; `project.py` segan.toml + discovery; `templates/` files `segan init` writes;
   - `asset.py` shared metadata, `extends` templates, asset loading; `sfx.py` SFX parsing (+ `presets/*.yaml`);
     `sfxrender.py` SFX rendering (layers, keyframes, effects, variations, phases, loops);
-  - `song.py` song parsing (tracks, lanes, labels, derived patterns, sections, variants, E007/E014 checks);
-    `sequence.py` timeline + note events; `songrender.py` song rendering (loop offset, stems); `songlint.py` source warnings;
+  - `song.py` song parsing (tracks, lanes, labels, derived patterns, sections + section changes, variants, flow,
+    E007/E014 checks); `sequence.py` timeline + note events; `songrender.py` song rendering (loop offset, stems);
+    `flowrender.py` flow clips (per-section timelines, head/from/rest/tail, walks); `songlint.py` source warnings;
+  - `soundtrack.py` `music/*.soundtrack.yaml` (states, transitions; E018/W016) — not an asset: lint/build only;
   - `render.py` outputs + render cache (`.segan-cache/renders/`); `preview.py` / `songpreview.py` listen sheets + analysis;
   - `lint.py` lint (errors from parsing, warnings from source and rendered audio); `yamlwrite.py` YAML writer;
   - `manage.py` long-term management: catalogue (`segan status`), `mark`, `style bump`, `mix adjust` (text edits keep comments);
@@ -49,8 +51,10 @@ generated text files.
   - `midi.py` hand-written SMF reader + `segan import midi` (quantize, snap to key, GM -> kit, change report);
   - `mcp_server.py` `segan mcp`: MCP tools/resources/prompts over the CLI handlers (stdout captured, cwd pinned, one lock);
   - `build.py` `segan build` (WAVs, manifest.json, stale cleanup); `exporters/godot.py` `.import` edits, Randomizer /
-    Synchronized `.tres`, headless verify (`templates/godot_verify.gd`).
-- `examples/godot/` — Godot 4.7 project receiving the demo's build; `scenes/audio_test.tscn` plays everything.
+    Synchronized `.tres`, headless verify (`templates/godot_verify.gd`); `templates/segan_music.gd` the Godot music
+    director (flows + soundtracks), copied next to the manifest.
+- `examples/godot/` — Godot 4.7 project receiving the demo's build; `scenes/audio_test.tscn` plays everything
+  (flow songs and soundtracks through the `SeganMusic` autoload = the generated `segan_music.gd`).
   Only text outputs (manifest, .tres, .import) are committed; run `segan build` in examples/demo first.
 - `scripts/check_committed_build.py` — CI: the rebuilt generated folder must match the commit.
 - `tests/fixtures/golden/` — golden project (22.05 kHz mono so files stay small); `expected/*.wav` are checked
@@ -151,3 +155,17 @@ generated text files.
 - 2026-10-19: ORCHESTRATOR_PLAN S1-S3: song `stems: { groups, mixes, main_mix }` (stems normalised over the loudest
   listed mix; the full mix is normalised on its own), `variations.include_main`, `[room]` sends, `tail_trim_db`.
   S4 unison phases within a quarter turn. Release v0.2.0.
+- 2026-10-20: Long-form music (owner): section changes + `flow` (section graph) + soundtracks + a Godot director.
+  Measured on Godot 4.7.2: AudioStreamWAV has no bpm (Interactive ignores beat/bar sync on WAV clips);
+  Interactive auto-advance switches one mix chunk (~11.6 ms) early per clip, cuts tails and ignores `next_clip`
+  changed while a clip plays; Playlist without fade glitches 2 frames per seam. So no native Interactive/Playlist
+  `.tres`: the director feeds an AudioStreamGenerator from clip playbacks with `mix_audio`.
+- 2026-10-20: Flow clips: every section has its own timeline (no drift when chained); `H` = whole bars covering
+  the longest ring-out; per section a cold head, one head per predecessor (its ring-out baked in; deduped when
+  identical), the rest and a tail; one static gain (the linear song's) then the limiter. Head/rest clips carry 32
+  frames of continuation (`PAD`): Godot stops a WAV playback ~4 frames before its data ends. A new playback is
+  late by 2 frames (resampler history): the director measures that once with an impulse and pre-rolls each clip.
+  Godot decodes int16 as x/32767. Flow sections must be whole bars (E017). Section pitch changes apply after
+  the song variant's.
+- 2026-10-20: Soundtracks are their own source type (like kits), not a third asset kind: no render, preview,
+  status or MCP surface; lint checks them against the project's songs/SFX; manifest top-level `soundtracks`.
