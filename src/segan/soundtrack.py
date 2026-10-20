@@ -5,8 +5,10 @@ states. The director (`segan_music.gd`) plays them; SEGAN checks them (E018, W01
 name: main
 start: explore
 states:
-  explore: { songs: { overworld: 2, village: 1 }, play: [120, 240], gap: [10, 40], fade_out: 3 }
+  explore: { songs: { overworld: 2, village: 1 }, play: [120, 240], gap: [10, 40], fade_out: 3, crossfade: 4 }
   combat: { songs: [combat, overworld.danger] }
+families:                          # songs that cross-fade into each other in a state (others fade out, gap, start)
+  a_minor: [overworld, village]
 transitions:                       # "from>to", "from>*", "*>to", "*" (most specific wins)
   "*": { at: bar, fade: 2 }
   explore>combat: { at: beat, fade: 0.5, stinger: hit, start: main }
@@ -28,8 +30,8 @@ from segan.patch import Report, is_number, line_of
 from segan.yamlio import LineMap
 
 SOUNDTRACK_SUFFIX = ".soundtrack.yaml"
-FIELDS = ("name", "description", "start", "states", "transitions")
-STATE_FIELDS = ("songs", "play", "gap", "fade_out")
+FIELDS = ("name", "description", "start", "states", "transitions", "families")
+STATE_FIELDS = ("songs", "play", "gap", "fade_out", "crossfade")
 TRANSITION_FIELDS = ("at", "fade", "fade_in", "stinger", "start")
 SYNC_POINTS = ("now", "beat", "bar", "section", "end")
 DEFAULT_TRANSITION = {"at": "bar", "fade": 2.0, "fade_in": 0.0, "stinger": None, "start": None}
@@ -55,6 +57,7 @@ class State:
     play: tuple[float, float] | None  # seconds a song plays before it ends; None = until the state changes
     gap: tuple[float, float]  # seconds of silence between songs
     fade_out: float  # how a looping song ends when its play time is up
+    crossfade: float = 0.0  # seconds the next song overlaps the last when both are in one family (no gap)
     line: int | None = None
 
 
@@ -76,6 +79,12 @@ class Soundtrack:
     start: str
     states: dict[str, State]
     transitions: dict[str, Transition] = field(default_factory=dict)  # "from>to" with "*" wildcards, or "*"
+    families: dict[str, tuple[str, ...]] = field(default_factory=dict)  # family -> song labels ("song" or "song.variant")
+    families_line: int | None = None
+
+    def family(self, ref: SongRef) -> str:
+        """The family listing this song (`song`, or `song.variant` for a variant), else its own label."""
+        return next((name for name, members in self.families.items() if ref.label in members), ref.label)
 
     def transition(self, src: str, dst: str) -> Transition:
         """The rule for src -> dst: "src>dst", then "src>*", "*>dst", "*", then the default."""
@@ -91,9 +100,10 @@ class Soundtrack:
         return {
             "description": self.description,
             "start": self.start,
-            "states": {s.name: {"songs": [{"song": r.song, "variant": r.variant, "weight": r.weight} for r in s.songs],
-                                "play": range_or_none(s.play), "gap": [s.gap[0], s.gap[1]], "fade_out": s.fade_out}
+            "states": {s.name: {"songs": [{"song": r.song, "variant": r.variant, "weight": r.weight, "family": self.family(r)} for r in s.songs],
+                                "play": range_or_none(s.play), "gap": [s.gap[0], s.gap[1]], "fade_out": s.fade_out, "crossfade": s.crossfade}
                        for s in self.states.values()},  # fmt: skip
+            "families": {name: list(members) for name, members in self.families.items()},
             "transitions": {k: {"at": t.at, "fade": t.fade, "fade_in": t.fade_in, "stinger": t.stinger, "start": t.start} for k, t in self.transitions.items()},
             "default_transition": dict(DEFAULT_TRANSITION),
         }
@@ -173,7 +183,11 @@ def parse_soundtrack(data: dict[str, Any], path: Path | None) -> tuple[Soundtrac
         if not (is_number(fade_out) and 0 <= fade_out <= 60):
             bad(f"state {sname!r}: fade_out must be 0-60 seconds", at, f"{where}.fade_out")
             continue
-        states[sname] = State(sname, refs, play, gap, float(fade_out), at)
+        crossfade = raw.get("crossfade", 0.0)
+        if not (is_number(crossfade) and 0 <= crossfade <= 60):
+            bad(f"state {sname!r}: crossfade must be 0-60 seconds (how long the next song overlaps the last when both are in one family)", at, f"{where}.crossfade")
+            continue
+        states[sname] = State(sname, refs, play, gap, float(fade_out), float(crossfade), at)
     start = data.get("start", next(iter(raw_states), None))
     if not isinstance(start, str) or (raw_states and start not in raw_states):
         bad(f"start must be one of the states ({', '.join(map(str, raw_states))})", line_of(data, "start", line), "start")
@@ -206,9 +220,27 @@ def parse_soundtrack(data: dict[str, Any], path: Path | None) -> tuple[Soundtrac
             bad(f"transition {key!r}: start must be a section name", at, f"{where}.start")
         else:
             transitions["*" if ends == ["*", "*"] else str(key)] = Transition(str(sync), float(fade), float(fade_in), stinger, first, at)
+    families: dict[str, tuple[str, ...]] = {}
+    raw_families = data.get("families", {})
+    fline = line_of(data, "families", line)
+    owner: dict[str, str] = {}
+    if not isinstance(raw_families, dict):
+        bad("families must map family names to songs, e.g. d_minor: [dungeon, overworld.calm]", fline, "families")
+        raw_families = {}
+    for fname, members in raw_families.items():
+        where, at = f"families.{fname}", line_of(raw_families, fname, fline)
+        if not isinstance(fname, str) or not STATE_RE.match(fname):
+            bad(f"family name {fname!r} must be lowercase letters, digits or '_'", at, where)
+        elif not isinstance(members, list) or not members or not all(isinstance(m, str) for m in members) or len(set(members)) != len(members):
+            bad(f"family {fname!r} must list songs once each (`song` or `song.variant`), e.g. [dungeon, overworld.calm]", at, where)
+        elif twice := [m for m in members if m in owner]:
+            bad(f"family {fname!r}: {', '.join(twice)} already in family {owner[twice[0]]!r} (a song is in one family)", at, where)
+        else:
+            owner.update(dict.fromkeys(members, fname))
+            families[fname] = tuple(members)
     if report.failed:
         return None, report.findings
-    return Soundtrack(name, path, description, start, states, transitions), report.findings
+    return Soundtrack(name, path, description, start, states, transitions, families, fline), report.findings
 
 
 def load_soundtrack(path: Path) -> tuple[Soundtrack | None, list[Finding]]:
@@ -249,6 +281,13 @@ def check_soundtrack(st: Soundtrack, songs: dict[str, Any], sfx: set[str]) -> li
             elif ref.variant and ref.variant not in song.all_variants():
                 out.append(Finding("E018", f"state {state.name!r}: song {ref.song!r} has no variant {ref.variant!r} (variants: {', '.join(song.all_variants()) or 'none'})",
                                    st.path, state.line, f"states.{state.name}.songs"))  # fmt: skip
+    for fname, members in st.families.items():
+        for label in members:
+            ref = SongRef(label.split(".", 1)[0], label.split(".", 1)[1] if "." in label else None, 1.0)
+            song = songs.get(ref.song)
+            if song is None or (ref.variant and ref.variant not in song.all_variants()):
+                out.append(Finding("E018", f"family {fname!r}: no song {label!r} (songs: {', '.join(sorted(songs)) or 'none'}; `song.variant` for a variant)",
+                                   st.path, st.families_line, f"families.{fname}"))  # fmt: skip
     if out:
         return out
     for key, t in st.transitions.items():
@@ -275,4 +314,14 @@ def check_soundtrack(st: Soundtrack, songs: dict[str, Any], sfx: set[str]) -> li
                         out.append(Finding("W016", f"{src.name}>{dst.name} cross-fades {a.label} ({ka.describe()}) into {b.label} ({kb.describe()}) for "
                                            f"{t.fade:g}s: the keys clash while both sound. Shorten the fade (or fade: 0 with a stinger), switch at: end, "
                                            "or use a variant in a related key", st.path, t.line, f"transitions.{src.name}>{dst.name}"))  # fmt: skip
+    for state in st.states.values():
+        if state.crossfade <= 0:
+            continue
+        for i, a in enumerate(state.songs):
+            for b in state.songs[i + 1 :]:
+                ka, kb = song_key(songs[a.song], a.variant), song_key(songs[b.song], b.variant)
+                if st.family(a) == st.family(b) and keys_clash(ka, kb):
+                    out.append(Finding("W016", f"state {state.name!r} cross-fades {a.label} ({ka.describe()}) and {b.label} ({kb.describe()}) for {state.crossfade:g}s "
+                                       f"(both in family {st.family(a)!r}): the keys clash while both sound. Put them in different families", st.path,
+                                       st.families_line or state.line, f"states.{state.name}.crossfade"))  # fmt: skip
     return list(dict.fromkeys(out))

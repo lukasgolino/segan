@@ -136,3 +136,13 @@ Fixed on `main`; they ship in the next tag (v0.2.0).
 - Stem mix levels: a bed-only mix can sit 13 dB under bed+drive (drums-only loops). Wanted: a per-mix loudness target or max gap between mixes.
 - Size: no OGG/Vorbis output and no per-song sample rate / mono; 22 loops = 136 MB WAV (Godot QOA ~23 MB).
 - W001 for percussive orchestral songs: songs had to move to a custom quieter category; a hint in W001 for songs would help.
+
+Status (v0.4.0, 2026-10-20):
+- Pools: soundtracks (v0.3.0) are the first-class pool: states with weighted songs, play times, gaps, transitions
+  with sync points, fades and stingers; v0.4.0 adds `families` + a state's `crossfade` (inside a family the next
+  loop cross-fades in on the bar; across families: fade, gap, start). Mood/intensity stay tags or states.
+- Stem mix levels: each `stems.mixes` entry gets `trim_db` in the manifest (add it to the stem volumes while that
+  mix plays; capped by the limiter ceiling); W017 when a mix can't reach the target even so.
+- Size: `export = [..., "ogg"]` (music as Ogg Vorbis, `[ogg] quality`, ~10x smaller than WAV); song
+  `sample_rate` / `channels` for small chip loops.
+- W001 on a song now suggests a quieter category of its own.

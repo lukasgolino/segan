@@ -32,6 +32,7 @@ from segan.mix import apply_crush, apply_room, apply_tone, gain_and_limit, room_
 from segan.project import Project
 from segan.render import Output
 from segan.sequence import build_timeline, song_events
+from segan.songrender import song_mix
 from segan.song import Song, Variant
 from segan.synth import Context
 from segan.voices import NoteEvent, assign_cuts, event_end, render_events
@@ -60,7 +61,7 @@ def flow_id(variant: Variant | None, clip: str = "") -> str:
 def flow_sections(song: Song, project: Project, variant: Variant | None) -> tuple[dict[str, FlowSection], int]:
     """Each flow section on its own timeline, and the head length in bars."""
     assert song.flow is not None
-    mix = project.config.mix_for(song.category)
+    mix = song_mix(song, project)
     ctx = context_for(mix)
     rate = ctx.rate
     pieces: dict[str, tuple[list[NoteEvent], int, int, int]] = {}
@@ -85,7 +86,7 @@ def flow_sections(song: Song, project: Project, variant: Variant | None) -> tupl
 
 def _bus(events: list[NoteEvent], frames: int, project: Project, song: Song, gain_db: float) -> Signal:
     """Events -> mix bus -> the song's gain and the limiter, `frames` long."""
-    mix = project.config.mix_for(song.category)
+    mix = song_mix(song, project)
     ctx: Context = context_for(mix)
     channels = 2 if mix.music_channels == "stereo" else 1
     tracks = render_events(events, ctx, channels, frames)
@@ -97,7 +98,7 @@ def _bus(events: list[NoteEvent], frames: int, project: Project, song: Song, gai
 def render_flow(song: Song, project: Project, variant: Variant | None, gain_db: float) -> list[Output]:
     """Every flow clip of the song (or of one variant), at the linear song's normalisation gain."""
     assert song.flow is not None
-    mix = project.config.mix_for(song.category)
+    mix = song_mix(song, project)
     rate = context_for(mix).rate
     sections, bars = flow_sections(song, project, variant)
     room = round(room_tail(mix) * rate)

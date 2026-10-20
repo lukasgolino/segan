@@ -11,14 +11,15 @@ manifest `loop`).
 from __future__ import annotations
 
 import math
+from dataclasses import replace
 
 import numpy as np
 
-from segan.analysis import frames_of, integrated_lufs
+from segan.analysis import frames_of, integrated_lufs, true_peak_db
 from segan.dsp import Signal
 from segan.kitshow import context_for
 from segan.mix import apply_crush, apply_room, apply_tone, finish, room_tail, trim_tail
-from segan.project import Project
+from segan.project import MixConfig, Project
 from segan.render import Output, Render, level_dict
 from segan.sequence import Timeline, build_timeline, song_events
 from segan.song import Song, Variant
@@ -26,11 +27,17 @@ from segan.voices import assign_cuts, event_end, render_events
 from segan.wavio import to_pcm16
 
 
+def song_mix(song: Song, project: Project) -> MixConfig:
+    """The shared mix for this song, at its own sample rate and channels when it sets them."""
+    mix = project.config.mix_for(song.category)
+    return replace(mix, sample_rate=song.sample_rate or mix.sample_rate, music_channels=song.channels or mix.music_channels)
+
+
 def song_cache_parts(song: Song, project: Project) -> tuple[object, ...]:
     patterns = sorted((name, p.length, tuple(p.notes)) for name, p in song.patterns.items())
     return ("song", song.name, song.kit, song.tempo, song.meter, song.steps_per_beat, song.swing, song.key, sorted(song.tracks.items()),
             patterns, sorted(song.sections.items()), song.arrangement, song.loop, sorted(song.markers.items()),
-            sorted(song.all_variants().items()), song.normalize, song.category, project.config.mix_for(song.category),
+            sorted(song.all_variants().items()), song.normalize, song.category, song_mix(song, project),
             project.config.target(song.category), project.config.lint.max_limiting_db, wants_stems(song, project), song.stems,
             sorted(song.section_changes.items()), song.flow)  # fmt: skip
 
@@ -50,7 +57,7 @@ def loop_offset_steps(song: Song, timeline: Timeline, tail: float) -> int:
 
 
 def render_variant(song: Song, project: Project, variant: Variant | None, stems: bool = False) -> tuple[Output, list[Output]]:
-    mix = project.config.mix_for(song.category)
+    mix = song_mix(song, project)
     ctx = context_for(mix)
     rate = ctx.rate
     channels = 2 if mix.music_channels == "stereo" else 1
@@ -110,9 +117,13 @@ def render_variant(song: Song, project: Project, variant: Variant | None, stems:
         for mname, members in mixes.items():
             audio = np.sum([crushed[g] for g in members], axis=0) * curve[:, None]
             lufs = integrated_lufs(audio, rate)
-            mix_info = {**info, "mix": mname, "stems": list(members), "tracks": [t for g in members for t in groups[g]], "normalised_over": loudest}
+            # what the game adds to every stem's volume while it plays this mix to bring it to the target, kept
+            # under the limiter's ceiling (the stems are already limited as the loudest mix)
+            trim = round(max(0.0, min(target - lufs, mix.limiter - true_peak_db(audio))), 1) if target is not None else 0.0
+            mix_info = {**info, "mix": mname, "stems": list(members), "tracks": [t for g in members for t in groups[g]], "normalised_over": loudest, "trim_db": trim}
             stem_outputs.append(Output(f"mix:{mname}", f"{song.name}/mix.{mname}", to_pcm16(audio), rate, loop, [], {"target": target, "lufs": lufs}, mix_info))
             main.info.setdefault("mixes", {})[mname] = round(lufs, 2)
+            main.info.setdefault("mix_trims", {})[mname] = trim
     return main, stem_outputs
 
 

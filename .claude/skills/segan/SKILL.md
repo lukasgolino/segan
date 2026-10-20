@@ -44,7 +44,7 @@ whether a sound is pleasant or fits the game, whether the mix balance feels righ
 ## 1. Setup check
 
 1. `segan --version`. If it's missing, install it the way the project pins it (its requirements file / tag,
-   e.g. `pip install "git+https://github.com/lukasgolino/segan.git@v0.3.0"`). Never swap a pinned install for an
+   e.g. `pip install "git+https://github.com/lukasgolino/segan.git@v0.4.0"`). Never swap a pinned install for an
    editable checkout unless you are developing SEGAN itself.
 2. Find the audio project: `segan status` (it says so if there's no `segan.toml` here or above), or
    `find . -name segan.toml -not -path '*/node_modules/*'`. That folder is the game's **audio home**:
@@ -181,11 +181,15 @@ bass, maybe a pad or arpeggio, 3-5 drums.
    so the game picks the next section at run time; preview `--output walk` and look at the whole walk. Plan the
    game's music as a soundtrack (`music/<name>.soundtrack.yaml`): states with song pools, play times and
    silence gaps (silence between songs is what keeps music fresh), and transitions (sync point, fades,
-   stingers). reference.md: "Long-form music" and "Soundtrack".
+   stingers). A pool of short loops: group same-key loops into `families` and give the state a `crossfade`
+   so they flow into each other. reference.md: "Long-form music" and "Soundtrack".
 6. **Variants** in one line each: `danger: { tempo: 150, instrument_swap: { q: r } }`, `calm: { kit: soft_kit }`,
    `night: { semitones: -2 }`, `major: { key: A major }`; combinations with `variant_axes`. Adaptive layering:
    add `"stems"` to `export` (one WAV per track, Godot AudioStreamSynchronized), or a `stems:` block with `groups`
-   (one WAV per layer) and `mixes` (the layer combinations the game plays: normalised over the loudest of them).
+   (one WAV per layer) and `mixes` (the layer combinations the game plays: normalised over the loudest of them;
+   each quieter mix gets a `trim_db` the game adds to the stem volumes while it plays that mix).
+   Size: many long songs add up (a 3-minute stereo WAV is 30 MB). `"ogg"` in `export` writes music as Ogg
+   Vorbis (~10x smaller); a simple chip song can set `sample_rate: 22050` and `channels: mono` for itself.
 7. `segan lint`, then `segan preview <song>`: look at the piano roll (is it what you meant?), the spectrogram
    (busy where you expect, bass at the bottom, no smear of clashing notes), the LUFS curve (no holes or spikes),
    `pitch_check` (every note within 50 cents), the seam. Long songs: `--from 9 --to 16` (bars) shows a window.

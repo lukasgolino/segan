@@ -82,6 +82,8 @@ class Deck:
 	var play_until := -1  # output frame after which the song ends (soundtrack play time), -1 = never
 	var announced := false  # song_started emitted (when its first frame is heard)
 	var fade_out := 0.0
+	var next_choice: Dictionary = {}  # the soundtrack's next song when it cross-fades into this one (same family)
+	var crossfade := 0.0
 
 	func audible() -> int:
 		if gen == null:
@@ -149,7 +151,7 @@ class Deck:
 		if flow == null or ending or not segments.is_empty():
 			return
 		var past_play := play_until >= 0 and queued_from >= play_until
-		if past_play:
+		if past_play and next_choice.is_empty():  # (a cross-fade keeps walking until the next song takes over)
 			end_song()
 			return
 		var name := pick_next()
@@ -537,10 +539,10 @@ func _pick_song(st_state: Dictionary) -> Dictionary:
 	return pool[-1]
 
 
-func _next_in_state(rule: Dictionary) -> void:
+func _next_in_state(rule: Dictionary, preset := {}) -> void:
 	var st: Dictionary = manifest["soundtracks"][soundtrack_name]
 	var st_state: Dictionary = st["states"][state]
-	var choice := _pick_song(st_state)
+	var choice: Dictionary = preset if not preset.is_empty() else _pick_song(st_state)
 	var variant: String = choice["variant"] if choice["variant"] != null else ""
 	_last_in_state[state] = choice["song"] + ("." + variant if variant != "" else "")
 	var play_seconds := -1.0
@@ -549,6 +551,13 @@ func _next_in_state(rule: Dictionary) -> void:
 	var start = rule.get("start")
 	_switch(choice["song"], variant, rule["at"], float(rule["fade"]), float(rule["fade_in"]), str(rule["stinger"]) if rule.get("stinger") != null else "",
 		str(start) if start != null else "", play_seconds, float(st_state["fade_out"]))
+	var crossfade := float(st_state.get("crossfade", 0.0))
+	var deck := _newest()
+	if crossfade > 0.0 and play_seconds > 0.0 and deck != null and deck.song == choice["song"]:
+		var after: Dictionary = _pick_song(st_state)  # picked now: a flow song keeps walking past its play time for it
+		if after.get("family") == choice.get("family"):
+			deck.next_choice = after
+			deck.crossfade = crossfade
 
 
 func _song_ended(deck: Deck) -> void:
@@ -666,7 +675,10 @@ func _process(_delta: float) -> void:
 			section_started.emit(deck.song, e[1])
 		if deck.play_until >= 0 and heard >= deck.play_until and not deck.ending and deck == current_deck():
 			deck.play_until = -1
-			if deck.flow != null:
+			if not deck.next_choice.is_empty() and soundtrack_name != "":  # same family: the next song cross-fades in, no gap
+				var fade: float = deck.crossfade
+				_next_in_state({"at": "bar", "fade": fade, "fade_in": fade, "stinger": null, "start": null}, deck.next_choice)
+			elif deck.flow != null:
 				deck.end_song()
 			else:
 				_end_deck(deck, "bar", deck.fade_out)

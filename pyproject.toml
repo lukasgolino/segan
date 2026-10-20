@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "segan"
-version = "0.3.0"
+version = "0.4.0"
 description = "SEGAN (Sound Effect Grammar And Notation): write game sound effects and music as text, build them into WAVs and game-ready assets."
 readme = "README.md"
 license = "MIT"
@@ -19,8 +19,9 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8", "mypy>=1.10", "types-PyYAML", "mcp>=2.3,<3"]
+dev = ["pytest>=8", "mypy>=1.10", "types-PyYAML", "mcp>=2.3,<3", "soundfile>=0.12"]
 mcp = ["mcp>=2.3,<3"]
+ogg = ["soundfile>=0.12"]
 
 [project.scripts]
 segan = "segan.cli:main"
@@ -36,7 +37,7 @@ strict = true
 files = ["src/segan", "tests"]
 
 [[tool.mypy.overrides]]
-module = ["scipy", "scipy.*"]
+module = ["scipy", "scipy.*", "soundfile"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]

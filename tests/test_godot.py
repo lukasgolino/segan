@@ -10,8 +10,10 @@ import shutil
 import subprocess
 from pathlib import Path
 
+import numpy as np
 import pytest
 
+from segan import oggio
 from segan.build import build
 from segan.exporters.godot import find_godot_binary, verify_with_godot
 from segan.project import load_project
@@ -160,8 +162,32 @@ func _init():
 """
 
 
-@pytest.fixture
-def flow_game(tmp_path: Path) -> Path:
+DIRECTOR_CROSSFADE = """\
+extends SceneTree
+func _init():
+	var music = load("res://audio/segan_music.gd").new()
+	music.random_seed = 5
+	root.add_child(music)
+	var t0 := Time.get_ticks_msec()
+	music.song_started.connect(func(s, v): print("EVENT song %s %.2f" % [s, (Time.get_ticks_msec() - t0) / 1000.0]))
+	music.song_finished.connect(func(s): print("EVENT finished %s %.2f" % [s, (Time.get_ticks_msec() - t0) / 1000.0]))
+	music.play_soundtrack("pool")
+	while (Time.get_ticks_msec() - t0) / 1000.0 < 6.0:
+		await process_frame
+	print("LIVE_OK")
+	quit()
+"""
+
+POOL = """\
+name: pool
+states:
+  calm: { songs: [f, g], play: 2, gap: 30, crossfade: 1 }
+families:
+  a_minor: [f, g]
+"""
+
+
+def make_flow_game(tmp_path: Path, ogg: bool = False) -> Path:
     """A Godot project with a flow song, a looping song, a stinger SFX and a soundtrack built into res://audio."""
     from test_flow import FLOW_SONG, G_SONG, SOUNDTRACK
 
@@ -171,7 +197,7 @@ def flow_game(tmp_path: Path) -> Path:
     game.mkdir()
     (game / "project.godot").write_text('config_version=5\n\n[application]\n\nconfig/name="flow"\n')
     config = CONFIG.replace("sample_rate = 22050", "sample_rate = 44100").replace(
-        'mode = "strict"', 'mode = "strict"\noutput_dir = "../game/audio"\nexport = ["wav", "godot"]'
+        'mode = "strict"', 'mode = "strict"\noutput_dir = "../game/audio"\nexport = ["wav", "godot"' + (', "ogg"' if ogg else "") + "]"
     )
     (tmp_path / "src").mkdir()
     project = make_project(tmp_path / "src", config + '\n[godot]\ncompress = "none"\n')
@@ -179,6 +205,7 @@ def flow_game(tmp_path: Path) -> Path:
     write(project, "song", "g", G_SONG)
     write(project, "sfx", "hit", "name: hit\npreset: hit\n")
     (project.music_dir / "main.soundtrack.yaml").write_text(SOUNDTRACK)
+    (project.music_dir / "pool.soundtrack.yaml").write_text(POOL)
     result = build(project)
     assert not result.errors, result.errors
     assert GODOT is not None
@@ -187,37 +214,60 @@ def flow_game(tmp_path: Path) -> Path:
     return game
 
 
-def test_director_chains_flow_clips_sample_exactly(flow_game: Path, tmp_path: Path) -> None:
-    import wave
+@pytest.fixture
+def flow_game(tmp_path: Path) -> Path:
+    return make_flow_game(tmp_path)
 
-    import numpy as np
 
+def director_render(game: Path, tmp_path: Path) -> tuple[np.ndarray, list[tuple[str, int]]]:
+    """The director's offline output for a fixed walk, and the clips (res path, frames) it should equal."""
     script = tmp_path / "director_render.gd"
     script.write_text(DIRECTOR_RENDER)
     raw = tmp_path / "out.raw"
     assert GODOT is not None
-    run = subprocess.run([GODOT, "--headless", "--path", str(flow_game), "-s", str(script), "--", str(raw)], capture_output=True, text=True, timeout=300)
+    run = subprocess.run([GODOT, "--headless", "--path", str(game), "-s", str(script), "--", str(raw)], capture_output=True, text=True, timeout=300)
     output = run.stdout + run.stderr
     assert "SCRIPT ERROR" not in output and "MIXRATE 44100" in output, output
-    sections = json.loads((flow_game / "audio" / "manifest.json").read_text())["assets"]["f"]["flow"]["sections"]
+    sections = json.loads((game / "audio" / "manifest.json").read_text())["assets"]["f"]["flow"]["sections"]
+    path = ["intro", "verse", "up", "verse", "verse", "up"]
+    clips = []
+    for i, name in enumerate(path):
+        section = sections[name]
+        head = section["from"].get(path[i - 1], section["head"]) if i else section["head"]
+        clips.append((head, section["head_samples"]))
+        if section["rest"] is not None:
+            clips.append((section["rest"], section["samples"] - section["head_samples"]))
+    return np.fromfile(raw, dtype="<f4").reshape(-1, 2), clips
+
+
+def test_director_chains_flow_clips_sample_exactly(flow_game: Path, tmp_path: Path) -> None:
+    import wave
 
     def pcm(res: str, frames: int) -> np.ndarray:
         with wave.open(str(flow_game / res.removeprefix("res://"))) as w:
             data = np.frombuffer(w.readframes(w.getnframes()), dtype="<i2").reshape(-1, w.getnchannels())
         return data[:frames] / 32767.0  # Godot decodes 16-bit PCM as x / 32767
 
-    path = ["intro", "verse", "up", "verse", "verse", "up"]
-    parts = []
-    for i, name in enumerate(path):
-        section = sections[name]
-        head = section["from"].get(path[i - 1], section["head"]) if i else section["head"]
-        parts.append(pcm(head, section["head_samples"]))
-        if section["rest"] is not None:
-            parts.append(pcm(section["rest"], section["samples"] - section["head_samples"]))
-    expected = np.concatenate(parts)
-    got = np.fromfile(raw, dtype="<f4").reshape(-1, 2)[: len(expected)]
-    assert len(got) == len(expected)
-    assert np.abs(got - expected).max() < 1e-6  # every seam exact: no lost, doubled or late frames
+    got, clips = director_render(flow_game, tmp_path)
+    expected = np.concatenate([pcm(res, frames) for res, frames in clips])
+    assert len(got) >= len(expected)
+    assert np.abs(got[: len(expected)] - expected).max() < 1e-6  # every seam exact: no lost, doubled or late frames
+
+
+@pytest.mark.skipif(not oggio.available(), reason="needs soundfile (segan[ogg])")
+def test_director_chains_ogg_clips_sample_exactly(tmp_path: Path) -> None:
+    game = make_flow_game(tmp_path, ogg=True)  # (the build's --verify-godot check passed: OGG streams load and loop)
+    manifest = json.loads((game / "audio" / "manifest.json").read_text())
+    assert manifest["assets"]["g"]["file"].endswith(".ogg") and manifest["assets"]["hit"]["file"].endswith(".wav")
+
+    def pcm(res: str, frames: int) -> np.ndarray:
+        audio, _ = oggio.decode_ogg((game / res.removeprefix("res://")).read_bytes())
+        return audio[:frames]
+
+    got, clips = director_render(game, tmp_path)
+    assert all(res.endswith(".ogg") for res, _ in clips)
+    expected = np.concatenate([pcm(res, frames) for res, frames in clips])
+    assert np.abs(got[: len(expected)] - expected).max() < 1e-5  # Godot's Vorbis decoder = libvorbis's; seams exact
 
 
 def test_director_plays_a_soundtrack_live(flow_game: Path, tmp_path: Path) -> None:
@@ -228,3 +278,14 @@ def test_director_plays_a_soundtrack_live(flow_game: Path, tmp_path: Path) -> No
     events = [line for line in output.splitlines() if line.startswith("EVENT")]
     assert events[:3] == ["EVENT state calm", "EVENT song f", "EVENT section f intro"], events
     assert "EVENT state tense" in events and any(e.startswith("EVENT song g") or e == "EVENT song f" for e in events[3:]), events
+
+
+def test_director_cross_fades_within_a_family(flow_game: Path, tmp_path: Path) -> None:
+    script = tmp_path / "director_crossfade.gd"
+    script.write_text(DIRECTOR_CROSSFADE)
+    output = run_script(flow_game, script)
+    assert "LIVE_OK" in output and "SCRIPT ERROR" not in output, output
+    starts = [float(line.split()[-1]) for line in output.splitlines() if line.startswith("EVENT song")]
+    finished = [float(line.split()[-1]) for line in output.splitlines() if line.startswith("EVENT finished")]
+    assert len(starts) >= 2 and starts[1] < 4.5, output  # the next song comes in on the bar after 2 s, not after the 30 s gap
+    assert finished and finished[0] > starts[1], output  # the first one was still fading when the second started

@@ -61,6 +61,7 @@ def analyze(output: Output, kind: str) -> dict[str, Any]:
     }
     if output.info.get("mixes"):
         result["stem_mixes_lufs"] = output.info["mixes"]  # each `stems.mixes` combination as the game plays it
+        result["stem_mixes_trim_db"] = output.info["mix_trims"]  # what the game adds to the stems while playing each mix
     if output.info.get("normalised_over"):
         result["normalised_over_mix"] = output.info["normalised_over"]
     if kind == "sfx" and not output.info.get("loop"):

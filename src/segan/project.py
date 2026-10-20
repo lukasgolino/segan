@@ -19,7 +19,7 @@ from segan.kit import KIT_SUFFIX, NAME_RE, Kit, load_kit_file
 
 CONFIG_NAME = "segan.toml"
 MODES = ("strict", "open")
-EXPORTERS = ("wav", "godot", "stems")
+EXPORTERS = ("wav", "godot", "stems", "ogg")
 SAMPLE_RATES = (22050, 32000, 44100, 48000)
 OVERSAMPLE = (1, 2, 4, 8)
 CHANNELS = ("mono", "stereo")
@@ -65,6 +65,11 @@ class GodotConfig:
 
 
 @dataclass(frozen=True)
+class OggConfig:
+    quality: float = 0.4  # Vorbis quality 0-1 (q0-q10 / 10); 0.4 is about 128 kbit/s stereo
+
+
+@dataclass(frozen=True)
 class Config:
     mode: Mode = "strict"
     default_kit: str | None = None
@@ -76,6 +81,7 @@ class Config:
     loudness: dict[str, float] = field(default_factory=lambda: dict(DEFAULT_LOUDNESS))
     lint: LintConfig = field(default_factory=LintConfig)
     godot: GodotConfig = field(default_factory=GodotConfig)
+    ogg: OggConfig = field(default_factory=OggConfig)
     room: dict[str, float] = field(default_factory=dict)  # category -> room send (0-1, x mix.room)
 
     def target(self, category: str) -> float:
@@ -191,7 +197,7 @@ def parse_config(data: dict[str, Any], path: Path) -> Config:
         findings.append(Finding("E001", message, path, None, where))
 
     defaults = Config()
-    allowed = ("mode", "default_kit", "output_dir", "preview_dir", "export", "style_version", "mix", "loudness", "room", "lint", "godot")
+    allowed = ("mode", "default_kit", "output_dir", "preview_dir", "export", "style_version", "mix", "loudness", "room", "lint", "godot", "ogg")
     for key in data:
         if key not in allowed:
             error(f"unknown setting {key!r}; allowed: {', '.join(allowed)}", key)
@@ -229,6 +235,7 @@ def parse_config(data: dict[str, Any], path: Path) -> Config:
     room = _parse_room(data.get("room", {}), error)
     lint = _parse_lint(data.get("lint", {}), error)
     godot = _parse_godot(data.get("godot", {}), error)
+    ogg = _parse_ogg(data.get("ogg", {}), error)
     if findings:
         raise SeganError(findings)
     return Config(
@@ -242,6 +249,7 @@ def parse_config(data: dict[str, Any], path: Path) -> Config:
         loudness=loudness,
         lint=lint,
         godot=godot,
+        ogg=ogg,
         room=room,
     )
 
@@ -348,3 +356,9 @@ def _parse_godot(data: Any, error: Callable[[str, str], None]) -> GodotConfig:
     rules: dict[str, tuple[Check, str]] = {"compress": (lambda v: v in GODOT_COMPRESS, f"must be one of {', '.join(GODOT_COMPRESS)}")}
     v = _table(data, "godot", GodotConfig(), rules, error)
     return GodotConfig(compress=v["compress"])
+
+
+def _parse_ogg(data: Any, error: Callable[[str, str], None]) -> OggConfig:
+    rules: dict[str, tuple[Check, str]] = {"quality": (lambda v: _number(v) and 0 <= v <= 1, "must be 0-1 (Vorbis q0-q10 / 10)")}
+    v = _table(data, "ogg", OggConfig(), rules, error)
+    return OggConfig(quality=float(v["quality"]))

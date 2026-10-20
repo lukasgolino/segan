@@ -29,7 +29,7 @@ if TYPE_CHECKING:
 
 SONG_FIELDS = (*META_FIELDS, "kit", "instruments", "groups", "tempo", "meter", "steps_per_beat", "swing", "key", "tracks",
                "patterns", "sections", "arrangement", "loop", "variants", "variant_axes", "markers", "normalize", "category", "stems",
-               "flow")  # fmt: skip
+               "flow", "sample_rate", "channels")  # fmt: skip
 STEM_FIELDS = ("groups", "mixes", "main_mix")
 TRACK_FIELDS = ("roll", "drums", "chromatic", "gain", "pan")
 DERIVE_FIELDS = ("from", "transpose", "semitones", "shift", "reverse", "mute", "swap")
@@ -171,6 +171,8 @@ class Song:
     section_changes: dict[str, SectionChange] = field(default_factory=dict)
     flow: Flow | None = None
     section_sources: dict[str, str] = field(default_factory=dict)  # section -> the section it derives from
+    sample_rate: int | None = None  # the song's own output rate / channels ([mix] sample_rate / music_channels otherwise)
+    channels: str | None = None
 
     @property
     def name(self) -> str:
@@ -842,6 +844,17 @@ def parse_song(data: dict[str, Any], path: Path | None, project: Project, report
     if not isinstance(normalize, bool):
         _bad(report, "E001", "normalize must be true or false", line_of(data, "normalize", line), "normalize")
         normalize = True
+    from segan.project import CHANNELS, SAMPLE_RATES
+
+    sample_rate = data.get("sample_rate")
+    if sample_rate is not None and (isinstance(sample_rate, bool) or sample_rate not in SAMPLE_RATES):
+        _bad(report, "E001", f"sample_rate must be one of {', '.join(map(str, SAMPLE_RATES))} (Hz; default: [mix] sample_rate)",
+             line_of(data, "sample_rate", line), "sample_rate")  # fmt: skip
+        sample_rate = None
+    channels = data.get("channels")
+    if channels is not None and channels not in CHANNELS:
+        _bad(report, "E001", "channels must be mono or stereo (default: [mix] music_channels)", line_of(data, "channels", line), "channels")
+        channels = None
     if kit is None or report.failed:
         return None, report.findings
 
@@ -930,7 +943,7 @@ def parse_song(data: dict[str, Any], path: Path | None, project: Project, report
     if report.failed or key is None:
         return None, report.findings
     song = Song(meta, kit, float(tempo), (meter[0], meter[1]), steps_per_beat, float(swing), key, tracks, patterns, sections, arrangement, loop,
-                markers, variants, axes, normalize, category, stems, changes, flow, section_sources)  # fmt: skip
+                markers, variants, axes, normalize, category, stems, changes, flow, section_sources, sample_rate, channels)  # fmt: skip
     for name in flow.sections if flow is not None else []:
         steps = sum(patterns[p].length for p in sections[name])
         if steps % song.steps_per_bar:

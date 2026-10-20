@@ -216,9 +216,15 @@ stems:
 
 `segan preview <song> --output mix:calm --output stem:base` renders once and shows each; the main analysis
 lists every mix's LUFS (`stem_mixes_lufs`). Without `mixes` the stems follow the full mix's gain (they add up to it).
+A quieter mix (a bed without drums can sit 10+ dB under the loudest) gets a `trim_db` in the manifest
+(`stem_mixes_trim_db` in the analysis): add it to every stem's volume while the game plays that mix and it is on
+target too; it's capped so the mix's true peak stays under `[mix] limiter`. W017: a mix too peaky to reach its
+target even with its trim.
 
-More song fields: `category` (default `music`: loudness target), `normalize: false`, `extends` (a song with
-`template: true`; tracks, patterns, sections, variants merge by name), and the common fields below.
+More song fields: `category` (default `music`: loudness target), `normalize: false`, `sample_rate` (22050 |
+32000 | 44100 | 48000) and `channels` (`mono` | `stereo`): this song's own output format over `[mix]`'s (a chip
+loop at 22050 Hz mono is a quarter of the size; it aliases more, which lint checks at that rate), `extends` (a
+song with `template: true`; tracks, patterns, sections, variants merge by name), and the common fields below.
 
 ### Long-form music: section changes and `flow`
 
@@ -283,9 +289,11 @@ Which songs a game plays in which state, and how it moves between states (played
 name: main
 start: explore
 states:
-  explore: { songs: { overworld: 2, village: 1 }, play: [120, 240], gap: [10, 40], fade_out: 3 }
+  explore: { songs: { overworld: 2, village: 1, cave: 1 }, play: [120, 240], gap: [10, 40], fade_out: 3, crossfade: 4 }
   combat: { songs: [combat, overworld.danger] }      # `song.variant`
   menu: [title]                                      # a list = songs only
+families:                                            # songs that cross-fade into each other inside a state
+  a_minor: [overworld, village]                      # (`overworld` is the main version; list variants as `song.variant`)
 transitions:                                         # most specific wins: "from>to", "from>*", "*>to", "*"
   "*": { at: bar, fade: 2 }                          # the default is { at: bar, fade: 2 }
   explore>combat: { at: beat, fade: 0.5, stinger: hit, start: main }
@@ -295,12 +303,17 @@ transitions:                                         # most specific wins: "from
 State: `songs` (list, or weights; never the same song twice in a row when there are others), `play` (seconds a
 song plays before it ends, a number or [min, max]; a flow song then finishes its section and plays `end` or
 its tail, a looping song fades out over `fade_out`; default: forever when the state has one song and no gap,
-else [120, 240]), `gap` (seconds of silence between songs, number or [min, max]: silence makes music last).
+else [120, 240]), `gap` (seconds of silence between songs, number or [min, max]: silence makes music last),
+`crossfade` (seconds; when the next song is in the same family as the one ending, it comes in on the next bar
+and the two overlap this long, no gap; songs of different families still fade out, wait the gap and start;
+default 0 = never). `families`: family -> songs (each song in one family; a song in none is its own family).
+A big shuffled pool of short loops: put the loops of one key/tempo in a family, give the state a `crossfade`
+and a short `play` (e.g. [30, 60]), and they flow into each other; changing family gets a breath of silence.
 Transition: `at` (`now`, `beat`, `bar`, `section`, `end`: when the switch happens, on the old song's grid),
 `fade` (seconds the old song fades out; 0 with `at: section` lets a flow song ring out naturally), `fade_in`,
 `stinger` (an SFX played at the switch), `start` (a section of the new song to start at). E018: unknown
-state/song/variant/SFX/section or a bad field; W016: a cross-fade between songs whose keys clash (keep fades
-between related keys, or use a short fade with a stinger).
+state/song/variant/SFX/section or family member, or a bad field; W016: a cross-fade between songs whose keys
+clash, in a transition or a family (keep fades between related keys, or use a short fade with a stinger).
 
 ## Common fields (songs and SFX)
 
@@ -315,7 +328,8 @@ mode = "strict"               # strict: kits only; open: inline instruments allo
 default_kit = "nes"
 output_dir = "build/audio"    # e.g. ../game/assets/generated/audio (apart from PAGAN's output: both write manifest.json)
 preview_dir = "previews"
-export = ["wav"]              # + "godot" (.import loops/compression, randomizer/synchronized .tres), "stems"
+export = ["wav"]              # + "godot" (.import loops/compression, randomizer/synchronized .tres), "stems",
+                              #   "ogg" (music as Ogg Vorbis, ~10x smaller; SFX stay WAV; pip install "segan[ogg]")
 style_version = 1
 
 [mix]                         # shared by every asset; any change re-renders everything
@@ -344,6 +358,9 @@ foley = -22.0                 # add any category: boss = -12
 
 [godot]
 compress = "qoa"              # qoa | ima | none
+
+[ogg]
+quality = 0.4                 # Vorbis quality 0-1 (0.4 is about 128 kbit/s stereo)
 
 [lint]
 disable = []
@@ -402,13 +419,15 @@ a section that isn't whole bars), E018 soundtrack problem (unknown state, song, 
 section; a bad field).
 
 Warnings: W001 loudness target out of reach without more limiting than `max_limiting_db` (too short/spiky:
-give it body or a quieter category), W002 unused pattern or section, W003 too many instruments in one song,
+give it body or a quieter category; for a percussive song: `category: music_soft` + `music_soft = -19` under
+`[loudness]`), W002 unused pattern or section, W003 too many instruments in one song,
 W004 silent pattern or sound, W005 lead-in silence in an SFX, W006 made under an older style version, W007
 click at a loop point, W008 DC offset, W009 tracks clash (minor 2nd/tritone) on a beat, W010 aliasing (raise
 `[mix] oversample` or play lower), W011 SFX still sounding at `duration`, W012 note cut at the end of its
 pattern, W013 loudness off target with `normalize: false`, W014 a note held longer than its sample (no loop):
 it goes silent before it ends, W015 a flow section shorter than the ring-out of a section before it, W016 a
-soundtrack cross-fade between songs in clashing keys.
+soundtrack cross-fade between songs in clashing keys, W017 a stem mix that can't reach its target even with its
+trim.
 Turn warnings off for one asset with `lint: { disable: [...] }`, project-wide with `[lint] disable`.
 
 ## Build output (any engine)
@@ -423,7 +442,7 @@ Turn warnings off for one asset with `lint: { disable: [...] }`, project-wide wi
   (name -> sample, seconds, bar), `loop` (`start`/`end` in the file + `offset`: the loop points sit that many
   samples (whole bars, usually one) after the loop section's start and the song's end, because the file carries
   that much of the loop's start again with the end's tail ringing into it; `section`), `variants` (name -> file entry + timing),
-  `stems` (stem -> file entry + `tracks`), `stem_mixes` (mix -> `stems`, `lufs`), `stems_normalised_over` and
+  `stems` (stem -> file entry + `tracks`), `stem_mixes` (mix -> `stems`, `lufs`, `trim_db`), `stems_normalised_over` and
   `godot_stems`. With `main_mix: false` / `include_main: false` the entry has no `file` (timing and loop stay).
 - flow songs: `flow` = `start`, `next` (section -> {successor: weight}), `end`, `no_repeat`, `head_bars`, `sections`
   (name -> `samples` (its length: play the next section exactly this many samples after it starts), `seconds`,
@@ -432,16 +451,19 @@ Turn warnings off for one asset with `lint: { disable: [...] }`, project-wide wi
   head (`from[prev]` or `head`) for `head_samples` samples, then `rest` for `samples - head_samples`; after the
   last section, its `tail`. Clip files carry 32 extra samples (Godot stops a WAV a few samples before its end):
   play each for its stated length, not to its end.
-Top level: `soundtracks` (name -> `start`, `states` (state -> `songs` [{song, variant, weight}], `play`, `gap`,
-`fade_out`), `transitions` ("from>to" -> `at`, `fade`, `fade_in`, `stinger`, `start`), `default_transition`).
+Top level: `soundtracks` (name -> `start`, `states` (state -> `songs` [{song, variant, weight, family}], `play`,
+`gap`, `fade_out`, `crossfade`), `families`, `transitions` ("from>to" -> `at`, `fade`, `fade_in`, `stinger`,
+`start`), `default_transition`).
 Files: `music/<song>.wav`, `music/<song>.<variant>.wav`, `stems/<song>/<track>.wav`, `flow/<song>[.<variant>]/<clip>.wav`,
 `sfx/<name>.wav`, `sfx/<name>.<n>.wav`, `sfx/<name>.<phase>.wav`. WAVs are 16-bit PCM with a `smpl` loop chunk and `cue` markers.
+With `"ogg"` in `export`, every music file (songs, variants, stems, flow clips) is `.ogg` instead (same samples
+count; a looping file ends exactly at its loop end, the loop restarts at `loop.start`); SFX stay `.wav`.
 The build only rewrites files that changed and deletes outputs (and their `.import`) it no longer produces.
 
 ## Godot
 
 With `export = ["wav", "godot"]` and `output_dir` inside a Godot 4 project, SEGAN writes each WAV's loop points
-and compression into its `.import` (Godot keeps the rest), `sfx/<name>.tres` (AudioStreamRandomizer over the
+and compression into its `.import` (Godot keeps the rest; an `.ogg` gets `loop` and `loop_offset`), `sfx/<name>.tres` (AudioStreamRandomizer over the
 variations: play it and Godot picks one, never the same twice in a row) and `stems/<song>.tres`
 (AudioStreamSynchronized: all stems in sync; change `stream_N/volume` to layer them).
 

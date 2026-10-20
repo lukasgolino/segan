@@ -14,8 +14,8 @@ from importlib.resources import files
 from pathlib import Path
 from typing import Any
 
-from segan import __version__
-from segan.exporters.godot import edit_import, find_godot_project, import_params, randomizer_tres, res_path, synchronized_tres
+from segan import __version__, oggio
+from segan.exporters.godot import edit_import, find_godot_project, import_params, ogg_import_params, randomizer_tres, res_path, synchronized_tres
 from segan.findings import Finding
 from segan.lint import LintResult, lint_paths
 from segan.project import Project
@@ -78,13 +78,23 @@ def build(project: Project) -> BuildResult:
     previous = _previous_outputs(out)
     produced: set[Path] = set()
     compress = project.config.godot.compress
+    ogg = "ogg" in exporters
+    if ogg and not oggio.available():
+        result.errors.append(Finding("E000", 'export includes "ogg" but soundfile (libsndfile) isn\'t installed: pip install "segan[ogg]"', project.config_path))
+        return result
 
     def emit(output: Output, folder: str) -> dict[str, Any]:
-        path = out / folder / f"{output.stem}.wav"
-        _write(path, output.wav(), result)
+        if ogg and folder != "sfx":  # music only: SFX stay WAV (short, latency-critical, randomised)
+            path = out / folder / f"{output.stem}.ogg"
+            _write(path, oggio.encode_ogg(output.pcm, output.rate, project.config.ogg.quality, f"{folder}/{output.stem}"), result)
+            params = ogg_import_params(output.loop, output.rate)
+        else:
+            path = out / folder / f"{output.stem}.wav"
+            _write(path, output.wav(), result)
+            params = import_params(output.loop, compress)
         produced.add(path.resolve())
         if godot_root is not None:
-            sidecar = edit_import(path, import_params(output.loop, compress))
+            sidecar = edit_import(path, params)
             if sidecar is not None:
                 result.imports.append(sidecar)
         return {"file": _ref(path, out, godot_root), "seconds": round(output.seconds, 6), "samples": output.frames,
@@ -145,7 +155,8 @@ def build(project: Project) -> BuildResult:
                 entry["stems"] = {o.id.split(":", 1)[1]: {**emit(o, "stems"), "tracks": o.info.get("tracks", [])} for o in stems}
                 if asset.stems is not None and asset.stems.mixes:
                     mixes = [o for o in render.outputs if o.id.startswith("mix:")]
-                    entry["stem_mixes"] = {o.info["mix"]: {"stems": o.info["stems"], "lufs": _round(o.level.get("lufs"))} for o in mixes}
+                    entry["stem_mixes"] = {o.info["mix"]: {"stems": o.info["stems"], "lufs": _round(o.level.get("lufs")), "trim_db": o.info["trim_db"]}
+                                          for o in mixes}
                     entry["stems_normalised_over"] = mixes[0].info.get("normalised_over") if mixes else None
                 if godot_root is not None:
                     entry["godot_stems"] = emit_tres(out / "stems" / f"{asset.name}.tres", synchronized_tres([s["file"] for s in entry["stems"].values()]))
@@ -269,6 +280,6 @@ def _previous_outputs(out: Path) -> set[Path]:
         if not isinstance(name, str) or Path(name).is_absolute():
             continue
         path = (root / name).resolve()
-        if path.is_relative_to(root) and path != root and path.suffix in (".wav", ".tres", ".gd"):
+        if path.is_relative_to(root) and path != root and path.suffix in (".wav", ".ogg", ".tres", ".gd"):
             found.add(path)
     return found

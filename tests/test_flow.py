@@ -233,8 +233,48 @@ def test_soundtrack_lints_and_lands_in_the_manifest(tmp_path: Path) -> None:
     built = build(project)
     assert not built.errors
     entry = json.loads((project.output_dir / "manifest.json").read_text())["soundtracks"]["main"]
-    assert entry["states"]["tense"]["songs"][1] == {"song": "f", "variant": "night", "weight": 1.0}
+    assert entry["states"]["tense"]["songs"][1] == {"song": "f", "variant": "night", "weight": 1.0, "family": "f.night"}  # its own family
+    assert entry["states"]["calm"]["crossfade"] == 0.0 and entry["families"] == {}
     assert entry["transitions"]["calm>tense"]["start"] == "verse"
+
+
+POOL = """\
+name: main
+states:
+  calm: { songs: [f, g, f.night], play: 60, gap: 30, crossfade: 2 }
+families:
+  a_minor: [f, g]
+"""
+
+
+def test_families_and_crossfade(tmp_path: Path) -> None:
+    project = soundtrack_project(tmp_path, POOL)
+    result = lint_paths(project, render=False)
+    assert not result.errors and "W016" not in rules(result.findings), result.findings
+    [st] = result.soundtracks
+    assert [st.family(r) for r in st.states["calm"].songs] == ["a_minor", "a_minor", "f.night"]  # `f` is the main version only
+    built = build(project)
+    assert not built.errors
+    entry = json.loads((project.output_dir / "manifest.json").read_text())["soundtracks"]["main"]
+    assert entry["families"] == {"a_minor": ["f", "g"]} and entry["states"]["calm"]["crossfade"] == 2.0
+
+
+def test_crossfade_in_a_family_of_clashing_keys_warns(tmp_path: Path) -> None:
+    project = soundtrack_project(tmp_path, POOL.replace("[f, g]", "[g, f.night]"))
+    found = [f for f in lint_paths(project, render=False).findings if f.rule == "W016"]
+    assert found and "g (A minor) and f.night (G minor)" in found[0].message, found
+
+
+@pytest.mark.parametrize(("text", "needle"), [
+    (POOL.replace("[f, g]", "[f, nope]"), "no song 'nope'"),
+    (POOL.replace("[f, g]", "[f, g.day]"), "no song 'g.day'"),
+    (POOL + "  other: [g]\n", "already in family"),
+    (POOL.replace("crossfade: 2", "crossfade: -1"), "crossfade must be"),
+    (POOL.replace("a_minor: [f, g]", "a_minor: f"), "must list songs"),
+])  # fmt: skip
+def test_family_errors(tmp_path: Path, text: str, needle: str) -> None:
+    found = lint_paths(soundtrack_project(tmp_path, text), render=False).findings
+    assert any(f.rule == "E018" and needle in f.message for f in found), found
 
 
 def test_one_song_without_gap_plays_forever(tmp_path: Path) -> None:

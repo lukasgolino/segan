@@ -30,8 +30,30 @@ func _plays(stream: AudioStream, path: String) -> void:
 		_fail(path + " mixed " + str(frames.size()) + " frames, expected 256")
 	playback.stop()
 
+func _check_ogg(entry: Dictionary, rate: int) -> void:
+	var path: String = entry["file"]
+	var stream = load(path)
+	if stream == null or not (stream is AudioStreamOggVorbis):
+		_fail("not an AudioStreamOggVorbis: " + path)
+		return
+	var ogg: AudioStreamOggVorbis = stream
+	if ogg.packet_sequence == null or int(ogg.packet_sequence.sampling_rate) != rate:
+		_fail(path + " sampling rate isn't " + str(rate))
+	var loop = entry.get("loop")
+	if typeof(loop) == TYPE_DICTIONARY:
+		# Godot restarts a loop at floor(loop_offset * rate), after the last frame of the file
+		if not ogg.loop or int(ogg.loop_offset * rate) != int(loop["start"]):
+			_fail(path + " loop " + str(ogg.loop) + " from " + str(ogg.loop_offset * rate) + ", expected from frame " + str(int(loop["start"])))
+	elif ogg.loop:
+		_fail(path + " loops but the manifest says it doesn't")
+	_plays(ogg, path)
+	checked += 1
+
 func _check_wav(entry: Dictionary, rate: int) -> void:
 	var path: String = entry["file"]
+	if path.ends_with(".ogg"):
+		_check_ogg(entry, rate)
+		return
 	var stream = load(path)
 	if stream == null or not (stream is AudioStreamWAV):
 		_fail("not an AudioStreamWAV: " + path)

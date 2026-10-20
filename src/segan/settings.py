@@ -40,7 +40,7 @@ SETTINGS: tuple[Setting, ...] = (
     Setting("default_kit", None, "kit for songs and SFX that don't name one; switching it re-voices all of them", "all"),
     Setting("output_dir", "build/audio", "where `segan build` writes final assets (e.g. a game engine's audio folder; keep it apart from PAGAN's)", "build"),
     Setting("preview_dir", "previews", "scratch folder for previews and listen sheets", "none"),
-    Setting("export", ["wav"], 'build outputs: "wav" (WAVs + manifest.json, always), "godot" (.import loop/compression edits + AudioStreamRandomizer/Synchronized .tres), "stems" (one WAV per song track)', "build"),
+    Setting("export", ["wav"], 'build outputs: "wav" (WAVs + manifest.json, always), "godot" (.import loop/compression edits + AudioStreamRandomizer/Synchronized .tres), "stems" (one WAV per song track), "ogg" (music as Ogg Vorbis instead of WAV; SFX stay WAV; needs segan[ogg])', "build"),
     Setting("style_version", 1, "current sound style version; assets made under older ones get W006 (use `segan style bump`)", "lint"),
     Setting("mix.sample_rate", 44100, "output sample rate (Hz): 44100 (Godot's default mix rate) or 48000", "all"),
     Setting("mix.oversample", 2, "synthesis runs at N x the sample rate and is filtered down (anti-aliasing): 1, 2, 4 or 8", "all"),
@@ -69,6 +69,7 @@ SETTINGS: tuple[Setting, ...] = (
     Setting("lint.max_dc_offset", 0.01, "W008: largest DC offset (fraction of full scale)", "lint"),
     Setting("lint.loudness_tolerance", 1.0, "W013: how far (LU) an un-normalised asset may be from its target", "lint"),
     Setting("godot.compress", "qoa", 'how Godot compresses imported WAVs: "qoa" (default, good), "ima" (IMA-ADPCM), "none"', "build"),
+    Setting("ogg.quality", 0.4, 'Vorbis quality 0-1 for export "ogg" (0.4 is about 128 kbit/s stereo, 10x smaller than WAV)', "build"),
 )
 BY_KEY = {s.key: s for s in SETTINGS}
 

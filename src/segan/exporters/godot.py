@@ -8,6 +8,10 @@ resource ids are derived from names (never random), so output is byte-stable.
 Loop points: Godot 4.7.2 plays a forward loop as the frames after `loop_begin` up to and including `loop_end`
 (checked by mixing a ramp), so a loop [start, end) in SEGAN's terms is `loop_begin = start - 1`, `loop_end = end - 1`.
 SEGAN's loops always start at frame 1 or later for that reason.
+
+Ogg Vorbis (export "ogg", music only): Godot loops an AudioStreamOggVorbis from the end of the file back to
+frame floor(loop_offset * rate) (measured), so `loop_offset` is written a quarter frame past the loop start
+and the file must end where the loop does (SEGAN's looping songs do).
 """
 
 from __future__ import annotations
@@ -57,14 +61,25 @@ def import_params(loop: tuple[int, int] | None, compress: str) -> dict[str, str]
     }
 
 
-def edit_import(wav: Path, params: dict[str, str]) -> Path | None:
-    """Set SEGAN's [params] lines in `wav`'s `.import` sidecar (Godot re-imports when it changes and keeps
+def ogg_import_params(loop: tuple[int, int] | None, rate: int) -> dict[str, str]:
+    """The `.import` [params] lines SEGAN owns for an Ogg Vorbis file."""
+    if loop is None:
+        return {"loop": "false", "loop_offset": "0"}
+    return {"loop": "true", "loop_offset": repr((loop[0] + 0.25) / rate)}
+
+
+IMPORTERS = {".wav": ("wav", "AudioStreamWAV"), ".ogg": ("oggvorbisstr", "AudioStreamOggVorbis")}
+
+
+def edit_import(audio: Path, params: dict[str, str]) -> Path | None:
+    """Set SEGAN's [params] lines in `audio`'s `.import` sidecar (Godot re-imports when it changes and keeps
     every other line). Without a sidecar, a minimal one is written and Godot fills in the rest. Returns the
     sidecar if it changed."""
-    sidecar = wav.with_name(wav.name + ".import")
+    sidecar = audio.with_name(audio.name + ".import")
     if not sidecar.is_file():
+        importer, kind = IMPORTERS[audio.suffix]
         body = "\n".join(f"{k}={v}" for k, v in params.items())
-        sidecar.write_text(f'[remap]\n\nimporter="wav"\ntype="AudioStreamWAV"\n\n[params]\n\n{body}\n', encoding="utf-8")
+        sidecar.write_text(f'[remap]\n\nimporter="{importer}"\ntype="{kind}"\n\n[params]\n\n{body}\n', encoding="utf-8")
         return sidecar
     text = sidecar.read_text(encoding="utf-8")
     lines = text.split("\n")

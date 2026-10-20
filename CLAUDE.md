@@ -34,7 +34,7 @@ generated text files.
   - `kit.py` kit files; `synth.py` one note -> samples (oscillators, envelopes, filters, drum macros, oversampling);
   - `voices.py` note events -> track buffers (mono voice cuts, pan, note cache); `mix.py` shared bus (room, tone,
     crush, loudness normalisation, true-peak limiter); `analysis.py` LUFS/peaks/onsets/YIN/seam/aliasing;
-  - `wavio.py` deterministic WAV with `smpl`/`cue ` chunks; `listen.py` listen sheets, seam view, gallery;
+  - `wavio.py` deterministic WAV with `smpl`/`cue ` chunks; `oggio.py` Ogg Vorbis via soundfile (export "ogg", fixed serial); `listen.py` listen sheets, seam view, gallery;
   - `kitshow.py` `segan kit show`; `project.py` segan.toml + discovery; `templates/` files `segan init` writes;
   - `asset.py` shared metadata, `extends` templates, asset loading; `sfx.py` SFX parsing (+ `presets/*.yaml`);
     `sfxrender.py` SFX rendering (layers, keyframes, effects, variations, phases, loops);
@@ -73,7 +73,7 @@ generated text files.
 - Versioning as PAGAN: bump `version` in pyproject.toml, CHANGELOG.md entry (Keep a Changelog), tag `vX.Y.Z`
   for any change to the notation, segan.toml settings, manifest/exporter output or rendered samples.
 - Open questions for the owner go in QUESTIONS.md with a recommended default; never block on them.
-- Dependencies: numpy, scipy, Pillow, PyYAML; extra `mcp`; dev: pytest, mypy, types-PyYAML, mcp.
+- Dependencies: numpy, scipy, Pillow, PyYAML; extras `mcp`, `ogg` (soundfile); dev: pytest, mypy, types-PyYAML, mcp, soundfile.
 
 ## Decisions log
 
@@ -169,3 +169,13 @@ generated text files.
   the song variant's.
 - 2026-10-20: Soundtracks are their own source type (like kits), not a third asset kind: no render, preview,
   status or MCP surface; lint checks them against the project's songs/SFX; manifest top-level `soundtracks`.
+- 2026-10-20: LOOSE! report (v0.4.0, owner said do all of it). Families: explicit soundtrack `families`, exact
+  labels (`song` = the main version only; variants listed as `song.variant`); a state's `crossfade` applies only
+  song-to-song inside a family (the next song is picked when the current one starts, so a flow song keeps walking
+  past its play time until the bar where the next one comes in). Stem mixes: no per-mix render gain (stems are
+  shared between mixes); the manifest gives each mix a `trim_db` the game applies, capped by the true-peak ceiling.
+- 2026-10-20: Ogg Vorbis (export "ogg", music only; SFX stay WAV) via soundfile/libsndfile, an optional extra.
+  libsndfile picks a random Ogg serial: SEGAN rewrites it (sha256 of the file's name) and recomputes page CRCs, so
+  rebuilds are byte-identical on one machine (Vorbis float code may differ across machines; the demo stays WAV).
+  Measured on Godot 4.7.2: its Vorbis decode = libvorbis's (1.5e-7), same 2-frame playback latency as WAV, and a
+  loop restarts at frame floor(loop_offset * rate) after the file's last frame: `loop_offset` = (start + 0.25) / rate.

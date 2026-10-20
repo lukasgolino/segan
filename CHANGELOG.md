@@ -4,7 +4,7 @@ All notable changes to SEGAN are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Game projects should pin a release tag
-(e.g. `pip install "git+https://github.com/lukasgolino/segan.git@v0.3.0"`).
+(e.g. `pip install "git+https://github.com/lukasgolino/segan.git@v0.4.0"`).
 
 A new version (and tag) is cut for **any** change to:
 - the notation (kit, song or SFX files),
@@ -18,6 +18,28 @@ check before upgrading. Patch bumps never change existing behaviour. Every relea
 `generator` (`"segan X.Y.Z"`), so expect every manifest to change once per upgrade.
 
 ## [Unreleased]
+
+## [0.4.0] - 2026-10-20
+
+The LOOSE! report (ORCHESTRATOR_PLAN.md): shuffled pools of loops, stem mix levels, file size.
+
+### Added
+
+- Soundtrack `families` (family -> songs) and state `crossfade` (seconds): when the next song in a state is in
+  the same family it comes in on the bar and overlaps the last one, no gap; other songs still fade out, wait the
+  gap and start. Manifest: `families`, each state song's `family`, the state's `crossfade`. E018 for unknown or
+  repeated family members; W016 also for cross-fades within a family in clashing keys.
+- Stem mixes get a `trim_db` (manifest `stem_mixes.<mix>.trim_db`, preview `stem_mixes_trim_db`): what the game
+  adds to the stem volumes while it plays that mix to bring it to the target, capped by the limiter ceiling.
+  W017: a mix that can't reach its target even with its trim.
+- Song `sample_rate` and `channels`: a song's own output format over `[mix]`'s (lint checks aliasing at that rate).
+- `export` value `"ogg"`: music (songs, variants, stems, flow clips) as Ogg Vorbis, SFX stay WAV; `[ogg] quality`
+  (default 0.4); optional extra `segan[ogg]` (soundfile). Byte-identical rebuilds on one machine; Godot `.import`
+  gets `loop`/`loop_offset`; `--verify-godot` checks OGG loops; the director chains OGG flow clips sample-exactly.
+
+### Changed
+
+- W001 on a song suggests a quieter category of its own (percussive songs).
 
 ## [0.3.0] - 2026-10-20
 
@@ -113,5 +135,8 @@ First release: milestones 0-7 of PLAN.md.
 - `segan import midi`: standard MIDI files to songs (quantize, snap to the key, GM programs/drums to kit instruments,
   reused patterns, a change report).
 
-[Unreleased]: https://github.com/lukasgolino/segan/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/lukasgolino/segan/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/lukasgolino/segan/compare/v0.3.0...v0.4.0
+[0.3.0]: https://github.com/lukasgolino/segan/compare/v0.2.0...v0.3.0
+[0.2.0]: https://github.com/lukasgolino/segan/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/lukasgolino/segan/releases/tag/v0.1.0

@@ -571,8 +571,15 @@ the manifest; reference.md documents all of it. v0.3.0.
 *(Done 2026-10-20: walk of clips = linear render within 1e-3; director output = concatenated clip files within
 1e-6 in headless Godot 4.7.2; no seam clicks with QOA or a 48 kHz mix rate. Musical quality of flows: owner's ear.)*
 
+### ☑ Milestone 10 — The LOOSE! report (owner request, 2026-10-20)
+Soundtrack `families` + state `crossfade` (loops of one family flow into each other); stem mix `trim_db` + W017;
+song `sample_rate` / `channels`; `export` "ogg" (music as Ogg Vorbis, `[ogg] quality`, extra `segan[ogg]`);
+W001 song hint. v0.4.0.
+*(Done 2026-10-20: OGG measured in Godot 4.7.2 (decode = libvorbis, loops to the exact frame); the director chains
+OGG flow clips within 1e-5 of the decoded files; an in-family cross-fade verified live in headless Godot.)*
+
 ### Later (don't start unless asked)
-OGG/Opus export, MIDI export,
+Opus export, MIDI export,
 `segan play` (local playback), audio-to-SFX parameter fitting, tracker (`.xm`) export, other engines, and a
 **PAGAN ↔ SEGAN link**: PAGAN animation frame events (`footstep` on `walk_2`) referencing SEGAN SFX, merged
 by the orchestrator via both manifests.

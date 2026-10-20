@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 import numpy as np
 import pytest
 
@@ -9,7 +11,7 @@ from segan.render import render_asset
 from segan.sequence import build_timeline, placed_notes
 from segan.wavio import read_wav
 
-from conftest import load
+from conftest import load, write
 
 SONG = """\
 name: tune
@@ -209,7 +211,7 @@ variants:""")
 
 
 def test_stem_groups_and_mixes(project: Project) -> None:
-    from segan.analysis import integrated_lufs
+    from segan.analysis import integrated_lufs, true_peak_db
 
     song, findings = load(project, "song", "tune", GROUPED)
     assert song is not None, findings
@@ -221,6 +223,10 @@ def test_stem_groups_and_mixes(project: Project) -> None:
     assert float(np.max(np.abs(base.audio + top.audio - full.audio))) < 0.002
     assert abs(integrated_lufs(full.audio, full.rate) + 16.0) < 0.5  # the loudest mix is on target
     assert render.main.info["mixes"]["calm"] < render.main.info["mixes"]["full"]
+    calm = render.output("mix:calm")
+    assert render.main.info["mix_trims"]["full"] == 0.0 and calm.info["trim_db"] > 0  # the quieter mix gets a trim up
+    reach = render.main.info["mixes"]["calm"] + calm.info["trim_db"]
+    assert abs(reach + 16.0) <= 0.15 or true_peak_db(calm.audio) + calm.info["trim_db"] > -1.1  # on target, or up against the ceiling
 
 
 @pytest.mark.parametrize(
@@ -237,3 +243,29 @@ def test_stem_groups_and_mixes(project: Project) -> None:
 def test_stem_errors(project: Project, stems: str, message: str) -> None:
     song, findings = load(project, "song", "tune", SONG.replace("variants:", f"stems: {stems}\nvariants:"))
     assert song is None and any(f.rule == "E016" and message in f.message for f in findings), findings
+
+
+def test_stem_mix_out_of_reach_warns(tmp_path: Path) -> None:
+    from conftest import CONFIG, make_project
+
+    from segan.lint import lint_paths
+
+    project = make_project(tmp_path, CONFIG + "\n[loudness]\nmusic = -7.0\n")
+    write(project, "song", "tune", SONG.replace("variants:", "stems:\n  groups: { hits: [drums], rest: [lead, bass] }\n  mixes: { hits: [hits], full: [hits, rest] }\nvariants:"))
+    found = [f for f in lint_paths(project).findings if f.rule in ("W001", "W017")]
+    assert any(f.rule == "W017" and "'hits'" in f.message for f in found), found
+    assert any(f.rule == "W001" and "category: music_soft" in f.message for f in found), found  # the song hint
+
+
+def test_song_sets_its_own_rate_and_channels(project: Project) -> None:
+    song, findings = load(project, "song", "tune", SONG.replace("variants:", "sample_rate: 32000\nchannels: mono\nvariants:"))
+    assert song is not None, findings
+    render = render_asset(song, project)
+    assert {(o.rate, o.channels) for o in render.outputs} == {(32000, 1)}  # project: 22050 Hz stereo
+    assert render.main.loop is not None and render.main.loop[1] == render.main.frames
+
+
+@pytest.mark.parametrize(("field", "message"), [("sample_rate: 16000", "sample_rate must be"), ("channels: quad", "channels must be")])
+def test_song_rate_and_channel_errors(project: Project, field: str, message: str) -> None:
+    song, findings = load(project, "song", "tune", SONG.replace("variants:", f"{field}\nvariants:"))
+    assert song is None and any(f.rule == "E001" and message in f.message for f in findings), findings

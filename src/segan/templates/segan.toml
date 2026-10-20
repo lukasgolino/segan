@@ -17,7 +17,8 @@ preview_dir = "previews"
 
 # What `segan build` produces: WAVs + manifest.json always ("wav"); add "godot" (loop points and compression in
 # each WAV's .import, AudioStreamRandomizer for SFX variations, AudioStreamSynchronized for stems) and
-# "stems" (one WAV per song track, sample-aligned, for adaptive layering).
+# "stems" (one WAV per song track, sample-aligned, for adaptive layering), "ogg" (music as Ogg Vorbis, ~10x
+# smaller; SFX stay WAV; needs `pip install "segan[ogg]"`).
 export = ["wav"]
 
 # Bump this when SOUND.md changes in a way that means existing sounds should be revisited. Assets record
@@ -59,6 +60,10 @@ foley = -22.0             # footsteps, cloth, small handling sounds: frequent, s
 # Only with export "godot".
 [godot]
 compress = "qoa"          # how Godot compresses the WAVs: qoa, ima or none
+
+# Only with export "ogg".
+[ogg]
+quality = 0.4             # Vorbis quality 0-1 (0.4 is about 128 kbit/s stereo)
 
 [lint]
 # Warning rule ids to turn off, e.g. ["W009"].

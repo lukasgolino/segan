@@ -1,7 +1,7 @@
 """`segan lint`: format errors (from parsing) plus warnings from the source and from the rendered audio.
 
 Audio warnings (W001 loudness shortfall, W004 silence, W005 lead-in, W007 loop seam, W008 DC offset,
-W010 aliasing, W011 cut-off tail, W013 un-normalised level) render the asset (cached), so lint, preview and
+W010 aliasing, W011 cut-off tail, W013 un-normalised level, W017 stem mix level) render the asset (cached), so lint, preview and
 build always judge the same samples. `render=False` skips them for a fast format-only check.
 """
 
@@ -38,6 +38,7 @@ WARNING_RULES = {
     "W014": "note held longer than its (unlooped) sample",
     "W015": "flow section shorter than the ring-out before it",
     "W016": "soundtrack cross-fade between clashing keys",
+    "W017": "stem mix can't reach its target",
 }
 
 
@@ -179,13 +180,22 @@ def lint_asset(asset: Any, project: Project, render: bool = True) -> list[Findin
 def lint_audio(asset: Any, project: Project) -> list[Finding]:
     from segan.render import render_asset
 
+    from segan.song import Song
+    from segan.songrender import song_mix
+
     cfg = project.config.lint
-    ctx = context_for(project.config.mix)
+    ctx = context_for(song_mix(asset, project) if isinstance(asset, Song) else project.config.mix)  # a song at its own rate aliases more
     found: list[Finding] = []
     path = asset.path
     render = render_asset(asset, project)
     short: set[tuple[str, str]] = set()
     for output in render.outputs:
+        if output.id.startswith("mix:") and output.level.get("target") is not None:
+            aim, reach = float(output.level["target"] or 0.0), float(output.level["lufs"] or 0.0) + float(output.info["trim_db"])
+            if reach < aim - cfg.loudness_tolerance:
+                found.append(Finding("W017", f"stem mix {output.info['mix']!r} reaches only {reach:.1f} LUFS of its {aim:g} target, even with its "
+                                     f"{output.info['trim_db']:g} dB trim: its peaks are too close to the ceiling, so it plays {aim - reach:.1f} LU quieter "
+                                     "than the loudest mix. Give its stems more body (sustained parts), or let the loudest mix be quieter", path, None, f"stems.mixes.{output.info['mix']}"))  # fmt: skip
         if output.id.startswith(("stem:", "mix:", "flow")):
             if output.info.get("cut") and (output.id.split(":", 1)[0], output.info["section"]) not in short:
                 short.add((output.id.split(":", 1)[0], output.info["section"]))
@@ -200,9 +210,12 @@ def lint_audio(asset: Any, project: Project) -> list[Finding]:
             found.append(Finding("W004", f"{label} is silent (nothing above -70 LUFS): check gains, envelopes and starts", path, None, label))
             continue
         if target is not None and lufs is not None and lufs < target - cfg.loudness_tolerance:
+            fix = ("Give it more body (longer decay/sustain, less transient) or a quieter category" if render.kind != "song" else
+                   "Percussive songs (drums, plucks, staccato orchestra) have high peaks for their integrated loudness: add sustained parts "
+                   "(pads, held bass), or give it a quieter category of its own: `category: music_soft` in the song and "
+                   f"`music_soft = {target - 3:g}` under [loudness] in segan.toml (an unlisted category falls back to `sfx`)")  # fmt: skip
             found.append(Finding("W001", f"{label} reaches only {lufs:.1f} LUFS of its {target:g} target: it's too peaky to get louder without more than "
-                                 f"{cfg.max_limiting_db:g} dB of limiting. Give it more body (longer decay/sustain, less transient) or a quieter category",
-                                 path, None, label))  # fmt: skip
+                                 f"{cfg.max_limiting_db:g} dB of limiting. {fix}", path, None, label))  # fmt: skip
         if target is None and lufs is not None:
             goal = project.config.target(getattr(asset, "category", "music"))
             if abs(lufs - goal) > cfg.loudness_tolerance:
