@@ -19,6 +19,11 @@ check before upgrading. Patch bumps never change existing behaviour. Every relea
 
 ## [Unreleased]
 
+### Fixed
+
+- `--verify-godot` runs Godot's import again when it crashes (Godot 4.7.2 sometimes segfaults at the end of a
+  large threaded import, seen once in CI).
+
 ## [0.4.0] - 2026-10-20
 
 The LOOSE! report (ORCHESTRATOR_PLAN.md): shuffled pools of loops, stem mix levels, file size.

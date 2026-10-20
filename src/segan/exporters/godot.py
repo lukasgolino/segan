@@ -166,9 +166,12 @@ def verify_with_godot(godot: str, godot_root: Path, manifest_res: str, timeout: 
         script_path.write_text(script, encoding="utf-8")
         stage = "import"
         try:
-            imported = subprocess.run(
-                [godot, "--headless", "--path", str(godot_root), "--import"], capture_output=True, text=True, timeout=timeout
-            )
+            for _ in range(2):  # Godot 4.7.2 sometimes crashes (SIGSEGV) at the end of a large threaded import: run it again
+                imported = subprocess.run(
+                    [godot, "--headless", "--path", str(godot_root), "--import"], capture_output=True, text=True, timeout=timeout
+                )
+                if imported.returncode >= 0:
+                    break
             import_output = (imported.stdout + imported.stderr).strip()
             import_errors = [line for line in import_output.splitlines() if "ERROR" in line]
             if imported.returncode != 0 or import_errors:
