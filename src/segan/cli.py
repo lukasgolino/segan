@@ -20,6 +20,8 @@ from segan.findings import Finding, SeganError, display_path
 from segan.asset import SFX_SUFFIX, SONG_SUFFIX, load_asset_or_raise
 from segan.kit import KIT_SUFFIX, NAME_RE, Kit, load_kit_file
 from segan.lint import lint_paths
+from segan.notes import note_name
+from segan.patch import Instrument
 from segan.project import CONFIG_NAME, Project, discover_project, find_project_root, load_project
 from segan.settings import Change, describe, lookup, set_in_toml, set_setting, unset_setting
 from segan.sfx import PRESETS, preset_data
@@ -286,9 +288,12 @@ def cmd_samples_list(args: argparse.Namespace, out: Output) -> int:
         rows = []
         for inst, info in sorted(lib.instruments.items()):
             fetched = not lib.missing(inst)
+            keys = lib.key_range(inst)
+            span = [note_name(keys[0]), note_name(keys[1])] if keys is not None else None
             rows.append({"instrument": inst, "sample": f"{lib.name}/{inst}", "description": info["description"], "kind": info["kind"],
-                         "mb": round(lib.size(inst) / 1e6, 1), "fetched": fetched})  # fmt: skip
-            out.say(f"  {'*' if fetched else ' '} {inst:<15} {lib.size(inst) / 1e6:6.1f} MB  {info['description']}")
+                         "range": span, "mb": round(lib.size(inst) / 1e6, 1), "fetched": fetched})  # fmt: skip
+            shown = f"{span[0]}-{span[1]}" if span is not None else "unpitched"
+            out.say(f"  {'*' if fetched else ' '} {inst:<15} {lib.size(inst) / 1e6:6.1f} MB  {shown:<9}  {info['description']}")
         out.say("  (* = downloaded; `segan samples fetch " + lib.name + " <instrument...>` gets the rest)")
         result.append({"library": lib.name, "title": lib.title, "license": lib.license, "url": lib.url, "cache": str(lib.cache), "instruments": rows})
     out.result({"libraries": result})
@@ -311,6 +316,20 @@ def cmd_samples_fetch(args: argparse.Namespace, out: Output) -> int:
     out.say(f"fetched {count} files ({fetched / 1e6:.0f} MB); use them as sample: {lib.name}/<instrument>")
     out.result({"library": lib.name, "instruments": wanted, "files": count, "bytes": fetched, "cache": str(lib.cache)})
     return 0
+
+
+def _instrument_range(inst: Instrument) -> list[str] | None:
+    """The notes an instrument plays: its `range`, else (samples) the keys its zones map; None = any / unpitched."""
+    if inst.range is not None:
+        return [note_name(inst.range[0]), note_name(inst.range[1])]
+    if inst.sample is not None and not inst.is_drum:
+        from segan.samples import load_set
+
+        sset = load_set(inst.sample)
+        low, high = sset.key_span()
+        if (low, high) != (0, 127):
+            return [note_name(low), note_name(high)]
+    return None
 
 
 def cmd_kit_show(args: argparse.Namespace, out: Output) -> int:
@@ -338,9 +357,10 @@ def cmd_kit_show(args: argparse.Namespace, out: Output) -> int:
         if over:
             out.say(f"  W010 aliasing over {threshold:g} dB: {over} - raise [mix] oversample or lower the range")
         instruments = {
-            k: {"name": i.name, "source": i.describe(), "aliasing_db": None if (a := show.aliasing.get(k)) is None else round(a, 1)}
+            k: {"name": i.name, "source": i.describe(), "range": _instrument_range(i),
+                "aliasing_db": None if (a := show.aliasing.get(k)) is None else round(a, 1)}
             for k, i in kit.instruments.items()
-        }
+        }  # fmt: skip
         outputs.append({"kit": kit.name, "sheet": display_path(sheet), "wavs": [display_path(w) for w in wavs],
                         "instruments": instruments, "lufs": round(show.lufs, 2)})  # fmt: skip
     if findings:

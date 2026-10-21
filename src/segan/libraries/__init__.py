@@ -10,6 +10,8 @@ shared by every project. Nothing is bundled: the audio is the library author's, 
 
 from __future__ import annotations
 
+import re
+
 import json
 import os
 import urllib.parse
@@ -58,6 +60,16 @@ class Library:
 
     def size(self, instrument: str) -> int:
         return sum(self.files[f][0] for f in self.instruments[instrument]["files"])
+
+    def key_range(self, instrument: str) -> tuple[int, int] | None:
+        """Lowest and highest MIDI key the instrument's SFZ maps (read from the bundled map, no audio needed);
+        None for unpitched instruments (pitch_keytrack=0: every key plays the same sound)."""
+        text = self.sfz(instrument).read_text(encoding="utf-8")
+        if re.search(r"\bpitch_keytrack=0\b", text):
+            return None
+        low = [int(v) for v in re.findall(r"\blokey=(\d+)", text)]
+        high = [int(v) for v in re.findall(r"\bhikey=(\d+)", text)]
+        return (min(low), max(high)) if low and high else None
 
 
 def cache_root() -> Path:
