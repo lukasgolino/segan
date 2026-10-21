@@ -1076,11 +1076,13 @@ def build_parser() -> argparse.ArgumentParser:
     lint.add_argument("paths", nargs="*", help="files or directories (default: the whole project)")
     lint.add_argument("--warnings-as-errors", action="store_true", help="exit non-zero on warnings too")
     lint.add_argument("--no-render", action="store_true", help="format checks only (skip the audio warnings)")
+    lint.add_argument("-j", "--jobs", type=int, help="render songs/SFX in N processes (default: SEGAN_JOBS, else the CPU count up to 8)")
     lint.set_defaults(handler=cmd_lint)
 
     build_cmd = commands.add_parser("build", parents=[common], help="lint, then write WAVs, manifest.json and engine files to output_dir")
     build_cmd.add_argument("project", nargs="?", help="project directory (default: the one containing the cwd)")
     build_cmd.add_argument("--verify-godot", action="store_true", help="load and play every generated stream in headless Godot")
+    build_cmd.add_argument("-j", "--jobs", type=int, help="render songs/SFX in N processes (default: SEGAN_JOBS, else the CPU count up to 8)")
     build_cmd.set_defaults(handler=cmd_build)
 
     status = commands.add_parser("status", parents=[common], help="catalogue of every song and SFX and what needs attention")
@@ -1182,6 +1184,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         parser.print_help()
         return 0
     out = Output(as_json=getattr(args, "json", False))
+    if getattr(args, "jobs", None) is not None:
+        if args.jobs < 1:
+            parser.error("--jobs must be 1 or more")
+        os.environ["SEGAN_JOBS"] = str(args.jobs)  # read by the render pool (and its worker processes)
     progress.enabled = argv is None and not args.quiet and not os.environ.get("SEGAN_QUIET")
     try:
         return handler(args, out)

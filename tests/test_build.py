@@ -3,6 +3,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
+
 from segan.build import build
 from segan.exporters.godot import edit_import, import_params, randomizer_tres, synchronized_tres
 from segan.project import load_project
@@ -152,3 +154,34 @@ def test_manifest_has_each_variations_loudness(tmp_path: Path) -> None:
     coin = json.loads((root / "build" / "audio" / "manifest.json").read_text())["assets"]["coin"]
     assert all(isinstance(v["lufs"], float) and v["target_lufs"] == coin["target_lufs"] for v in coin["variations"])
     assert not result.errors
+
+
+def test_render_jobs_and_cache_per_used_instrument(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """#26: songs render in parallel processes with the same bytes as one process, and editing a kit instrument a
+    song doesn't play keeps that song's cached render."""
+    from segan.asset import load_asset
+    from segan.render import cache_key
+    from segan.songrender import song_cache_parts
+
+    (tmp_path / "one").mkdir()
+    (tmp_path / "many").mkdir()
+    one = setup(tmp_path / "one")
+    build(load_project(one))
+    monkeypatch.setenv("SEGAN_JOBS", "3")
+    many = setup(tmp_path / "many")
+    result = build(load_project(many))
+    assert not result.errors
+    for wav in sorted((one / "build" / "audio").rglob("*.wav")):
+        assert (many / "build" / "audio" / wav.relative_to(one / "build" / "audio")).read_bytes() == wav.read_bytes(), wav.name
+
+    def key() -> str:
+        project = load_project(one)
+        song, _ = load_asset(project.music_dir / "tune.song.yaml", project)
+        return cache_key(*song_cache_parts(song, project))
+
+    before = key()
+    kit = one / "kits" / "t.kit.yaml"
+    kit.write_text(kit.read_text().replace("groups:", "  z: { name: extra, osc: saw }\ngroups:"))  # an instrument the song doesn't play
+    assert key() == before
+    kit.write_text(kit.read_text().replace("osc: pulse, duty: 0.25", "osc: pulse, duty: 0.3"))  # p: the song's lead
+    assert key() != before

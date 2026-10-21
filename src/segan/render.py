@@ -10,7 +10,9 @@ from __future__ import annotations
 import hashlib
 import io
 import json
+import os
 from dataclasses import asdict, dataclass, field
+from pathlib import Path
 from typing import Any
 
 import numpy as np
@@ -104,6 +106,48 @@ def _load(data: bytes) -> Render:
             for i, o in enumerate(meta["outputs"])
         ]
     return Render(meta["name"], meta["kind"], outputs)
+
+
+def jobs() -> int:
+    """Processes for rendering several songs/SFX at once: SEGAN_JOBS if set (1 = none), else the CPU count, up to 8."""
+    raw = os.environ.get("SEGAN_JOBS", "")
+    if raw.strip().isdigit() and int(raw) >= 1:
+        return int(raw)
+    return max(1, min(8, os.cpu_count() or 1))
+
+
+def _render_in_worker(project: Project, path: str) -> None:
+    from segan.asset import load_asset
+
+    asset, _ = load_asset(Path(path), project)
+    if asset is not None:
+        render_asset(asset, project)  # writes the cache file the main process then reads
+
+
+def prerender(assets: list[Any], project: Project) -> None:
+    """Render every asset whose render isn't cached yet in parallel processes (`jobs()`), filling the render
+    cache; each render is the same as in one process, so the output doesn't depend on the job count."""
+    from segan.sfxrender import sfx_cache_parts
+    from segan.songrender import song_cache_parts
+
+    todo = []
+    for asset in assets:
+        if asset.path is None or getattr(asset.meta, "template", False):
+            continue
+        parts = sfx_cache_parts(asset, project) if asset.kind == "sfx" else song_cache_parts(asset, project)
+        if not (project.cache_dir / "renders" / f"{cache_key(*parts)}.npz").is_file():
+            todo.append(str(asset.path))
+    workers = min(jobs(), len(todo))
+    if workers < 2:
+        return
+    import multiprocessing
+    from concurrent.futures import ProcessPoolExecutor
+
+    method = "forkserver" if "forkserver" in multiprocessing.get_all_start_methods() else "spawn"
+    progress.note(f"rendering {len(todo)} songs/SFX in {workers} processes")
+    with ProcessPoolExecutor(workers, mp_context=multiprocessing.get_context(method)) as pool:
+        for future in [pool.submit(_render_in_worker, project, path) for path in todo]:
+            future.result()
 
 
 def render_asset(asset: Any, project: Project, use_cache: bool = True) -> Render:

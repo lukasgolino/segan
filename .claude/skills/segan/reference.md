@@ -382,19 +382,23 @@ loudness_tolerance = 1.0      # W001/W013, LU
 
 ## Commands (all accept `--json`; non-zero exit on errors)
 
+Songs and SFX render in several processes (`-j N` on lint/build, or `SEGAN_JOBS=N`; default: the CPU count up to 8;
+`1` = one process); the output is identical. Renders are cached per asset and keyed on the kit instruments the
+asset actually plays, so editing one instrument re-renders only what uses it.
+
 | Command | Purpose |
 |---|---|
 | `segan init [dir] [--open] [--style chiptune\|synth] [--godot DIR]` | create a project with a starter kit; `--godot` builds into `DIR/assets/generated/audio`, or `DIR/assets/audio` when a PAGAN project there already builds into `assets/generated`; warns when the two output folders are the same or nested |
 | `segan new kit <name>` / `new song <name> [--kit K] [--key "A minor"] [--tempo 120] [--bars 2]` / `new sfx <name> [--preset P] [--kit K]` | starter files (always pass `--description`) |
 | `segan samples list [library\|file.sf2]` / `segan samples fetch <library> <instrument...> [--all]` | sample libraries: instruments, key ranges and what's downloaded / download instruments |
 | `segan kit show [kits]` | every instrument playing a test phrase: `previews/kits/<kit>.listen.png` + WAVs; `--json` gives each instrument's `range` |
-| `segan lint [paths] [--warnings-as-errors] [--no-render]` | errors + warnings (audio warnings render the asset; cached); exits 1 on errors, 0 when there are only warnings, 1 on warnings too with `--warnings-as-errors` (CI) |
+| `segan lint [paths] [--warnings-as-errors] [--no-render] [-j N]` | errors + warnings (audio warnings render the asset; cached); exits 1 on errors, 0 when there are only warnings, 1 on warnings too with `--warnings-as-errors` (CI) |
 | `segan preview <asset...> [--output main\|variant:X\|variation:N\|phase:X\|stem:T\|mix:M\|flow:CLIP\|walk[:SEED] ...] [--from 5 --to 8]` | WAV + listen sheet (+ seam view for loops) per output in `previews/<asset>/`, analysis in `--json` (SFX: `layers` = each layer dry on its own, `peak_db`/`lufs`/`crest_db`, plus the dry mix); flow songs also get a walk; `--output reel` (an SFX): the main sound and every variation back to back, 0.4 s apart, to judge the variety |
 | `segan render <asset...>` | WAVs only |
 | `segan gallery` | every asset's waveform + spectrum and a loudness chart by category |
 | `segan bake sfx <name> [--in-place]` | expand a preset/template into every field |
 | `segan import midi <file.mid> [--kit K] [--key K] [--quantize 16] [--bars-per-pattern 2]` | MIDI -> song + change report |
-| `segan build [--verify-godot]` | final WAVs + manifest (+ Godot files); `--verify-godot` loads and plays everything headless |
+| `segan build [--verify-godot] [-j N]` | final WAVs + manifest (+ Godot files); `--verify-godot` loads and plays everything headless |
 | `segan status [--fast]` | catalogue + what needs attention |
 | `segan mark <asset...> [--status approved\|draft] [--current] [--outdated]` | record reviews |
 | `segan style bump "note"` | new style version; flags older assets (W006) |
