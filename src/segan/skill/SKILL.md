@@ -136,7 +136,9 @@ bass, maybe a pad or arpeggio, 3-5 drums.
    - The file is `duration` plus the shared room's tail (the sheet shows "1.10s + 0.26s room tail"). Short,
      frequent sounds (UI clicks) can go dry: `room: 0` on the SFX or `[room] ui = 0` in segan.toml.
    - `category` picks the loudness target: `sfx` -14, `ui` -20, `foley` -22 LUFS (segan.toml `[loudness]`).
-     A sound too short and spiky to reach its target gets W001: give it more body or a quieter category.
+     A sound too short and spiky to reach its target gets W001: `segan preview <name> --json` lists each layer's
+     peak/loudness/crest (`layers`); stagger layer starts by 3-9 ms, saturate or lower the peakiest layer, give it
+     more body, or use a quieter category.
 4. `segan lint <file>` -> fix every error and every warning that's a real problem (a warning you keep on
    purpose goes in the file's `lint: { disable: [...] }` with a comment why); hand over with a clean lint.
    `segan preview <name>` -> **open the listen sheet** and check: the pitch

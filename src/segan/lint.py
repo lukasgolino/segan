@@ -210,7 +210,9 @@ def lint_audio(asset: Any, project: Project) -> list[Finding]:
             found.append(Finding("W004", f"{label} is silent (nothing above -70 LUFS): check gains, envelopes and starts", path, None, label))
             continue
         if target is not None and lufs is not None and lufs < target - cfg.loudness_tolerance:
-            fix = ("Give it more body (longer decay/sustain, less transient) or a quieter category" if render.kind != "song" else
+            fix = ("Stagger layer starts by a few ms (3-9 ms) so transients don't stack, tame the peakiest layer (saturate or "
+                   "compress noise layers with distort, lower its gain), give it more body (longer decay/sustain), or use a quieter "
+                   "category. `segan preview --json` lists each layer's peak, loudness and crest" if render.kind != "song" else
                    "Percussive songs (drums, plucks, staccato orchestra) have high peaks for their integrated loudness: add sustained parts "
                    "(pads, held bass), or give it a quieter category of its own: `category: music_soft` in the song and "
                    f"`music_soft = {target - 3:g}` under [loudness] in segan.toml (an unlisted category falls back to `sfx`)")  # fmt: skip

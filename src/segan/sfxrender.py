@@ -12,7 +12,7 @@ from dataclasses import replace
 
 import numpy as np
 
-from segan.analysis import frames_of
+from segan.analysis import SILENCE_DB, frames_of, max_momentary_lufs, peak_db, to_db
 from segan.dsp import Signal, exp2, seed_of, sin_turns, uniform
 from segan.kitshow import context_for
 from segan.mix import bus, finish, room_tail, trim_tail
@@ -205,6 +205,43 @@ def render_sfx(sfx: Sfx, project: Project) -> Render:
     for phase in sfx.phases.values():
         emit(f"phase:{phase.name}", f"{sfx.name}.{phase.name}", phase.layers, phase.duration, phase.loop, phase.crossfade)
     return Render(sfx.name, "sfx", outputs)
+
+
+def layer_levels(sfx: Sfx, project: Project, output_id: str) -> list[dict[str, object]]:
+    """Each layer of one output on its own, dry (before the room, normalisation and the limiter), at its place in
+    the sound: peak, loudness (loudest 400 ms) and crest factor (peak over RMS while it sounds), plus the dry sum.
+    Which layer makes a sound peaky shows as the highest peak for its loudness (W001)."""
+    ctx = context_for(project.config.mix)
+    variation, pitch, timbre = 0, 0.0, 0.0
+    layers, duration, loop, crossfade = sfx.layers, sfx.duration, sfx.loop, sfx.crossfade
+    if output_id.startswith("phase:"):
+        phase = sfx.phases[output_id.split(":", 1)[1]]
+        layers, duration, loop, crossfade = phase.layers, phase.duration, phase.loop, phase.crossfade
+    elif output_id.startswith("variation:") and sfx.variations is not None:
+        variation = int(output_id.split(":", 1)[1])
+        pitch, timbre, _ = variation_params(sfx.name, sfx.variations)[variation - 1]
+    available = duration + (crossfade if loop else 0.0)
+    total = round(available * ctx.rate)
+
+    def levels(x: Signal) -> dict[str, float]:
+        sounding = x[np.abs(x) > 0]
+        rms = float(np.sqrt(np.mean(sounding**2))) if len(sounding) else 0.0
+        peak = peak_db(x)
+        return {"peak_db": round(peak, 2), "lufs": round(max_momentary_lufs(x, ctx.rate), 2),
+                "crest_db": round(peak - to_db(rms), 2) if rms > 0 else 0.0}  # fmt: skip
+
+    out: list[dict[str, object]] = []
+    dry = np.zeros(total)
+    for layer in layers:
+        signal, _ = render_layer(layer, ctx, available, seed_of(sfx.name, layer.index, variation), pitch, timbre)
+        start = round(layer.start * ctx.rate)
+        placed = np.zeros(total)
+        piece = signal[: max(0, total - start)]
+        placed[start : start + len(piece)] = piece
+        dry += placed
+        out.append({"layer": layer.id or f"layers.{layer.index}", "start_s": layer.start, **levels(placed)})
+    out.append({"layer": "(dry mix)", "start_s": 0.0, **(levels(dry) if total else {"peak_db": SILENCE_DB, "lufs": SILENCE_DB, "crest_db": 0.0})})
+    return out
 
 
 def variation_params(name: str, v: Variations) -> list[tuple[float, float, float]]:

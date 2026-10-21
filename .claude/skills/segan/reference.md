@@ -382,7 +382,7 @@ loudness_tolerance = 1.0      # W001/W013, LU
 | `segan samples list [library\|file.sf2]` / `segan samples fetch <library> <instrument...> [--all]` | sample libraries: instruments and what's downloaded / download instruments |
 | `segan kit show [kits]` | every instrument playing a test phrase: `previews/kits/<kit>.listen.png` + WAVs |
 | `segan lint [paths] [--warnings-as-errors] [--no-render]` | errors + warnings (audio warnings render the asset; cached) |
-| `segan preview <asset...> [--output main\|variant:X\|variation:N\|phase:X\|stem:T\|mix:M\|flow:CLIP\|walk[:SEED] ...] [--from 5 --to 8]` | WAV + listen sheet (+ seam view for loops) per output in `previews/<asset>/`, analysis in `--json`; flow songs also get a walk |
+| `segan preview <asset...> [--output main\|variant:X\|variation:N\|phase:X\|stem:T\|mix:M\|flow:CLIP\|walk[:SEED] ...] [--from 5 --to 8]` | WAV + listen sheet (+ seam view for loops) per output in `previews/<asset>/`, analysis in `--json` (SFX: `layers` = each layer dry on its own, `peak_db`/`lufs`/`crest_db`, plus the dry mix); flow songs also get a walk |
 | `segan render <asset...>` | WAVs only |
 | `segan gallery` | every asset's waveform + spectrum and a loudness chart by category |
 | `segan bake sfx <name> [--in-place]` | expand a preset/template into every field |
@@ -419,7 +419,7 @@ a section that isn't whole bars), E018 soundtrack problem (unknown state, song, 
 section; a bad field).
 
 Warnings: W001 loudness target out of reach without more limiting than `max_limiting_db` (too short/spiky:
-give it body or a quieter category; for a percussive song: `category: music_soft` + `music_soft = -19` under
+stagger layer starts 3-9 ms, tame the peakiest layer (`preview --json` `layers`), give it body, or a quieter category; for a percussive song: `category: music_soft` + `music_soft = -19` under
 `[loudness]`), W002 unused pattern or section, W003 too many instruments in one song,
 W004 silent pattern or sound, W005 lead-in silence in an SFX, W006 made under an older style version, W007
 click at a loop point, W008 DC offset, W009 tracks clash (minor 2nd/tritone) on a beat, W010 aliasing (raise
