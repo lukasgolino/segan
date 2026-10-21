@@ -58,6 +58,23 @@ def test_init_warns_about_a_pagan_output_clash(in_tmp: Path, capsys: pytest.Capt
     assert code == 0 and data["pagan_clash"] is not None
 
 
+def test_init_steps_out_of_a_sibling_pagan_output(in_tmp: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    """#12: game/art/pagan.toml builds into game/assets/generated: the audio goes to assets/audio, not inside it."""
+    (in_tmp / "game" / "art").mkdir(parents=True)
+    (in_tmp / "game" / "project.godot").write_text("config_version=5\n")
+    (in_tmp / "game" / "art" / "pagan.toml").write_text('output_dir = "../assets/generated"\n')
+    code, data = run_json(["init", "game/sound", "--godot", "game"], capsys)
+    assert code == 0 and data["pagan_clash"] is None
+    assert load_project(in_tmp / "game" / "sound").config.output_dir == "../assets/audio"
+
+
+def test_init_warns_when_outputs_nest(in_tmp: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    """#12: an output_dir inside PAGAN's (or around it) is a clash too, not only the same folder."""
+    (in_tmp / "pagan.toml").write_text('output_dir = "art"\n')
+    code, data = run_json(["init", "art/sound"], capsys)  # build/audio inside art/
+    assert code == 0 and data["pagan_clash"] is not None
+
+
 def test_new_kit_and_kit_show(in_tmp: Path, capsys: pytest.CaptureFixture[str]) -> None:
     main(["init", "."])
     capsys.readouterr()

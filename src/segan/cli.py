@@ -80,19 +80,40 @@ STYLES = {
 }
 
 
-def _pagan_clash(root: Path, output_dir: str) -> Path | None:
-    """A pagan.toml at or above `root` whose output_dir is the same directory as ours (both write manifest.json)."""
+def _pagan_outputs(root: Path, godot_root: Path | None) -> list[tuple[Path, Path]]:
+    """(pagan.toml, its output dir) for PAGAN projects at or above `root`, and anywhere in the Godot project
+    (art often lives next to the sound folder, e.g. game/art/pagan.toml)."""
     import tomllib
 
-    ours = (root / output_dir).resolve()
+    configs: list[Path] = []
     for directory in (root.resolve(), *root.resolve().parents):
-        config = directory / "pagan.toml"
-        if config.is_file():
-            try:
-                theirs = tomllib.loads(config.read_text(encoding="utf-8")).get("output_dir", "build")
-            except (OSError, ValueError):
-                return None
-            return config if isinstance(theirs, str) and (directory / theirs).resolve() == ours else None
+        if (directory / "pagan.toml").is_file():
+            configs.append(directory / "pagan.toml")
+            break
+    if godot_root is not None:
+        top = godot_root.resolve()
+        for config in sorted(top.glob("**/pagan.toml")):
+            depth = len(config.relative_to(top).parts)
+            if depth <= 4 and not any(part.startswith(".") for part in config.relative_to(top).parts) and config not in configs:
+                configs.append(config)
+    found = []
+    for config in configs:
+        try:
+            theirs = tomllib.loads(config.read_text(encoding="utf-8")).get("output_dir", "build")
+        except (OSError, ValueError):
+            continue
+        if isinstance(theirs, str):
+            found.append((config, (config.parent / theirs).resolve()))
+    return found
+
+
+def _pagan_clash(root: Path, output_dir: str, godot_root: Path | None = None) -> Path | None:
+    """A pagan.toml whose output_dir is ours, contains ours or sits inside ours: PAGAN and SEGAN would mix their files
+    (both write manifest.json, and each build cleans up files it doesn't know)."""
+    ours = (root / output_dir).resolve()
+    for config, theirs in _pagan_outputs(root, godot_root):
+        if ours == theirs or ours.is_relative_to(theirs) or theirs.is_relative_to(ours):
+            return config
     return None
 
 
@@ -114,8 +135,12 @@ def cmd_init(args: argparse.Namespace, out: Output) -> int:
     kit_name, style_text = STYLES[style]
     config_text = Template(template("segan.toml")).substitute(mode=mode, default_kit=f'default_kit = "{kit_name}"')
     output_dir = "build/audio"
+    moved_from_pagan: Path | None = None
     if godot_root is not None:
-        output_dir = Path(os.path.relpath((godot_root / "assets" / "generated" / "audio").resolve(), root.resolve())).as_posix()
+        target = godot_root / "assets" / "generated" / "audio"
+        if (moved_from_pagan := _pagan_clash(root, os.path.relpath(target.resolve(), root.resolve()), godot_root)) is not None:
+            target = godot_root / "assets" / "audio"  # PAGAN's output folder holds assets/generated: stay out of it
+        output_dir = Path(os.path.relpath(target.resolve(), root.resolve())).as_posix()
         config_text = set_in_toml(config_text, "output_dir", output_dir)
         config_text = set_in_toml(config_text, "export", ["wav", "godot"])
     if style == "orchestral":  # a hall, and an orchestra's worth of instruments per song
@@ -152,16 +177,18 @@ def cmd_init(args: argparse.Namespace, out: Output) -> int:
     if not kit_path.exists():
         kit_path.write_text(template(f"{kit_name}{KIT_SUFFIX}"), encoding="utf-8")
         created.append(kit_path)
-    clash = _pagan_clash(root, output_dir)
+    clash = _pagan_clash(root, output_dir, godot_root)
 
     out.say(f"Initialized SEGAN project in {display_path(root)} ({mode} mode, {style} starter kit '{kit_name}')")
     for path in created:
         out.say(f"  created {display_path(path)}")
     for path in skipped:
         out.say(f"  kept existing {display_path(path)}")
+    if moved_from_pagan is not None:
+        out.say(f"  output_dir = {output_dir}: {display_path(moved_from_pagan)} builds into assets/generated, so the audio goes next to it, not inside it")
     if clash is not None:
-        out.say(f"  warning: {display_path(clash)} writes to the same output_dir; both tools write manifest.json there. "
-                "Point one of them at its own folder (e.g. .../generated/audio).")  # fmt: skip
+        out.say(f"  warning: {display_path(clash)} writes to the same output_dir, or one inside the other; both tools write manifest.json "
+                "and clean up files they don't know. Give each its own folder (e.g. assets/art and assets/audio).")  # fmt: skip
     if style == "orchestral":
         from segan.kitshow import library_needs
 
