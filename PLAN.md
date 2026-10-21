@@ -579,10 +579,8 @@ W001 song hint. v0.4.0.
 OGG flow clips within 1e-5 of the decoded files; an in-family cross-fade verified live in headless Godot.)*
 
 ### Later (don't start unless asked)
-Opus export, MIDI export,
-`segan play` (local playback), audio-to-SFX parameter fitting, tracker (`.xm`) export, other engines, and a
-**PAGAN ↔ SEGAN link**: PAGAN animation frame events (`footstep` on `walk_2`) referencing SEGAN SFX, merged
-by the orchestrator via both manifests.
+Moved to GitHub issues #29-#35 (Opus/MIDI/`.xm` export, `segan play`, audio-to-SFX fitting, other engines,
+PAGAN ↔ SEGAN link).
 
 ---
 
@@ -632,6 +630,7 @@ The owner is away and won't review as you go. Build SEGAN **to completion (Miles
 
 ## 15. Feedback from games (2026-10-19)
 
-Game orchestrators file bug/feature reports in [ORCHESTRATOR_PLAN.md](ORCHESTRATOR_PLAN.md) (append-only, like
-PAGAN's). First consumer: Age of Boom (S1–S11, segan v0.1.0). Highest value: S1 (layer groups for adaptive stems,
+Game orchestrators file bug/feature reports as GitHub issues (label `agent-report`; the skill's section 9 and
+`.github/ISSUE_TEMPLATE/agent-report.md`). The former ORCHESTRATOR_PLAN.md and QUESTIONS.md were converted to
+issues #1-#28 and deleted on 2026-10-21 (fixed items are in CHANGELOG.md). First consumer: Age of Boom (S1–S11, segan v0.1.0). Highest value: S1 (layer groups for adaptive stems,
 normalised by the mixes a game actually plays), S2 (skip unused outputs), S3 (per-category room / tail trim).

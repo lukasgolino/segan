@@ -72,7 +72,9 @@ generated text files.
   Co-Authored-By trailers, no "Generated with" lines). Push to origin main is allowed (owner, 2026-10-19).
 - Versioning as PAGAN: bump `version` in pyproject.toml, CHANGELOG.md entry (Keep a Changelog), tag `vX.Y.Z`
   for any change to the notation, segan.toml settings, manifest/exporter output or rendered samples.
-- Open questions for the owner go in QUESTIONS.md with a recommended default; never block on them.
+- Questions for the owner: ask as you go (tight questions, each with a recommended default).
+- Bugs, feature requests and future work live in GitHub issues (`gh issue list --repo lukasgolino/segan`); games
+  report through the `agent-report` template. No plan/report files in the repo.
 - Dependencies: numpy, scipy, Pillow, PyYAML; extras `mcp`, `ogg` (soundfile); dev: pytest, mypy, types-PyYAML, mcp, soundfile.
 
 ## Decisions log
@@ -179,3 +181,5 @@ generated text files.
   rebuilds are byte-identical on one machine (Vorbis float code may differ across machines; the demo stays WAV).
   Measured on Godot 4.7.2: its Vorbis decode = libvorbis's (1.5e-7), same 2-frame playback latency as WAV, and a
   loop restarts at frame floor(loop_offset * rate) after the file's last frame: `loop_offset` = (start + 0.25) / rate.
+- 2026-10-21: ORCHESTRATOR_PLAN.md (open items) and PLAN.md's "Later" list became GitHub issues #1-#35; ORCHESTRATOR_PLAN.md
+  and QUESTIONS.md deleted (owner). Questions are asked as you go instead of logged.
