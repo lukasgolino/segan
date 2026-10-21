@@ -38,6 +38,7 @@ check before upgrading. Patch bumps never change existing behaviour. Every relea
   codes (1 on errors; warnings only fail with `--warnings-as-errors`) (#8).
 - `[loudness]` targets can go down to -60 LUFS (was -40), for very quiet categories such as a hover tick; `segan mix
   adjust` clamps to the same range (#9).
+- Docs: why a new `.import` sidecar changes once more after Godot's first import (Godot adds `uid`/`dest_files`) (#14).
 
 ### Fixed
 

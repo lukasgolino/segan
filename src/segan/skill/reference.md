@@ -471,6 +471,9 @@ With `export = ["wav", "godot"]` and `output_dir` inside a Godot 4 project, SEGA
 and compression into its `.import` (Godot keeps the rest; an `.ogg` gets `loop` and `loop_offset`), `sfx/<name>.tres` (AudioStreamRandomizer over the
 variations: play it and Godot picks one, never the same twice in a row) and `stems/<song>.tres`
 (AudioStreamSynchronized: all stems in sync; change `stream_N/volume` to layer them).
+A new file gets a minimal `.import` (importer, type, SEGAN's params); Godot adds `uid`, `path` and `dest_files` the
+first time it imports it, so the first commit after a build is followed by one more `.import` diff once the editor
+(or `segan build --verify-godot`) has run. Commit that too; it doesn't recur, and SEGAN keeps Godot's additions.
 
 ```gdscript
 $Music.stream = load("res://assets/generated/audio/music/overworld.wav")   # loops by itself
