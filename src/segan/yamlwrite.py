@@ -49,7 +49,14 @@ def flow(value: Any) -> str:
     return scalar(value)
 
 
-def _block(key: str, value: Any, indent: str) -> list[str]:
+def _block(key: str, value: Any, indent: str, path: str = "", comments: dict[str, str] | None = None) -> list[str]:
+    """`comments` maps a dotted path (`patterns.chorus`, `tracks`) to text written as `#` lines above that key."""
+    path = f"{path}.{key}" if path else key
+    note = [f"{indent}# {line}".rstrip() for line in comments[path].split("\n")] if comments and path in comments else []
+    return note + _block_lines(key, value, indent, path, comments)
+
+
+def _block_lines(key: str, value: Any, indent: str, path: str, comments: dict[str, str] | None) -> list[str]:
     head = f"{indent}{scalar(key)}:"
     if isinstance(value, str) and "\n" in value:
         body = value.rstrip("\n").split("\n")
@@ -61,7 +68,7 @@ def _block(key: str, value: Any, indent: str) -> list[str]:
     if isinstance(value, dict):
         lines = [head]
         for k, v in value.items():
-            lines += _block(str(k), v, indent + "  ")
+            lines += _block(str(k), v, indent + "  ", path, comments)
         return lines
     if isinstance(value, list):
         lines = [head]
@@ -78,10 +85,11 @@ def _block(key: str, value: Any, indent: str) -> list[str]:
     return [f"{head} {scalar(value)}"]
 
 
-def dump_mapping(data: dict[str, Any], order: list[str] | None = None) -> str:
-    """YAML text for a mapping; keys in `order` first, then the rest as given."""
+def dump_mapping(data: dict[str, Any], order: list[str] | None = None, comments: dict[str, str] | None = None) -> str:
+    """YAML text for a mapping; keys in `order` first, then the rest as given. `comments`: dotted path -> text
+    written as comment lines above that key (top-level and nested mapping keys)."""
     keys = [k for k in (order or []) if k in data] + [k for k in data if k not in (order or [])]
     lines: list[str] = []
     for key in keys:
-        lines += _block(key, data[key], "")
+        lines += _block(key, data[key], "", "", comments)
     return "\n".join(lines) + "\n"

@@ -23,6 +23,9 @@ check before upgrading. Patch bumps never change existing behaviour. Every relea
 
 - W018: an SFX noise layer whose filter removes more than 12 dB of its level (a narrow band-pass), so it plays far
   quieter than its gain says (#7).
+- `segan.api`: `dedupe(patterns, sections)` merges identical patterns, `derive("a", a, b, tracks)` writes a
+  pattern as a derived one (`from` + `transpose`/`mute`/`shift`) when it is, and `song_yaml`/`sfx_yaml` take
+  `comments={"patterns.chorus": "..."}` for `#` lines in generated files (#11).
 
 ### Changed
 

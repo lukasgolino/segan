@@ -57,3 +57,35 @@ def test_generated_sfx_parses(project: Project) -> None:
     sfx, findings = load(project, "sfx", "pew", text)
     assert sfx is not None, (findings, text)
     assert sfx.layers[0].slide and sfx.layers[0].pitch == ((0.0, 84.0), (0.15, 60.0))
+
+
+def test_dedupe_derive_and_comments(project: Project) -> None:
+    """#11: identical patterns collapse, a variation of a pattern is written as a derived pattern, and comments."""
+    key = "C major"
+    lead = api.Track.roll("lead", key, "C5", "C6")
+    drums = api.Track.drums("drums", ["k", "h"])
+
+    def bar(start: str, lead_on: bool = True) -> api.Pattern:
+        p = api.Pattern(8)
+        if lead_on:
+            p.note(lead, 0, start, 2, "p").note(lead, 4, "G5", 2, "p")
+        return p.row(drums, "k", "x...x...")
+
+    a, again, up, quiet = bar("C5"), bar("C5"), bar("D5"), bar("C5", lead_on=False)
+    up.notes["lead"] = [(r - 1, s, n, c) for r, s, n, c in a.notes["lead"]]  # every lead note a scale step up
+    patterns, sections = api.dedupe({"a": a, "a2": again, "up": up}, {"main": ["a", "a2", "up"]})
+    assert list(patterns) == ["a", "up"] and sections == {"main": ["a", "a", "up"]}
+    assert api.derive("a", a, up, [lead, drums]) == {"from": "a", "transpose": {"lead": 1}}
+    assert api.derive("a", a, quiet, [lead, drums]) == {"from": "a", "mute": ["lead"]}
+    late = api.Pattern(8).note(lead, 1, "C5", 2, "p").note(lead, 5, "G5", 2, "p").row(drums, "k", ".x...x..")
+    assert api.derive("a", a, late, [lead, drums]) == {"from": "a", "shift": 1}
+    assert api.derive("a", a, api.Pattern(8).note(lead, 3, "E5"), [lead, drums]) is None
+    text = api.song_yaml("gen", tracks=[lead, drums], patterns={"a": a, "up": api.derive("a", a, up, [lead, drums]) or up},
+                         sections=sections, arrangement=["main"], key=key, kit="t",
+                         comments={"patterns.up": "the hook, a step higher", "sections": "one bar each\nthen again"})  # fmt: skip
+    assert "  # the hook, a step higher\n  up:" in text and "# one bar each\n# then again\nsections:" in text
+    song, findings = load(project, "song", "gen", text)
+    assert song is not None, (findings, text)
+    ups = sorted((n.step, song.tracks["lead"].rows[n.row]) for n in song.patterns["up"].notes if n.track == "lead")
+    assert ups == [(0, 74), (4, 81)]  # D5 and A5: the derived pattern sounds like the built one
+    assert "# the hook\nlayers:" in api.sfx_yaml("x", layers=[{"osc": "sine"}], comments={"layers": "the hook"})
