@@ -16,7 +16,7 @@ from typing import Any
 from segan.asset import ASSET_SUFFIXES, STATUSES, asset_kind, asset_name_from_path
 from segan.findings import Finding, SeganError
 from segan.lint import lint_paths
-from segan.project import CONFIG_NAME, Project, parse_config
+from segan.project import CONFIG_NAME, MIN_TARGET_LUFS, Project, parse_config
 from segan.settings import current_value, set_in_toml
 from segan.yamlio import LineMap, YamlError, load_yaml, parse_yaml
 
@@ -231,7 +231,7 @@ def adjust_mix(project: Project, adj: MixAdjustment, dry_run: bool = False) -> d
         change("mix.crush_bits", adj.crush)
     if adj.loudness:
         for category, target in sorted(config.loudness.items()):
-            change(f"loudness.{category}", _clamp(target + adj.loudness, -40, -5))
+            change(f"loudness.{category}", _clamp(target + adj.loudness, MIN_TARGET_LUFS, -5))
     text = project.config_path.read_text(encoding="utf-8")
     for key, (_, new) in changes.items():
         text = set_in_toml(text, key, new)
