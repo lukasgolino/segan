@@ -6,7 +6,7 @@ import pytest
 
 from segan.findings import SeganError
 from segan.lint import WARNING_RULES, lint_paths
-from segan.project import Project
+from segan.project import Project, load_project
 
 from conftest import CONFIG, make_project, write
 
@@ -176,3 +176,15 @@ def test_category_lint_disable(tmp_path: Path) -> None:
     (tmp_path / "bad").mkdir()
     with pytest.raises(SeganError, match=r"lint\.loud"):  # only `disable` can differ per category
         make_project(tmp_path / "bad", CONFIG + '\n[lint.loud]\nmax_instruments = 3\n')
+
+
+def test_w019_long_loop_offset(project: Project) -> None:
+    """#25: a looping song whose last notes ring for bars makes a much longer file: W019, fixed by `max_ring`."""
+    kit = (project.root / "kits" / "t.kit.yaml").read_text()
+    ring = "  r: {{ name: gong, osc: sine, env: [0, 0, 1, 12], voices: 4{extra} }}\ngroups:"  # voices: the next pass doesn't cut it
+    song = ("name: g\ntempo: 240\ntracks:\n  lead: { roll: [C5, C5] }\npatterns:\n  a:\n    length: 16\n    lead: |\n"
+            "      r...............  C5\nsections:\n  main: [a, a, a, a]\narrangement: [main]\nloop: main\n")  # fmt: skip
+    (project.root / "kits" / "t.kit.yaml").write_text(kit.replace("groups:", ring.format(extra="")))
+    assert ("W019", "loop") in lint_rules(project, "song", "g", song)
+    (project.root / "kits" / "t.kit.yaml").write_text(kit.replace("groups:", ring.format(extra=", max_ring: 0.5")))
+    assert ("W019", "loop") not in lint_rules(load_project(project.root), "song", "g", song)  # a fresh project reloads the kit

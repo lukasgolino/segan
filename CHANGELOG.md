@@ -35,6 +35,9 @@ check before upgrading. Patch bumps never change existing behaviour. Every relea
   (`takes` in `--json` gives each start), to judge the variety in one listen (#20).
 - `segan samples list` shows each library instrument's key range (`range` in `--json`, read from the bundled map: no
   download needed), and `segan kit show --json` gives every instrument's `range` (#24).
+- Instrument `max_ring: <seconds>`: a note rings at most that long after it ends, then fades out in 50 ms, so long
+  one-shots and releases (timpani rolls, tam-tam, crash, low harp) don't make loop files bars longer (#25).
+- W019: a looping song's file runs more than 2 bars past the song because its last notes ring that long (#25).
 
 ### Changed
 
