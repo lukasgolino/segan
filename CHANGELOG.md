@@ -19,6 +19,13 @@ check before upgrading. Patch bumps never change existing behaviour. Every relea
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-10-21
+
+### Added
+
+- `variations.timing` (0-0.5 s): each variation moves every layer's start by up to that much, earlier or later
+  (seeded per layer, never before 0), so bursts and bubbles don't land at the same moments every time (#3).
+
 ## [0.6.0] - 2026-10-21
 
 ### Changed
@@ -170,7 +177,8 @@ First release: milestones 0-7 of PLAN.md.
 - `segan import midi`: standard MIDI files to songs (quantize, snap to the key, GM programs/drums to kit instruments,
   reused patterns, a change report).
 
-[Unreleased]: https://github.com/lukasgolino/segan/compare/v0.6.0...HEAD
+[Unreleased]: https://github.com/lukasgolino/segan/compare/v0.7.0...HEAD
+[0.7.0]: https://github.com/lukasgolino/segan/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/lukasgolino/segan/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/lukasgolino/segan/compare/v0.4.1...v0.5.0
 [0.4.1]: https://github.com/lukasgolino/segan/compare/v0.4.0...v0.4.1

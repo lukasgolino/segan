@@ -123,7 +123,8 @@ layer has no filter), `distort` (0-1), `ring` (`{ freq: Hz, mix: 0-1 }` ring mod
 
 More SFX fields:
 - `variations`: `count` 1-32, `seed` (change it for a different set), `pitch` (+/- semitones), `timbre` (0-1:
-  duty, filter, envelope jitter), `gain` (+/- dB). Each variation is its own WAV, all normalised to the target
+  duty, filter, envelope jitter), `gain` (+/- dB), `timing` (+/- seconds each layer's start moves, 0-0.5; never
+  before 0: bursts and bubbles land at different moments). Each variation is its own WAV, all normalised to the target
   (a +dB variation aims above the target: near the limiter cap it gets W001). `include_main: false` builds only
   `<name>.1..N.wav` (no `<name>.wav`) when the game plays the randomizer.
 - `room: 0-1`: this SFX's room send (x `[mix] room`; 0 = dry, no tail). Default: its category's `[room]` entry, else 1.

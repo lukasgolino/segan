@@ -162,3 +162,23 @@ def test_preview_lists_each_layers_levels(project: Project, monkeypatch: pytest.
     assert layers[1]["crest_db"] > layers[0]["crest_db"]  # a 10 ms noise click is far peakier than the tone
     assert layers[2]["peak_db"] >= max(layers[0]["peak_db"], layers[1]["peak_db"]) - 6.1
     assert outputs[1]["output"] == "variation:1" and outputs[1]["analysis"]["layers"][0]["layer"] == "tone"
+
+
+def test_variation_timing_moves_layer_starts(project: Project) -> None:
+    """#3: `variations.timing` jitters each layer's start per variation (seeded; the main sound stays put)."""
+    from segan.sfxrender import variation_layers
+
+    text = BASIC + "  - { id: pop, osc: noise, env: [0, 0.01, 0, 0.01], start: 0.05 }\nvariations: { count: 3, timing: 0.02 }\n"
+    sfx, findings = load(project, "sfx", "zap", text)
+    assert sfx is not None, findings
+    assert sfx.variations.timing == 0.02
+    starts = [[layer.start for layer in variation_layers("zap", sfx.layers, sfx.variations, i)] for i in (1, 2, 3)]
+    assert all(s[0] >= 0 and 0.03 <= s[1] <= 0.07 for s in starts)
+    assert len({tuple(s) for s in starts}) == 3  # each variation lands differently
+    assert starts == [[layer.start for layer in variation_layers("zap", sfx.layers, sfx.variations, i)] for i in (1, 2, 3)]
+    render = render_asset(sfx, project, use_cache=False)
+    assert not np.array_equal(render.output("variation:1").pcm, render.output("variation:2").pcm)
+    plain, _ = load(project, "sfx", "zap", text.replace(", timing: 0.02", ""))
+    assert plain is not None and variation_layers("zap", plain.layers, plain.variations, 1) == plain.layers
+    _, findings = load(project, "sfx", "zap", text.replace("timing: 0.02", "timing: 1"))
+    assert rules(findings) == ["E013"]
