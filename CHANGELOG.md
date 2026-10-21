@@ -29,6 +29,8 @@ check before upgrading. Patch bumps never change existing behaviour. Every relea
 - **Rendering:** a distorted SFX layer's `gain` (fixed or keyframes) now applies after `distort`, so changing the
   gain only changes its level, not its timbre. SFX layers with `distort` sound different; set their gain by ear
   again (#7).
+- Docs: seamless SFX loops: hold layers past the loop end and end keyframe curves where they start; `segan lint`'s exit
+  codes (1 on errors; warnings only fail with `--warnings-as-errors`) (#8).
 
 ## [0.9.0] - 2026-10-21
 

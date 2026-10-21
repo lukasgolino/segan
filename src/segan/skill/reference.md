@@ -132,6 +132,8 @@ More SFX fields:
 - `phases`: `{ <name>: { duration, loop, crossfade, layers } }` - each phase is its own output `<name>.<phase>.wav`
   (layers default to the SFX's own); e.g. a looping `charge` and a one-shot `release`.
 - `loop: true` + `crossfade` (s, default 0.05): a seamless loop (engine hum, alarm): the end blends into the start.
+  For a seam you can't hear: give held layers a `length:` past the loop end (so nothing releases inside the loop),
+  and make every keyframe curve (pitch, gain, cutoff) end on the value it starts with; check W007 and the seam view.
 - `normalize: false`: keep the level as written (W013 if it's more than 1 LU off its target).
 - `extends: <template>`: start from a file with `template: true` in sfx/ (templates aren't built). Layers merge by
   `id` (fields you give change, the rest stays), other layers are added, `remove: [ids]` drops template layers.
@@ -383,7 +385,7 @@ loudness_tolerance = 1.0      # W001/W013, LU
 | `segan new kit <name>` / `new song <name> [--kit K] [--key "A minor"] [--tempo 120] [--bars 2]` / `new sfx <name> [--preset P] [--kit K]` | starter files (always pass `--description`) |
 | `segan samples list [library\|file.sf2]` / `segan samples fetch <library> <instrument...> [--all]` | sample libraries: instruments and what's downloaded / download instruments |
 | `segan kit show [kits]` | every instrument playing a test phrase: `previews/kits/<kit>.listen.png` + WAVs |
-| `segan lint [paths] [--warnings-as-errors] [--no-render]` | errors + warnings (audio warnings render the asset; cached) |
+| `segan lint [paths] [--warnings-as-errors] [--no-render]` | errors + warnings (audio warnings render the asset; cached); exits 1 on errors, 0 when there are only warnings, 1 on warnings too with `--warnings-as-errors` (CI) |
 | `segan preview <asset...> [--output main\|variant:X\|variation:N\|phase:X\|stem:T\|mix:M\|flow:CLIP\|walk[:SEED] ...] [--from 5 --to 8]` | WAV + listen sheet (+ seam view for loops) per output in `previews/<asset>/`, analysis in `--json` (SFX: `layers` = each layer dry on its own, `peak_db`/`lufs`/`crest_db`, plus the dry mix); flow songs also get a walk |
 | `segan render <asset...>` | WAVs only |
 | `segan gallery` | every asset's waveform + spectrum and a loudness chart by category |
