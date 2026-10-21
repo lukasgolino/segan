@@ -381,7 +381,7 @@ loudness_tolerance = 1.0      # W001/W013, LU
 
 | Command | Purpose |
 |---|---|
-| `segan init [dir] [--open] [--style chiptune\|synth] [--godot DIR]` | create a project with a starter kit |
+| `segan init [dir] [--open] [--style chiptune\|synth] [--godot DIR]` | create a project with a starter kit; `--godot` builds into `DIR/assets/generated/audio`, or `DIR/assets/audio` when a PAGAN project there already builds into `assets/generated`; warns when the two output folders are the same or nested |
 | `segan new kit <name>` / `new song <name> [--kit K] [--key "A minor"] [--tempo 120] [--bars 2]` / `new sfx <name> [--preset P] [--kit K]` | starter files (always pass `--description`) |
 | `segan samples list [library\|file.sf2]` / `segan samples fetch <library> <instrument...> [--all]` | sample libraries: instruments and what's downloaded / download instruments |
 | `segan kit show [kits]` | every instrument playing a test phrase: `previews/kits/<kit>.listen.png` + WAVs |

@@ -37,6 +37,12 @@ check before upgrading. Patch bumps never change existing behaviour. Every relea
 - `[loudness]` targets can go down to -60 LUFS (was -40), for very quiet categories such as a hover tick; `segan mix
   adjust` clamps to the same range (#9).
 
+### Fixed
+
+- `segan init` catches a PAGAN output folder that contains (or sits inside) SEGAN's, including a PAGAN project elsewhere
+  in the Godot project (e.g. `game/art/pagan.toml`); with `--godot` the audio then goes to `assets/audio` instead of
+  inside PAGAN's `assets/generated` (#12).
+
 ## [0.9.0] - 2026-10-21
 
 ### Added
