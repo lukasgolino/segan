@@ -31,6 +31,8 @@ check before upgrading. Patch bumps never change existing behaviour. Every relea
 - `variations.envelope` (0-1: envelope times per layer up to 2x either way) and `variations.length` (0-0.5: the
   whole sound stretched or shortened), and each variation's `lufs`/`target_lufs`/`limiting_db` in the manifest (#16).
 - `[lint.<category>] disable = ["W017"]` in segan.toml: warnings off for every song or SFX of that category (#19).
+- `segan preview <sfx> --output reel`: the main sound and every variation back to back in one WAV and listen sheet
+  (`takes` in `--json` gives each start), to judge the variety in one listen (#20).
 
 ### Changed
 

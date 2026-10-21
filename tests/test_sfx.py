@@ -232,3 +232,21 @@ def test_variation_envelope_and_length(project: Project) -> None:
     assert render.main.info["duration"] == 0.2
     _, findings = load(project, "sfx", "zap", text.replace("length: 0.3", "length: 0.8"))
     assert rules(findings) == ["E013"]
+
+
+def test_preview_reel_plays_every_variation(project: Project, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
+    """#20: `segan preview <sfx> --output reel`: the main sound and each variation back to back in one WAV."""
+    from conftest import run_json
+    from segan.preview import REEL_GAP
+
+    write(project, "sfx", "zap", BASIC + "variations: { count: 3, pitch: 1 }\n")
+    monkeypatch.chdir(project.root)
+    code, data = run_json(["preview", "zap", "--output", "reel"], capsys)
+    assert code == 0, data
+    (entry,) = data["outputs"][0]["outputs"]
+    takes = entry["analysis"]["takes"]
+    assert entry["output"] == "reel" and [t["output"] for t in takes] == ["main", "variation:1", "variation:2", "variation:3"]
+    assert takes[1]["start_s"] == pytest.approx(takes[0]["seconds"] + REEL_GAP, abs=1e-4)
+    wav = read_wav(Path(entry["wav"]).read_bytes())  # paths are shown relative to the cwd (the project)
+    assert wav.frames / 22050 == pytest.approx(takes[-1]["start_s"] + takes[-1]["seconds"], abs=1e-3)
+    assert Path(entry["sheet"]).exists()

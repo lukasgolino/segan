@@ -181,9 +181,14 @@ def write_preview(asset: Any, render: Render, project: Project, start: float | N
     walks = [o for o in (only or ["walk"]) if o == "walk" or o.startswith("walk:")]
     if render.kind == "song" and asset.flow is not None:
         outputs += [walk_output(asset, render, project, int(w.split(":", 1)[1]) if ":" in w else 1) for w in walks]
+    if render.kind == "sfx" and only and "reel" in only:
+        outputs.append(reel_output(asset, render))
     for output in outputs:
         if output.id.startswith("walk"):
             result.files.append(_write_walk(asset, output, folder, click))
+            continue
+        if output.id == "reel":
+            result.files.append(_write_reel(asset, output, folder, click))
             continue
         if only and not {output.id or "main", output.stem} & set(only):
             continue
@@ -223,6 +228,38 @@ def write_preview(asset: Any, render: Render, project: Project, start: float | N
             entry["seam"] = seam
         result.files.append(entry)
     return result
+
+
+REEL_GAP = 0.4  # seconds of silence between the takes of a reel
+
+
+def reel_output(sfx: Sfx, render: Render) -> Output:
+    """Every playable take of an SFX back to back (the main sound, then each variation), REEL_GAP apart, so a
+    listener can judge the variety in one go. Each take keeps its own level, as the game plays it."""
+    takes = [o for o in render.outputs if o.id == "" or o.id.startswith("variation:")] or list(render.outputs)
+    first = takes[0]
+    gap = np.zeros((round(REEL_GAP * first.rate), first.channels), dtype=np.int16)
+    pcm = np.concatenate([part for o in takes for part in (o.pcm, gap)][:-1])
+    starts, at = [], 0
+    for o in takes:
+        starts.append((o.id or "main", at / first.rate, o.seconds))
+        at += o.frames + len(gap)
+    return Output("reel", f"{sfx.name}.reel", pcm, first.rate, info={"takes": starts})
+
+
+def _write_reel(sfx: Sfx, output: Output, folder: Path, threshold_click: float) -> dict[str, Any]:
+    wav = folder / f"{output.stem}.wav"
+    wav.write_bytes(output.wav())
+    analysis = analyze(output, "sfx")
+    analysis["takes"] = [{"output": name, "start_s": round(start, 4), "seconds": round(seconds, 4)} for name, start, seconds in output.info["takes"]]
+    rows = [str(i) for i in range(len(output.info["takes"]))]
+    notes_ = [RollNote(i, start, start + seconds, name) for i, (name, start, seconds) in enumerate(output.info["takes"])]
+    colours = {name: TRACK_COLOURS[i % len(TRACK_COLOURS)] for i, (name, _, _) in enumerate(output.info["takes"])}
+    spec = SheetSpec(f"sfx {sfx.name}: reel of {len(rows)} takes, {REEL_GAP:g}s apart"[:150], level_stats(analysis, threshold_click),
+                     output.audio, output.rate, tracks=[RollTrack("takes", rows, notes_, drums=True, colours=colours)])  # fmt: skip
+    sheet = folder / f"{output.stem}.listen.png"
+    listen_sheet(spec, None).save(sheet)
+    return {"output": "reel", "wav": wav, "sheet": sheet, "analysis": analysis}
 
 
 def walk_output(song: Any, render: Render, project: Project, seed: int) -> Output:
