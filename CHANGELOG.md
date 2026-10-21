@@ -30,6 +30,7 @@ check before upgrading. Patch bumps never change existing behaviour. Every relea
   so a voice pool doesn't hold a voice through an inaudible tail (#13).
 - `variations.envelope` (0-1: envelope times per layer up to 2x either way) and `variations.length` (0-0.5: the
   whole sound stretched or shortened), and each variation's `lufs`/`target_lufs`/`limiting_db` in the manifest (#16).
+- `[lint.<category>] disable = ["W017"]` in segan.toml: warnings off for every song or SFX of that category (#19).
 
 ### Changed
 

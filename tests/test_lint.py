@@ -4,6 +4,7 @@ from pathlib import Path
 
 import pytest
 
+from segan.findings import SeganError
 from segan.lint import WARNING_RULES, lint_paths
 from segan.project import Project
 
@@ -164,3 +165,14 @@ def test_w018_narrow_band_pass_noise(project: Project) -> None:
     assert ("W018", "whistle") in lint_rules(project, "sfx", "w", text)
     assert ("W018", "whistle") not in lint_rules(project, "sfx", "w", text.replace("osc: noise", "osc: saw, pitch: D3"))
     assert ("W018", "whistle") not in lint_rules(project, "sfx", "w", text.replace("resonance: 0.95", "resonance: 0"))
+
+
+def test_category_lint_disable(tmp_path: Path) -> None:
+    """#19: `[lint.<category>] disable` turns warnings off for every asset of that category only."""
+    text = "name: x\ncategory: {category}\nduration: 0.02\nlayers:\n  - {{ osc: sine, pitch: 20, env: [0, 0, 1, 0] }}\n"  # W008
+    project = make_project(tmp_path, CONFIG + '\n[lint.quiet_sfx]\ndisable = ["W008"]\n')
+    assert ("W008", "x") not in lint_rules(project, "sfx", "x", text.format(category="quiet_sfx"))
+    assert ("W008", "x") in lint_rules(project, "sfx", "x", text.format(category="sfx"))
+    (tmp_path / "bad").mkdir()
+    with pytest.raises(SeganError, match=r"lint\.loud"):  # only `disable` can differ per category
+        make_project(tmp_path / "bad", CONFIG + '\n[lint.loud]\nmax_instruments = 3\n')
