@@ -86,3 +86,9 @@ def load(project: Project, kind: str, name: str, text: str) -> tuple[Any, list[F
 
 def rules(findings: list[Finding]) -> list[str]:
     return [f.rule for f in findings]
+
+
+@pytest.fixture(autouse=True)
+def _one_render_process(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Tests render tiny projects: a process pool would cost more than it saves (test_render_jobs covers it)."""
+    monkeypatch.setenv("SEGAN_JOBS", "1")

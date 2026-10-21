@@ -33,9 +33,20 @@ def song_mix(song: Song, project: Project) -> MixConfig:
     return replace(mix, sample_rate=song.sample_rate or mix.sample_rate, music_channels=song.channels or mix.music_channels)
 
 
+def used_instruments(song: Song) -> tuple[tuple[str, object], ...]:
+    """The kit instruments a song can play: keys in its notes, plus the targets of variant and section swaps. The
+    render cache is keyed on these, so editing an instrument the song never plays doesn't re-render it."""
+    keys = set(song.used_keys())
+    for variant in song.all_variants().values():
+        keys.update(b for _, b in variant.swaps)
+    for change in song.section_changes.values():
+        keys.update(b for _, b in change.pitch.swaps)
+    return tuple((k, song.kit.instruments[k]) for k in sorted(keys) if k in song.kit.instruments)
+
+
 def song_cache_parts(song: Song, project: Project) -> tuple[object, ...]:
     patterns = sorted((name, p.length, tuple(p.notes)) for name, p in song.patterns.items())
-    return ("song", song.name, song.kit, song.tempo, song.meter, song.steps_per_beat, song.swing, song.key, sorted(song.tracks.items()),
+    return ("song", song.name, used_instruments(song), song.tempo, song.meter, song.steps_per_beat, song.swing, song.key, sorted(song.tracks.items()),
             patterns, sorted(song.sections.items()), song.arrangement, song.loop, sorted(song.markers.items()),
             sorted(song.all_variants().items()), song.normalize, song.category, song_mix(song, project),
             project.config.target(song.category), project.config.lint.max_limiting_db, wants_stems(song, project), song.stems,

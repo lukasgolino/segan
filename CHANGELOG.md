@@ -38,6 +38,8 @@ check before upgrading. Patch bumps never change existing behaviour. Every relea
 - Instrument `max_ring: <seconds>`: a note rings at most that long after it ends, then fades out in 50 ms, so long
   one-shots and releases (timpani rolls, tam-tam, crash, low harp) don't make loop files bars longer (#25).
 - W019: a looping song's file runs more than 2 bars past the song because its last notes ring that long (#25).
+- `segan lint` and `segan build` render songs and SFX in parallel processes (`-j N` / `SEGAN_JOBS`; default the CPU
+  count up to 8); output is identical to one process (#26).
 
 ### Changed
 
@@ -49,6 +51,8 @@ check before upgrading. Patch bumps never change existing behaviour. Every relea
 - `[loudness]` targets can go down to -60 LUFS (was -40), for very quiet categories such as a hover tick; `segan mix
   adjust` clamps to the same range (#9).
 - Docs: why a new `.import` sidecar changes once more after Godot's first import (Godot adds `uid`/`dest_files`) (#14).
+- A song's render cache is keyed on the kit instruments it plays (notes and swaps), not the whole kit: editing an
+  instrument re-renders only the songs that use it (#26).
 
 ### Fixed
 

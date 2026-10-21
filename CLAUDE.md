@@ -183,3 +183,6 @@ generated text files.
   loop restarts at frame floor(loop_offset * rate) after the file's last frame: `loop_offset` = (start + 0.25) / rate.
 - 2026-10-21: ORCHESTRATOR_PLAN.md (open items) and PLAN.md's "Later" list became GitHub issues #1-#35; ORCHESTRATOR_PLAN.md
   and QUESTIONS.md deleted (owner). Questions are asked as you go instead of logged.
+- 2026-10-21: #26: parallel rendering fills the render cache from a process pool (forkserver, else spawn; `SEGAN_JOBS` /
+  `-j`, default the CPU count up to 8) before lint/build read it, so every render is the same code path as in one
+  process. A song's cache key holds only the kit instruments it plays (notes plus variant/section swap targets).

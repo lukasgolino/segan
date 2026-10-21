@@ -93,6 +93,7 @@ def lint_paths(project: Project, paths: list[Path] | None = None, render: bool =
     ctx = context_for(project.config.mix)
     threshold = project.config.lint.max_aliasing_db
     soundtracks: list[Soundtrack] = []
+    pending: list[tuple[int, Any]] = []  # (where its findings go, asset)
     for path in files:
         if path.name.endswith(SOUNDTRACK_SUFFIX):
             soundtrack, st_findings = load_soundtrack(path)
@@ -118,7 +119,13 @@ def lint_paths(project: Project, paths: list[Path] | None = None, render: bool =
         if asset is None:
             continue
         assets.append(asset)
-        findings.extend(lint_asset(asset, project, render))
+        pending.append((len(findings), asset))  # linted below, after the renders are done in parallel
+    if render:
+        from segan.render import prerender
+
+        prerender(assets, project)
+    for at, asset in reversed(pending):  # back to front, so the earlier positions stay valid
+        findings[at:at] = lint_asset(asset, project, render)
     by_name: dict[str, list[Any]] = {}
     for asset in assets:
         by_name.setdefault(asset.name, []).append(asset)
