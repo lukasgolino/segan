@@ -32,6 +32,10 @@ def test_build_writes_wavs_and_manifest(tmp_path: Path) -> None:
     coin = manifest["assets"]["coin"]
     assert coin["file"] == "sfx/coin.wav" and coin["category"] == "pickup" and coin["loop"] is None
     assert [v["file"] for v in coin["variations"]] == ["sfx/coin.1.wav", "sfx/coin.2.wav", "sfx/coin.3.wav"]
+    # #13: the sound without its room tail (what a voice pool should count busy); loops have none
+    assert 0 < coin["dry_seconds"] <= coin["seconds"] and coin["variations"][0]["dry_seconds"] == coin["dry_seconds"]
+    assert manifest["assets"]["hum"]["dry_seconds"] < manifest["assets"]["hum"]["seconds"]  # a room tail follows the sound
+    assert "dry_seconds" not in manifest["assets"]["hum"]["phases"]["idle"] and "dry_seconds" not in manifest["assets"]["tune"]
     hum = manifest["assets"]["hum"]
     assert hum["phases"]["idle"]["loop"] == {"start": 1, "end": hum["phases"]["idle"]["samples"]}
     tune = manifest["assets"]["tune"]

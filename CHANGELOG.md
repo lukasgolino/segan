@@ -26,6 +26,8 @@ check before upgrading. Patch bumps never change existing behaviour. Every relea
 - `segan.api`: `dedupe(patterns, sections)` merges identical patterns, `derive("a", a, b, tracks)` writes a
   pattern as a derived one (`from` + `transpose`/`mute`/`shift`) when it is, and `song_yaml`/`sfx_yaml` take
   `comments={"patterns.chorus": "..."}` for `#` lines in generated files (#11).
+- Manifest `dry_seconds` on SFX one-shot file entries (main, variations, phases): the sound without its room tail,
+  so a voice pool doesn't hold a voice through an inaudible tail (#13).
 
 ### Changed
 

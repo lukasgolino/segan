@@ -97,8 +97,12 @@ def build(project: Project) -> BuildResult:
             sidecar = edit_import(path, params)
             if sidecar is not None:
                 result.imports.append(sidecar)
-        return {"file": _ref(path, out, godot_root), "seconds": round(output.seconds, 6), "samples": output.frames,
+        info = {"file": _ref(path, out, godot_root), "seconds": round(output.seconds, 6), "samples": output.frames,
                 "channels": output.channels, "loop": _loop(output)}  # fmt: skip
+        if folder == "sfx" and output.loop is None and "duration" in output.info:
+            # the sound itself, without the room tail after it: how long a voice pool should count it busy
+            info["dry_seconds"] = round(min(output.seconds, float(output.info["duration"])), 6)
+        return info
 
     def emit_tres(path: Path, text: str) -> str:
         _write(path, text.encode("utf-8"), result)

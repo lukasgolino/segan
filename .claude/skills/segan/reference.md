@@ -440,7 +440,8 @@ Turn warnings off for one asset with `lint: { disable: [...] }`, project-wide wi
 `tags`, `status`, `style_version`, `sample_rate`, and
 - every audio file as `{ file, seconds, samples, channels, loop }` (`loop` = `{start, end}` in samples, end
   exclusive, or null), `lufs`, `target_lufs`, `limiting_db`;
-- SFX: `variations` (list, + `pitch_offset_semitones`), `godot_randomizer`, `phases` (name -> file entry);
+- SFX: `dry_seconds` on every one-shot file entry (the sound without its room tail: how long a voice pool should
+  count it busy; `seconds` includes the tail), `variations` (list, + `pitch_offset_semitones`), `godot_randomizer`, `phases` (name -> file entry);
 - songs: `bpm`, `meter`, `steps_per_beat`, `key`, `beat_seconds`, `beat_count`, `bars`, `sections` (name ->
   start/end in samples, seconds and bars, first occurrence), `arrangement` (every section in order), `markers`
   (name -> sample, seconds, bar), `loop` (`start`/`end` in the file + `offset`: the loop points sit that many
