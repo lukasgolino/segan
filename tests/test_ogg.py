@@ -7,11 +7,12 @@ from pathlib import Path
 
 import numpy as np
 import pytest
-from conftest import CONFIG, make_project, write
+from conftest import CONFIG, make_project, run_json, write
 from test_flow import FLOW_SONG, G_SONG
 
 from segan import oggio
 from segan.build import build
+from segan.project import Project
 from segan.render import render_asset
 
 pytestmark = pytest.mark.skipif(not oggio.available(), reason="needs soundfile (segan[ogg])")
@@ -67,3 +68,19 @@ def test_ogg_quality_setting_is_checked(tmp_path: Path) -> None:
     with pytest.raises(SeganError) as caught:
         load_project(tmp_path)
     assert "ogg.quality" in str(caught.value.findings)
+
+
+@pytest.mark.parametrize("fmt", ["ogg", "mp3"])
+def test_preview_writes_a_compressed_copy(fmt: str, project: Project, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
+    """#28: `segan preview --format ogg|mp3` writes a shareable copy next to each preview WAV."""
+    from segan import oggio
+
+    if fmt == "mp3" and not oggio.mp3_available():
+        pytest.skip("this libsndfile can't write MP3")
+    write(project, "sfx", "zap", "name: zap\nduration: 0.3\nlayers:\n  - { osc: pulse, pitch: A4, env: [0.001, 0.1, 0.5, 0.1] }\n")
+    monkeypatch.chdir(project.root)
+    code, data = run_json(["preview", "zap", "--format", fmt], capsys)
+    assert code == 0, data
+    entry = data["outputs"][0]["outputs"][0]
+    copy = Path(entry[fmt])
+    assert copy.suffix == f".{fmt}" and copy.stat().st_size > 100 and Path(entry["wav"]).is_file()

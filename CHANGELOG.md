@@ -40,6 +40,8 @@ check before upgrading. Patch bumps never change existing behaviour. Every relea
 - W019: a looping song's file runs more than 2 bars past the song because its last notes ring that long (#25).
 - `segan lint` and `segan build` render songs and SFX in parallel processes (`-j N` / `SEGAN_JOBS`; default the CPU
   count up to 8); output is identical to one process (#26).
+- `segan preview --format ogg|mp3` also writes every preview compressed (`.ogg` / `.mp3` next to the WAV, in `--json`)
+  for sharing auditions; needs `segan[ogg]` (MP3: libsndfile 1.1+) (#28).
 
 ### Changed
 
