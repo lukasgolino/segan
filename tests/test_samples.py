@@ -260,3 +260,21 @@ def test_w014_note_longer_than_its_sample(project: Project) -> None:
     assert song is not None, findings
     warnings = [f for f in lint_song_source(song, project) if f.rule == "W014"]
     assert [f.where for f in warnings] == ["patterns.b"] and "lasts 0.3s" in warnings[0].message
+
+
+def test_ranges_in_samples_list_and_kit_show(project: Project, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
+    """#24: `segan samples list` gives each library instrument's key range (from the bundled map, no download);
+    `segan kit show --json` gives each instrument's range."""
+    from conftest import run_json
+
+    lib = libraries.library("vsco2")
+    assert lib.key_range("bass_drum") is None  # unpitched
+    low, high = lib.key_range("violins_sus") or (0, 0)
+    assert 40 <= low < 60 < high <= 108
+    monkeypatch.chdir(project.root)
+    code, data = run_json(["samples", "list"], capsys)
+    rows = {r["instrument"]: r for r in data["libraries"][0]["instruments"]}
+    assert code == 0 and rows["bass_drum"]["range"] is None and rows["violins_sus"]["range"][0].endswith(("2", "3"))
+    code, data = run_json(["kit", "show", "t"], capsys)
+    instruments = data["outputs"][0]["instruments"]
+    assert code == 0 and instruments["p"]["range"] == ["C4", "C6"] and instruments["q"]["range"] is None

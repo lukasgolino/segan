@@ -33,6 +33,8 @@ check before upgrading. Patch bumps never change existing behaviour. Every relea
 - `[lint.<category>] disable = ["W017"]` in segan.toml: warnings off for every song or SFX of that category (#19).
 - `segan preview <sfx> --output reel`: the main sound and every variation back to back in one WAV and listen sheet
   (`takes` in `--json` gives each start), to judge the variety in one listen (#20).
+- `segan samples list` shows each library instrument's key range (`range` in `--json`, read from the bundled map: no
+  download needed), and `segan kit show --json` gives every instrument's `range` (#24).
 
 ### Changed
 

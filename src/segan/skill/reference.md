@@ -75,7 +75,7 @@ instruments:
   `cellos_` `sus|trem|pizz|spic`, `basses_sus|pizz`, `violin_solo`, `harp`), brass (`horn_`, `trumpet_`, `trombone_`,
   `tuba_` `sus|stac`), woodwinds (`flute_`, `oboe_`, `clarinet_`, `bassoon_` `sus|stac`, `piccolo`), percussion
   (`timpani`, `timpani_roll`, `glockenspiel`, `marimba`, `xylophone`, `bass_drum`, `snare`, `crash`, `sus_cymbal`,
-  `tam_tam`, `triangle`, `tambourine`), `piano`. `segan samples list` shows them with sizes; the audio isn't in
+  `tam_tam`, `triangle`, `tambourine`), `piano`. `segan samples list` shows them with sizes and key ranges (`range` in `--json`; unpitched = none); the audio isn't in
   SEGAN: `segan samples fetch vsco2 violins_sus harp ...` downloads only those (pinned commit, checked) into a
   user cache shared by every project. Lint says what to fetch if a kit needs more. Every library instrument is
   levelled to the same loudness, so kit `gain` is pure balance.
@@ -385,8 +385,8 @@ loudness_tolerance = 1.0      # W001/W013, LU
 |---|---|
 | `segan init [dir] [--open] [--style chiptune\|synth] [--godot DIR]` | create a project with a starter kit; `--godot` builds into `DIR/assets/generated/audio`, or `DIR/assets/audio` when a PAGAN project there already builds into `assets/generated`; warns when the two output folders are the same or nested |
 | `segan new kit <name>` / `new song <name> [--kit K] [--key "A minor"] [--tempo 120] [--bars 2]` / `new sfx <name> [--preset P] [--kit K]` | starter files (always pass `--description`) |
-| `segan samples list [library\|file.sf2]` / `segan samples fetch <library> <instrument...> [--all]` | sample libraries: instruments and what's downloaded / download instruments |
-| `segan kit show [kits]` | every instrument playing a test phrase: `previews/kits/<kit>.listen.png` + WAVs |
+| `segan samples list [library\|file.sf2]` / `segan samples fetch <library> <instrument...> [--all]` | sample libraries: instruments, key ranges and what's downloaded / download instruments |
+| `segan kit show [kits]` | every instrument playing a test phrase: `previews/kits/<kit>.listen.png` + WAVs; `--json` gives each instrument's `range` |
 | `segan lint [paths] [--warnings-as-errors] [--no-render]` | errors + warnings (audio warnings render the asset; cached); exits 1 on errors, 0 when there are only warnings, 1 on warnings too with `--warnings-as-errors` (CI) |
 | `segan preview <asset...> [--output main\|variant:X\|variation:N\|phase:X\|stem:T\|mix:M\|flow:CLIP\|walk[:SEED] ...] [--from 5 --to 8]` | WAV + listen sheet (+ seam view for loops) per output in `previews/<asset>/`, analysis in `--json` (SFX: `layers` = each layer dry on its own, `peak_db`/`lufs`/`crest_db`, plus the dry mix); flow songs also get a walk; `--output reel` (an SFX): the main sound and every variation back to back, 0.4 s apart, to judge the variety |
 | `segan render <asset...>` | WAVs only |
