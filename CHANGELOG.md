@@ -19,6 +19,18 @@ check before upgrading. Patch bumps never change existing behaviour. Every relea
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-10-21
+
+### Added
+
+- Exponential envelopes: `env: [a, d, s, r, exp]` or `{ ..., curve: exp }`. Decay falls 60 dB (towards the
+  sustain) per `decay` seconds and keeps going, so a bell rings out instead of stopping dead; release takes
+  `release` seconds to -60 dB, then reaches zero. The default (1 - x)^3 curve is unchanged (#5).
+
+### Changed
+
+- W009 knows how long an `exp` note stays above -30 dB (#5).
+
 ## [0.7.0] - 2026-10-21
 
 ### Added
@@ -177,7 +189,8 @@ First release: milestones 0-7 of PLAN.md.
 - `segan import midi`: standard MIDI files to songs (quantize, snap to the key, GM programs/drums to kit instruments,
   reused patterns, a change report).
 
-[Unreleased]: https://github.com/lukasgolino/segan/compare/v0.7.0...HEAD
+[Unreleased]: https://github.com/lukasgolino/segan/compare/v0.8.0...HEAD
+[0.8.0]: https://github.com/lukasgolino/segan/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/lukasgolino/segan/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/lukasgolino/segan/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/lukasgolino/segan/compare/v0.4.1...v0.5.0

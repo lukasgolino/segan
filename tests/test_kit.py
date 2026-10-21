@@ -43,6 +43,8 @@ def test_valid_kit() -> None:
         ("name: test\ninstruments:\n  p: { colour: red, osc: sine }\n", "unknown instrument field 'colour'"),
         ("name: test\ninstruments:\n  p: { osc: sine, env: [1, 2] }\n", "env must be"),
         ("name: test\ninstruments:\n  p: { gain: -3 }\n", "needs a sound source"),
+        ("name: test\ninstruments:\n  p: { osc: sine, env: [0, 1, 0, 1, linear] }\n", "env curve must be"),
+        ("name: test\ninstruments:\n  p: { osc: sine, env: { decay: 1, shape: exp } }\n", "unknown env field 'shape'"),
         ("name: test\ninstruments:\n  p: { osc: sine, tune: 40 }\n", "drum parameter"),
         ("name: test\ninstruments:\n  p: { osc: sine }\ngroups:\n  g: [q]\n", "unknown instrument key"),
         ("name: other\ninstruments:\n  p: { osc: sine }\n", "must match the file name"),
@@ -69,3 +71,12 @@ def test_demo_kits_are_valid() -> None:
     root = Path(__file__).parent.parent / "examples" / "demo" / "kits"
     for path in sorted(root.glob("*.kit.yaml")):
         load_kit_file(path)
+
+
+def test_env_curve_forms() -> None:
+    """#5: `exp` as a fifth env item, or `curve:` in the mapping form."""
+    kit, findings = parse("name: test\ninstruments:\n  p: { osc: sine, env: [0, 1, 0, 2, exp] }\n  q: { osc: sine, env: { decay: 1, curve: exp } }\n  r: { osc: sine }\n")
+    assert kit is not None, findings
+    assert kit.instruments["p"].env.curve == "exp" and kit.instruments["p"].env.release == 2.0  # type: ignore[attr-defined]
+    assert kit.instruments["q"].env.curve == "exp" and kit.instruments["r"].env.curve == "cubic"  # type: ignore[attr-defined]
+    assert kit.instruments["p"].env.as_list() == [0.0, 1.0, 0.0, 2.0, "exp"]  # type: ignore[attr-defined]

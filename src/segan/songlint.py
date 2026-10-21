@@ -4,6 +4,8 @@ sample (W014)."""
 
 from __future__ import annotations
 
+import math
+
 from segan.findings import Finding
 from segan.patch import Instrument
 from segan.project import Project
@@ -92,8 +94,11 @@ def audible_seconds(inst: Instrument | None) -> float | None:
         return None
     if env.decay <= 0:
         return env.attack
-    # decay: level = s + (1 - s) * (1 - x)^3 falls to AUDIBLE at x = 1 - ((AUDIBLE - s) / (1 - s))^(1/3)
-    x = 1.0 - ((AUDIBLE - env.sustain) / (1.0 - env.sustain)) ** (1.0 / 3.0)
+    share = (AUDIBLE - env.sustain) / (1.0 - env.sustain)
+    if env.curve == "exp":  # level = s + (1 - s) * 10^(-3x)
+        x = -math.log10(share) / 3.0
+    else:  # level = s + (1 - s) * (1 - x)^3 falls to AUDIBLE at x = 1 - share^(1/3)
+        x = 1.0 - share ** (1.0 / 3.0)
     return float(env.attack + env.decay * x)
 
 
