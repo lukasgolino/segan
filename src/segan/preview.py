@@ -171,7 +171,7 @@ class PreviewResult:
 
 
 def write_preview(asset: Any, render: Render, project: Project, start: float | None = None, end: float | None = None,
-                  only: list[str] | None = None) -> PreviewResult:  # fmt: skip
+                  only: list[str] | None = None, compressed: str | None = None) -> PreviewResult:  # fmt: skip
     """WAV + listen sheet (+ seam view for loops) per output into <preview_dir>/<asset>/."""
     folder = project.preview_dir / asset.name
     folder.mkdir(parents=True, exist_ok=True)
@@ -227,6 +227,16 @@ def write_preview(asset: Any, render: Render, project: Project, start: float | N
             seam_sheet(output.stem, output.audio, output.rate, output.loop[0], output.loop[1], analysis["seam_click"], click).save(seam)
             entry["seam"] = seam
         result.files.append(entry)
+    if compressed is not None:  # a shareable copy of every preview WAV (the WAV stays: it's what lint measured)
+        from segan import oggio
+        from segan.wavio import read_wav
+
+        for entry in result.files:
+            wav = read_wav(entry["wav"].read_bytes())
+            path = entry["wav"].with_suffix(f".{compressed}")
+            data = oggio.encode_mp3(wav.samples, wav.rate) if compressed == "mp3" else oggio.encode_ogg(wav.samples, wav.rate, 0.6, path.name)
+            path.write_bytes(data)
+            entry[compressed] = path
     return result
 
 

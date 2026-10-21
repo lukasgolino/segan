@@ -64,6 +64,23 @@ def encode_ogg(pcm: np.ndarray, rate: int, quality: float, name: str) -> bytes:
     return _fix_serial(buffer.getvalue(), serial)
 
 
+def encode_mp3(pcm: np.ndarray, rate: int) -> bytes:
+    """int16 frames -> MP3 bytes (libsndfile 1.1+ with LAME), for sharing previews; not used by builds."""
+    import soundfile
+
+    buffer = io.BytesIO()
+    soundfile.write(buffer, pcm.astype(np.float32) / 32768.0, rate, format="MP3", subtype="MPEG_LAYER_III")
+    return buffer.getvalue()
+
+
+def mp3_available() -> bool:
+    try:
+        import soundfile
+    except (ImportError, OSError):
+        return False
+    return "MP3" in soundfile.available_formats()
+
+
 def decode_ogg(data: bytes) -> tuple[np.ndarray, int]:
     """Ogg Vorbis bytes -> float frames (libvorbis's decode, what Godot plays), rate."""
     import soundfile

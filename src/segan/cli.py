@@ -591,11 +591,17 @@ def cmd_preview(args: argparse.Namespace, out: Output) -> int:
     from segan.render import render_asset
 
     project = project_for(args.assets)
+    if args.format is not None:
+        from segan import oggio
+
+        if not oggio.available() or (args.format == "mp3" and not oggio.mp3_available()):
+            raise usage_error(f'--format {args.format} needs soundfile with a libsndfile that writes it: pip install "segan[ogg]"'
+                              + (" (MP3 needs libsndfile 1.1 or newer)" if args.format == "mp3" else ""))
     assets, findings = load_targets(args.assets, project)
     outputs: list[dict[str, Any]] = []
     for asset in assets:
         render = render_asset(asset, project)
-        result = write_preview(asset, render, project, _position(args.start, asset), _position(args.end, asset), args.output)
+        result = write_preview(asset, render, project, _position(args.start, asset), _position(args.end, asset), args.output, args.format)
         walks = asset.kind == "song" and asset.flow is not None
         missing = [o for o in args.output or [] if not any(o in (r.id or "main", r.stem) for r in render.outputs)
                    and not (walks and o.split(":")[0] == "walk") and not (asset.kind == "sfx" and o == "reel")]  # fmt: skip
@@ -608,7 +614,8 @@ def cmd_preview(args: argparse.Namespace, out: Output) -> int:
             out.say(f"{'':>16}  listen: {display_path(entry['wav'])}" + (f"  seam: {display_path(entry['seam'])} (click {a['seam_click']:.4f})" if "seam" in entry else ""))
         outputs.append({"asset": asset.name, "kind": asset.kind, "outputs": [
             {"output": e["output"], "wav": display_path(e["wav"]), "sheet": display_path(e["sheet"]),
-             **({"seam": display_path(e["seam"])} if "seam" in e else {}), "analysis": e["analysis"]} for e in result.files]})  # fmt: skip
+             **({"seam": display_path(e["seam"])} if "seam" in e else {}), **({k: display_path(e[k]) for k in ("ogg", "mp3") if k in e}),
+             "analysis": e["analysis"]} for e in result.files]})  # fmt: skip
     if findings:
         out.failure(findings, {"outputs": outputs})
         return 1
@@ -1053,6 +1060,7 @@ def build_parser() -> argparse.ArgumentParser:
     preview.add_argument("assets", nargs="+", help="asset files or names")
     preview.add_argument("--from", dest="start", help="start of the shown window: bar number (songs) or seconds (2.5s)")
     preview.add_argument("--to", dest="end", help="end of the shown window")
+    preview.add_argument("--format", choices=("ogg", "mp3"), help="also write each preview as .ogg or .mp3 (to share; needs segan[ogg])")
     preview.add_argument("--output", action="append", help="only this output (repeat for several; one render): main, variant:<name>, variation:<n>, "
                          "phase:<name>, stem:<name>, mix:<name>, flow:<clip>, walk (a flow song: a seeded walk through its sections; walk:<seed>), "
                          "reel (an SFX: the main sound and every variation back to back)")  # fmt: skip
