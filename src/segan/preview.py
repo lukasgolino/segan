@@ -203,6 +203,9 @@ def write_preview(asset: Any, render: Render, project: Project, start: float | N
             analysis["notes_per_pattern"] = {name: {t: sum(n.track == t for n in pat.notes) for t in sorted({n.track for n in pat.notes})}
                                              for name, pat in asset.patterns.items()}  # fmt: skip
         if render.kind == "sfx":
+            from segan.sfxrender import layer_levels
+
+            analysis["layers"] = layer_levels(asset, project, output.id)
             spec = sfx_sheet(asset, output, analysis, project, click)
         else:
             from segan.songpreview import song_sheet

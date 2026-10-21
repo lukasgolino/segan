@@ -19,6 +19,19 @@ check before upgrading. Patch bumps never change existing behaviour. Every relea
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-10-21
+
+### Added
+
+- `segan preview --json` gives SFX outputs a `layers` readout: each layer rendered dry on its own at its place in
+  the sound (`peak_db`, `lufs` = loudest 400 ms, `crest_db`), plus the dry mix, so the layer that makes a sound
+  peaky is easy to find (#1).
+
+### Changed
+
+- W001's hint for SFX says what works: stagger layer starts by 3-9 ms, saturate or lower the peakiest layer, then
+  body or a quieter category (#1).
+
 ## [0.4.1] - 2026-10-21
 
 ### Added
@@ -149,7 +162,8 @@ First release: milestones 0-7 of PLAN.md.
 - `segan import midi`: standard MIDI files to songs (quantize, snap to the key, GM programs/drums to kit instruments,
   reused patterns, a change report).
 
-[Unreleased]: https://github.com/lukasgolino/segan/compare/v0.4.1...HEAD
+[Unreleased]: https://github.com/lukasgolino/segan/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/lukasgolino/segan/compare/v0.4.1...v0.5.0
 [0.4.1]: https://github.com/lukasgolino/segan/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/lukasgolino/segan/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/lukasgolino/segan/compare/v0.2.0...v0.3.0

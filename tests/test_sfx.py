@@ -143,3 +143,22 @@ def test_room_send_and_tail_trim(tmp_path: Path) -> None:
     project = make_project(tmp_path / "field")
     sfx, _ = load(project, "sfx", "tick", text + "room: 0\n")
     assert sfx is not None and render_asset(sfx, project).main.frames == lengths["dry"]
+
+
+def test_preview_lists_each_layers_levels(project: Project, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
+    """#1: per-layer peak / loudness / crest in `segan preview --json`, to find what makes a sound peaky (W001)."""
+    from conftest import run_json
+
+    text = BASIC.replace("length: 0.1\n", "length: 0.1\n  - { id: crack, osc: noise, env: [0, 0.01, 0, 0.01], start: 0.004 }\n")
+    text += "variations: { count: 2, pitch: 1 }\n"
+    write(project, "sfx", "zap", text)
+    monkeypatch.chdir(project.root)
+    code, data = run_json(["preview", "zap"], capsys)
+    assert code == 0, data
+    outputs = data["outputs"][0]["outputs"]
+    layers = outputs[0]["analysis"]["layers"]
+    assert [entry["layer"] for entry in layers] == ["tone", "crack", "(dry mix)"]
+    assert layers[1]["start_s"] == 0.004 and set(layers[0]) == {"layer", "start_s", "peak_db", "lufs", "crest_db"}
+    assert layers[1]["crest_db"] > layers[0]["crest_db"]  # a 10 ms noise click is far peakier than the tone
+    assert layers[2]["peak_db"] >= max(layers[0]["peak_db"], layers[1]["peak_db"]) - 6.1
+    assert outputs[1]["output"] == "variation:1" and outputs[1]["analysis"]["layers"][0]["layer"] == "tone"
