@@ -422,7 +422,7 @@ Warnings: W001 loudness target out of reach without more limiting than `max_limi
 stagger layer starts 3-9 ms, tame the peakiest layer (`preview --json` `layers`), give it body, or a quieter category; for a percussive song: `category: music_soft` + `music_soft = -19` under
 `[loudness]`), W002 unused pattern or section, W003 too many instruments in one song,
 W004 silent pattern or sound, W005 lead-in silence in an SFX, W006 made under an older style version, W007
-click at a loop point, W008 DC offset, W009 tracks clash (minor 2nd/tritone) on a beat, W010 aliasing (raise
+click at a loop point, W008 DC offset, W009 tracks clash (minor 2nd/tritone) on a beat (the felt beat: every 3 units in 6/8, 9/8, 12/8; a held note counts while above -30 dB), W010 aliasing (raise
 `[mix] oversample` or play lower), W011 SFX still sounding at `duration`, W012 note cut at the end of its
 pattern, W013 loudness off target with `normalize: false`, W014 a note held longer than its sample (no loop):
 it goes silent before it ends, W015 a flow section shorter than the ring-out of a section before it, W016 a
