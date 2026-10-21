@@ -196,9 +196,11 @@ class Pattern:
 
 
 def song_yaml(name: str, *, tracks: list[Track], patterns: dict[str, Pattern | dict[str, Any]], sections: dict[str, list[str]],
-              arrangement: list[str], key: str | Key, tempo: float = 120, loop: str | bool | None = None, group: int = 4, **fields: Any) -> str:  # fmt: skip
+              arrangement: list[str], key: str | Key, tempo: float = 120, loop: str | bool | None = None, group: int = 4,
+              comments: dict[str, str] | None = None, **fields: Any) -> str:  # fmt: skip
     """A complete song file. `patterns` values are Pattern builders or raw mappings (derived patterns); fields
-    that are None are left out."""
+    that are None are left out. `comments` maps a dotted path (`patterns.chorus`, `sections.verse`, `tracks.lead`)
+    to text written as `#` lines above it."""
     fields = {k: v for k, v in fields.items() if v is not None}
     data: dict[str, Any] = {"name": name, **{k: v for k, v in fields.items() if k in ("description", "kit")}}
     data.update({"tempo": tempo, "key": key_of(key).describe()})
@@ -215,17 +217,78 @@ def song_yaml(name: str, *, tracks: list[Track], patterns: dict[str, Pattern | d
     data["arrangement"] = arrangement
     if loop is not None:
         data["loop"] = loop
-    text = dump_mapping(data, ["name", "description", "kit", "tempo", "meter", "steps_per_beat", "swing", "key", "status", "style_version", "tags"])
+    text = dump_mapping(data, ["name", "description", "kit", "tempo", "meter", "steps_per_beat", "swing", "key", "status", "style_version", "tags"], comments)
     return text.replace("tracks:\n", "tracks:\n", 1)
 
 
-def sfx_yaml(name: str, *, layers: list[dict[str, Any]], **fields: Any) -> str:
-    """A complete SFX file from layer mappings (the same fields as in the notation)."""
+def sfx_yaml(name: str, *, layers: list[dict[str, Any]], comments: dict[str, str] | None = None, **fields: Any) -> str:
+    """A complete SFX file from layer mappings (the same fields as in the notation); `comments` as in `song_yaml`."""
     data = {"name": name, **fields, "layers": layers}
-    return dump_mapping(data, ["name", "description", "category", "kit", "preset", "duration", "loop", "status", "style_version", "tags", "layers"])
+    return dump_mapping(data, ["name", "description", "category", "kit", "preset", "duration", "loop", "status", "style_version", "tags", "layers"], comments)
+
+
+def _signature(pattern: Pattern) -> tuple[int, tuple[tuple[str, tuple[tuple[int, int, int, str], ...]], ...]]:
+    return (pattern.length, tuple(sorted((t, tuple(sorted(n))) for t, n in pattern.notes.items() if n)))
+
+
+def dedupe(patterns: dict[str, Pattern], sections: dict[str, list[str]]) -> tuple[dict[str, Pattern], dict[str, list[str]]]:
+    """Identical patterns (same length and notes on every track) collapse into the first one's name, and the
+    sections are rewritten to use it: generators can emit a pattern per bar and still write a tidy file."""
+    first: dict[Any, str] = {}
+    rename: dict[str, str] = {}
+    kept: dict[str, Pattern] = {}
+    for name, pattern in patterns.items():
+        signature = _signature(pattern)
+        if signature in first:
+            rename[name] = first[signature]
+        else:
+            first[signature] = name
+            kept[name] = pattern
+    return kept, {s: [rename.get(p, p) for p in names] for s, names in sections.items()}
+
+
+def derive(base_name: str, base: Pattern, pattern: Pattern, tracks: list[Track]) -> dict[str, Any] | None:
+    """`pattern` written as a derived pattern of `base` (`{from: base_name, transpose: {...}, mute: [...], shift: N}`)
+    when it is `base` with some tracks muted, scale-row transpositions per roll track and one time shift; else None.
+    For `song_yaml(patterns={..., "b": api.derive("a", a, b, tracks) or b})`."""
+    if pattern.length != base.length:
+        return None
+    by_name = {t.name: t for t in tracks}
+    for shift in sorted(range(-base.length + 1, base.length), key=abs):
+        spec: dict[str, Any] = {"from": base_name}
+        transpose: dict[str, int] = {}
+        mute: list[str] = []
+        ok = True
+        for track, notes in base.notes.items():
+            moved = sorted((r, s + shift, n, c) for r, s, n, c in notes)
+            if any(s < 0 or s + n > base.length for _, s, n, _ in moved):
+                ok = False
+                break
+            target = sorted(pattern.notes.get(track, []))
+            if not target:
+                if notes:
+                    mute.append(track)
+                continue
+            options = [0] if by_name.get(track) is None or by_name[track].percussion or by_name[track].spec.get("chromatic") else range(-24, 25)
+            found = next((k for k in sorted(options, key=abs) if sorted((r - k, s, n, c) for r, s, n, c in moved) == target), None)
+            if found is None:
+                ok = False
+                break
+            if found:
+                transpose[track] = found
+        if not ok or any(t not in base.notes and n for t, n in pattern.notes.items()):
+            continue
+        if transpose:
+            spec["transpose"] = transpose
+        if shift:
+            spec["shift"] = shift
+        if mute:
+            spec["mute"] = mute
+        return spec
+    return None
 
 
 __all__ = [
-    "API_VERSION", "Pattern", "Track", "arpeggiate", "chord", "euclid", "flow", "humanize", "key_of", "note", "progression", "scale",
+    "API_VERSION", "Pattern", "Track", "arpeggiate", "chord", "dedupe", "derive", "euclid", "flow", "humanize", "key_of", "note", "progression", "scale",
     "sfx_yaml", "song_yaml",
 ]  # fmt: skip

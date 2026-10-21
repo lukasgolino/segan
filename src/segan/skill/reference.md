@@ -505,7 +505,9 @@ For many similar sounds or procedural music, write a Python script with `segan.a
 `Track.roll(name, key, low, high)`, `Track.drums(name, keys)`, `Pattern(length).note(track, step, pitch, length,
 key)` / `.hit(track, step, drum, mark)` / `.row(track, drum, "x...x...")` / `.lane(track)`,
 `song_yaml(name, tracks=..., patterns=..., sections=..., arrangement=..., key=..., tempo=..., loop=...)`,
-`sfx_yaml(name, layers=[...], ...)`. Write the result to a file, then lint and preview it like any other.
+`sfx_yaml(name, layers=[...], ...)` (both take `comments={"patterns.chorus": "text", ...}`: `#` lines above
+those keys). `dedupe(patterns, sections)` merges identical patterns (sections follow); `derive("a", a, b, tracks)`
+writes `b` as `{from: a, transpose, mute, shift}` when it is one (else None). Write the result to a file, then lint and preview it like any other.
 
 ```python
 from pathlib import Path
