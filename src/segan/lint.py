@@ -40,6 +40,7 @@ WARNING_RULES = {
     "W016": "soundtrack cross-fade between clashing keys",
     "W017": "stem mix can't reach its target",
     "W018": "a filter removes most of an SFX noise layer's level",
+    "W019": "a looping song's file is over 2 bars longer than the song (long ring-out)",
 }
 
 
@@ -193,6 +194,14 @@ def lint_audio(asset: Any, project: Project) -> list[Finding]:
     render = render_asset(asset, project)
     short: set[tuple[str, str]] = set()
     for output in render.outputs:
+        if asset.kind == "song" and output.loop is not None and output.info.get("loop_offset"):
+            variant = asset.all_variants().get(output.info.get("variant") or "")
+            tempo = variant.tempo if variant is not None and variant.tempo else asset.tempo
+            bars = output.info["loop_offset"] / output.rate / (asset.meter[0] * 60.0 / tempo)
+            if bars > MAX_LOOP_OFFSET_BARS + 1e-6:
+                found.append(Finding("W019", f"{output.stem}: the loop file runs {bars:.0f} bars past the song because its last notes ring that long "
+                                     "(a one-shot sample, a long release or room): the file is that much bigger. Give the long-ringing "
+                                     "instruments `max_ring: <seconds>` in the kit (a short fade after the note), or shorten their release", asset.path, None, "loop"))  # fmt: skip
         if output.id.startswith("mix:") and output.level.get("target") is not None:
             aim, reach = float(output.level["target"] or 0.0), float(output.level["lufs"] or 0.0) + float(output.info["trim_db"])
             if reach < aim - cfg.loudness_tolerance:
@@ -253,6 +262,7 @@ def lint_audio(asset: Any, project: Project) -> list[Finding]:
 
 
 FILTER_LOSS_DB = 12.0  # W018
+MAX_LOOP_OFFSET_BARS = 2  # W019
 
 
 def _filter_loss(asset: Any, ctx: Context) -> list[Finding]:

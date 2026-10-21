@@ -36,7 +36,7 @@ DRUM_PARAMS = ("tune", "decay", "tone", "noise", "click", "punch")
 
 PATCH_FIELDS = (
     "name", "osc", "drum", "sample", "duty", "pwm", "fm", "detune", "unison", "env", "pitch_env", "vibrato", "tremolo",
-    "arp", "arp_rate", "filter", "gain", "pan", "range", "voices", "crush", "note", *DRUM_PARAMS,
+    "arp", "arp_rate", "filter", "gain", "pan", "range", "voices", "crush", "note", "max_ring", *DRUM_PARAMS,
 )  # fmt: skip
 
 
@@ -101,6 +101,7 @@ class Instrument:
     note: int = 60  # pitch for one-shot hits (drum lanes, SFX layers without a pitch)
     drum: dict[str, float] = field(default_factory=dict)  # drum parameters (tune, decay, ...)
     sample: SampleSpec | None = None  # source "sample"
+    max_ring: float | None = None  # seconds a note may ring after its gate (then a short fade); None = to its natural end
     sample_text: Any = field(default=None, compare=False)  # the `sample:` value as written (for `segan bake sfx`)
     line: int | None = None
 
@@ -180,6 +181,8 @@ class Instrument:
             out["voices"] = self.voices
         if self.crush:
             out["crush"] = {"bits": self.crush.bits, "rate": self.crush.rate}
+        if self.max_ring is not None:
+            out["max_ring"] = self.max_ring
         return out
 
 
@@ -412,6 +415,8 @@ def parse_patch(
         changes["gain"] = v
     if "pan" in data and (v := number(data, "pan", -1, 1, report, rule, where, " (-1 left, 1 right)")) is not None:
         changes["pan"] = v
+    if "max_ring" in data and (v := number(data, "max_ring", 0.01, 30, report, rule, where, " seconds a note may ring after it ends")) is not None:
+        changes["max_ring"] = v
     if "range" in data:
         rng = data["range"]
         notes = [parse_note_value(n) for n in rng] if isinstance(rng, list) and len(rng) == 2 else []

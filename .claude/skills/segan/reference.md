@@ -42,6 +42,7 @@ Instrument fields (a source is required; everything else optional):
 | `duty` | pulse width 0.01-0.99 (0.5 square, 0.25 and 0.125 thinner, NES-like) |
 | `pwm` | `[rate_hz, depth]` pulse-width modulation |
 | `fm` | `{ ratio, index, env }`: modulator frequency ratio (whole numbers = harmonic, e.g. 1, 2; 3.5 = bell-like), modulation index (brightness), optional index envelope |
+| `max_ring` | seconds a note may ring after it ends (gate), then a 50 ms fade: chokes long one-shots and releases (timpani rolls, tam-tam, crash, low harp) so a loop file doesn't grow by bars (W019) |
 | `env` | `[attack, decay, sustain, release]` (seconds, seconds, 0-1, seconds) or `{attack, decay, sustain, release, curve}`; decay/release are (1 - x)^3 and stop at zero; `[..., exp]` / `curve: exp` = exponential: decay = time to fall 60 dB and it rings on (bells, plucks), release = time to -60 dB then zero |
 | `pitch_env` | `[semitones, seconds]` (start that far off and glide to the note) or keyframes `[[t, semitones], ...]` |
 | `vibrato` | `[rate_hz, depth_semitones]` or `[rate, depth, delay_s]` |
@@ -433,7 +434,9 @@ click at a loop point, W008 DC offset, W009 tracks clash (minor 2nd/tritone) on 
 pattern, W013 loudness off target with `normalize: false`, W014 a note held longer than its sample (no loop):
 it goes silent before it ends, W015 a flow section shorter than the ring-out of a section before it, W016 a
 soundtrack cross-fade between songs in clashing keys, W017 a stem mix that can't reach its target even with its
-trim, W018 an SFX noise layer whose filter removes more than 12 dB of its level (a narrow band-pass): raise its gain.
+trim, W018 an SFX noise layer whose filter removes more than 12 dB of its level (a narrow band-pass): raise its gain,
+W019 a looping song's file runs more than 2 bars past the song because its last notes ring that long: give those
+instruments `max_ring`.
 Turn warnings off for one asset with `lint: { disable: [...] }`, for every asset of a category with
 `[lint.<category>] disable = ["W017"]` (e.g. `[lint.battle_music]`), project-wide with `[lint] disable`.
 

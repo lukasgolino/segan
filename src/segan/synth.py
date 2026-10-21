@@ -195,9 +195,17 @@ def _keyframes(t: Signal, frames: tuple[tuple[float, float], ...]) -> Signal:
     return np.asarray(np.interp(t, times, values), dtype=np.float64)
 
 
+RING_FADE = 0.05  # seconds: the fade-out of a note cut by `max_ring`
+
+
 def note_length(inst: Instrument, gate: float, ctx: Context, midi: float | None = None) -> float:
     """Seconds a note sounds: gate + release (drums: their decay; one-shot samples: the sample, longer when
-    pitched down)."""
+    pitched down), at most gate + `max_ring`."""
+    natural = _natural_length(inst, gate, ctx, midi)
+    return min(natural, gate + inst.max_ring) if inst.max_ring is not None else natural
+
+
+def _natural_length(inst: Instrument, gate: float, ctx: Context, midi: float | None = None) -> float:
     if inst.is_drum:
         return inst.tail() + 0.01
     if inst.sample is not None:
@@ -274,6 +282,9 @@ def render_note(
     if gain_curve is not None:
         signal = signal * gain_curve(t)
     signal = signal * (velocity * db_to_gain(inst.gain))
+    if inst.max_ring is not None and _natural_length(inst, gate, ctx, midi) > gate + inst.max_ring and n > n_gate:
+        fade = min(n - n_gate, round(RING_FADE * rate))  # choked by max_ring: fade out instead of a click
+        signal[n - fade :] *= np.linspace(1.0, 0.0, fade, endpoint=False) ** 2
     out = decimate(signal, ctx.oversample)
     return crush(out, inst.crush, ctx.rate)
 

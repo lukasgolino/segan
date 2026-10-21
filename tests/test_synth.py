@@ -96,3 +96,15 @@ def test_unison_starts_at_full_level(wave: str) -> None:
     ctx = Context()
     a, b = (render_note(i, ctx, 84, 0.5, length=0.5)[: ctx.rate // 50] for i in (one, two))
     assert peak_db(b) > peak_db(a) - 3.0
+
+
+def test_max_ring_chokes_a_long_ring() -> None:
+    """#25: `max_ring` caps how long a note sounds after its gate, with a short fade (no click)."""
+    from segan.synth import note_length
+
+    ctx = Context(rate=22050, oversample=1)
+    long_tail = Instrument(wave="sine", env=Env(0.0, 0.0, 1.0, 8.0))
+    choked = Instrument(wave="sine", env=Env(0.0, 0.0, 1.0, 8.0), max_ring=0.5)
+    assert note_length(long_tail, 0.2, ctx) == pytest.approx(8.2) and note_length(choked, 0.2, ctx) == pytest.approx(0.7)
+    out = render_note(choked, ctx, 69, 0.2)
+    assert len(out) == round(0.7 * 22050) and abs(out[-1]) < 1e-3 and np.abs(out[: 22050 // 2]).max() > 0.5
