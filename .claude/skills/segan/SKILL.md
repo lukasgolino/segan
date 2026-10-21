@@ -165,7 +165,8 @@ bass, maybe a pad or arpeggio, 3-5 drums.
    - **Harmony/arpeggio**: chord tones in eighths, quieter (track `gain: -3`).
    - **Drums**: kick on 1 and 3 (or every beat for driving music), snare on 2 and 4 (steps 5 and 13), hats in
      eighths; `X` accents and `o` ghosts give groove; a fill in the last bar of a section.
-   - W009 flags minor-second/tritone clashes between tracks on a beat (notes held from earlier count): fix them
+   - W009 flags minor-second/tritone clashes between tracks on a beat (the meter's beat: a dotted quarter in 6/8;
+     notes held from earlier count while still above -30 dB): fix them
      unless you want the tension. A dominant seventh (V7, e.g. C7 going to F) contains a tritone on purpose:
      there it's a judgement call between shortening a note and `lint: { disable: [W009] }`.
    - Many similar patterns, or tired of counting dots: generate lanes with `segan.api` (reference.md has a worked

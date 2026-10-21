@@ -19,6 +19,14 @@ check before upgrading. Patch bumps never change existing behaviour. Every relea
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-10-21
+
+### Changed
+
+- W009 (clash on a beat) checks the felt beat: the dotted quarter in compound meters (6/8, 9/8, 12/8, every 3 beat
+  units), not every eighth; and a held note counts only while its envelope is above -30 dB, so a decayed sustain-0
+  bell no longer clashes for the rest of its gate (#2).
+
 ## [0.5.0] - 2026-10-21
 
 ### Added
@@ -162,7 +170,8 @@ First release: milestones 0-7 of PLAN.md.
 - `segan import midi`: standard MIDI files to songs (quantize, snap to the key, GM programs/drums to kit instruments,
   reused patterns, a change report).
 
-[Unreleased]: https://github.com/lukasgolino/segan/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/lukasgolino/segan/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/lukasgolino/segan/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/lukasgolino/segan/compare/v0.4.1...v0.5.0
 [0.4.1]: https://github.com/lukasgolino/segan/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/lukasgolino/segan/compare/v0.3.0...v0.4.0

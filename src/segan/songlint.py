@@ -5,6 +5,7 @@ sample (W014)."""
 from __future__ import annotations
 
 from segan.findings import Finding
+from segan.patch import Instrument
 from segan.project import Project
 from segan.song import Song, note_midi
 
@@ -71,14 +72,46 @@ def _short_samples(song: Song) -> list[Finding]:
     return out
 
 
+AUDIBLE = 10 ** (-30 / 20)  # W009 counts a note while its envelope is above -30 dB
+
+
+def beat_steps(song: Song) -> int:
+    """Steps per felt beat: the meter's beat unit, or a dotted beat (3 units) in compound meters (6/8, 9/8, 12/8)."""
+    beats, unit = song.meter
+    compound = unit >= 8 and beats % 3 == 0 and beats > 3
+    return song.steps_per_beat * (3 if compound else 1)
+
+
+def audible_seconds(inst: Instrument | None) -> float | None:
+    """How long a held note stays above -30 dB, if its envelope decays below that while held (sustain under -30 dB);
+    None = for as long as it's held. Synth envelopes only (samples and drums count while held)."""
+    if inst is None or inst.is_sample or inst.is_drum:
+        return None
+    env = inst.env
+    if env.sustain >= AUDIBLE:
+        return None
+    if env.decay <= 0:
+        return env.attack
+    # decay: level = s + (1 - s) * (1 - x)^3 falls to AUDIBLE at x = 1 - ((AUDIBLE - s) / (1 - s))^(1/3)
+    x = 1.0 - ((AUDIBLE - env.sustain) / (1.0 - env.sustain)) ** (1.0 / 3.0)
+    return float(env.attack + env.decay * x)
+
+
 def _clashes(song: Song) -> list[Finding]:
-    """Two roll notes on different tracks a minor 2nd (or 9th...) or a tritone apart, sounding together on a beat."""
+    """Two roll notes on different tracks a minor 2nd (or 9th...) or a tritone apart, sounding together on a beat
+    (the meter's beat: a dotted quarter in 6/8). A note counts while held and above -30 dB (a decayed bell doesn't)."""
     out = []
+    step_seconds = 60.0 / song.tempo / song.steps_per_beat
+    beat = beat_steps(song)
     for pattern in song.patterns.values():
         hits: list[str] = []
         roll = [n for n in pattern.notes if not song.tracks[n.track].drums]
-        for step in range(0, pattern.length, song.steps_per_beat):
-            sounding = [(n, note_midi(song, n)) for n in roll if n.step <= step < n.step + n.length]
+        heard: dict[int, float] = {}
+        for i, n in enumerate(roll):
+            seconds = audible_seconds(song.kit.instruments.get(n.key))
+            heard[i] = n.length if seconds is None else min(n.length, seconds / step_seconds)
+        for step in range(0, pattern.length, beat):
+            sounding = [(n, note_midi(song, n)) for i, n in enumerate(roll) if n.step <= step < n.step + heard[i]]
             for i, (a, ma) in enumerate(sounding):
                 for b, mb in sounding[i + 1 :]:
                     if a.track == b.track or ma is None or mb is None:
@@ -88,6 +121,7 @@ def _clashes(song: Song) -> list[Finding]:
                         hits.append(f"step {step + 1} {a.track}/{b.track} {CLASHES[interval]} ({song.key.name(ma)}-{song.key.name(mb)})")
         if hits:
             more = f" and {len(hits) - 3} more" if len(hits) > 3 else ""
-            out.append(Finding("W009", f"pattern {pattern.name!r}: tracks clash on the beat: {'; '.join(hits[:3])}{more}. Notes held from earlier count; the beats are steps 1, 1+steps_per_beat, ... "
+            out.append(Finding("W009", f"pattern {pattern.name!r}: tracks clash on the beat: {'; '.join(hits[:3])}{more}. Notes held from earlier count while "
+                               f"still audible (above -30 dB); the beats are every {beat} steps from step 1. "
                                "Often intended (a V7 chord's tritone, tension): then `lint: { disable: [W009] }`; if not, move or shorten one note", song.path, pattern.line, f"patterns.{pattern.name}"))  # fmt: skip
     return out

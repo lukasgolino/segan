@@ -115,3 +115,44 @@ def test_every_warning_is_documented(rule: str) -> None:
     reference = (Path(__file__).parent.parent / "src" / "segan" / "skill" / "reference.md")
     if reference.exists():
         assert rule in reference.read_text()
+
+
+CLASH = """\
+name: clash
+tempo: 120
+key: C major
+meter: {meter}
+steps_per_beat: 1
+tracks:
+  lead: {{ roll: [C5, C5] }}
+  bass: {{ roll: [B4, B4] }}
+patterns:
+  a:
+    length: 6
+    lead: |
+      {lead}  C5
+    bass: |
+      {bass}  B4
+sections:
+  main: [a]
+arrangement: [main]
+"""
+
+
+def test_w009_uses_the_felt_beat_in_compound_meters(project: Project) -> None:
+    """#2: in 6/8 the beat is the dotted quarter (every 3 eighths), not every eighth."""
+    off_beat = CLASH.format(meter="[6, 8]", lead=".p....", bass=".q....")  # together on eighth 2 only
+    assert not [r for r in lint_rules(project, "song", "clash", off_beat) if r[0] in ("W009",) or r[0].startswith("E")]
+    assert ("W009", "patterns.a") in lint_rules(project, "song", "clash", off_beat.replace("[6, 8]", "[6, 4]"))  # simple: every unit
+    on_beat = CLASH.format(meter="[6, 8]", lead="...p..", bass="...q..")  # eighth 4 = the second dotted beat
+    assert ("W009", "patterns.a") in lint_rules(project, "song", "clash", on_beat)
+
+
+def test_w009_ignores_a_note_that_has_decayed(project: Project) -> None:
+    """#2: a sustain-0 bell held for the whole bar no longer sounds when the other note comes in."""
+    kit = (project.root / "kits" / "t.kit.yaml").read_text()
+    (project.root / "kits" / "t.kit.yaml").write_text(kit.replace("groups:", "  e: { name: bell, osc: sine, env: [0.001, 0.2, 0, 0.1] }\ngroups:"))
+    held = CLASH.format(meter="[3, 4]", lead="e-----", bass="...q..").replace("tempo: 120", "tempo: 60")  # 1 s per step
+    assert not [r for r in lint_rules(project, "song", "clash", held) if r[0] in ("W009",) or r[0].startswith("E")]
+    sustained = held.replace("e-----", "p-----")  # the lead's sustain (0.6) keeps it audible: still a clash
+    assert ("W009", "patterns.a") in lint_rules(project, "song", "clash", sustained)
