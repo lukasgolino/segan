@@ -8,12 +8,13 @@ around, so they repeat without a seam.
 from __future__ import annotations
 
 import math
+from collections.abc import Callable
 from dataclasses import replace
 
 import numpy as np
 
 from segan.analysis import SILENCE_DB, frames_of, max_momentary_lufs, peak_db, to_db
-from segan.dsp import Signal, exp2, seed_of, sin_turns, uniform
+from segan.dsp import Signal, db_to_gain, exp2, seed_of, sin_turns, uniform
 from segan.kitshow import context_for
 from segan.mix import bus, finish, room_tail, trim_tail
 from segan.patch import Env, Filter, Instrument
@@ -68,12 +69,15 @@ def _jitter(inst: Instrument, amount: float, seed: int) -> Instrument:
     return replace(inst, **changes)  # type: ignore[arg-type]
 
 
-def _effects(x: Signal, layer: Layer, rate: int, length: int) -> Signal:
+def _effects(x: Signal, layer: Layer, rate: int, length: int, post_gain: Callable[[int], Signal | float] | None = None) -> Signal:
+    """distort -> `post_gain` (a distorted layer's gain, so gain stays balance, not timbre) -> ring -> delay."""
     out = x
     if layer.distort > 0:
         drive = 1.0 + 15.0 * layer.distort
         y = np.clip(out * drive, -1.5, 1.5)
         out = (y - y**3 / 6.75) / max(1.0, drive**0.5)
+    if post_gain is not None:
+        out = out * post_gain(len(out))
     if layer.ring is not None:
         freq, mix = layer.ring
         t = np.arange(len(out)) / rate
@@ -111,6 +115,11 @@ def render_layer(layer: Layer, ctx: Context, available: float, seed: int, pitch_
     if layer.gain:
         db = _keyframe_curve(layer.gain, True)
         gain_curve = lambda t: exp2(db(t) * LOG2_10_OVER_20)  # noqa: E731
+    post_gain = None
+    if layer.distort > 0:  # the layer's gain comes after the distortion: changing it mustn't change the timbre
+        level, curve = db_to_gain(inst.gain), gain_curve
+        inst, gain_curve = replace(inst, gain=0.0), None
+        post_gain = lambda n: level * (curve(np.arange(n) / ctx.rate) if curve is not None else 1.0)  # noqa: E731
     cutoff_curve = None
     if layer.cutoff:
         if inst.filter is None:
@@ -126,7 +135,7 @@ def render_layer(layer: Layer, ctx: Context, available: float, seed: int, pitch_
     sounding = full > room + 1e-3
     length = min(full, room) if layer.delay is None else room
     signal = render_note(inst, ctx, base, gate, 1.0, seed, pitch_curve, gain_curve, cutoff_curve, length=min(full, room))
-    signal = _effects(signal, layer, ctx.rate, round(length * ctx.rate))
+    signal = _effects(signal, layer, ctx.rate, round(length * ctx.rate), post_gain)
     if sounding and ctx.declick:
         fade = min(len(signal), round(0.003 * ctx.rate))
         if fade:

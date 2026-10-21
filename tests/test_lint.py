@@ -156,3 +156,11 @@ def test_w009_ignores_a_note_that_has_decayed(project: Project) -> None:
     assert not [r for r in lint_rules(project, "song", "clash", held) if r[0] in ("W009",) or r[0].startswith("E")]
     sustained = held.replace("e-----", "p-----")  # the lead's sustain (0.6) keeps it audible: still a clash
     assert ("W009", "patterns.a") in lint_rules(project, "song", "clash", sustained)
+
+
+def test_w018_narrow_band_pass_noise(project: Project) -> None:
+    """#7: noise through a narrow band-pass loses most of its level: say so (pitched waves through a band-pass don't count)."""
+    text = "name: w\nduration: 0.5\nlayers:\n  - { id: whistle, osc: noise, filter: { type: bp, cutoff: 2000, resonance: 0.95 }, env: [0.01, 0.1, 0.8, 0.1] }\n"
+    assert ("W018", "whistle") in lint_rules(project, "sfx", "w", text)
+    assert ("W018", "whistle") not in lint_rules(project, "sfx", "w", text.replace("osc: noise", "osc: saw, pitch: D3"))
+    assert ("W018", "whistle") not in lint_rules(project, "sfx", "w", text.replace("resonance: 0.95", "resonance: 0"))

@@ -119,7 +119,7 @@ variations: { count: 4, seed: 7, pitch: 0.5, timbre: 0.1, gain: 1 }   # -> coin.
 Layer fields = instrument fields (above) plus: `id`, `instrument` (a kit key to start from), `start` (s),
 `length` (s), `pitch` (note, Hz or keyframes; a note can carry a cents offset, `A4+15c` / `C6-30c`, for detuned
 copies of a layer) (+ `slide`), `gain` keyframes, `cutoff` keyframes (`[[t, Hz], ...]`; adds a low-pass if the
-layer has no filter), `distort` (0-1), `ring` (`{ freq: Hz, mix: 0-1 }` ring modulation), `delay`
+layer has no filter), `distort` (0-1; the layer's `gain` applies after it, so gain never changes the grit), `ring` (`{ freq: Hz, mix: 0-1 }` ring modulation), `delay`
 (`{ time: s, feedback: 0-0.95, mix: 0-1 }`).
 
 More SFX fields:
@@ -429,7 +429,7 @@ click at a loop point, W008 DC offset, W009 tracks clash (minor 2nd/tritone) on 
 pattern, W013 loudness off target with `normalize: false`, W014 a note held longer than its sample (no loop):
 it goes silent before it ends, W015 a flow section shorter than the ring-out of a section before it, W016 a
 soundtrack cross-fade between songs in clashing keys, W017 a stem mix that can't reach its target even with its
-trim.
+trim, W018 an SFX noise layer whose filter removes more than 12 dB of its level (a narrow band-pass): raise its gain.
 Turn warnings off for one asset with `lint: { disable: [...] }`, project-wide with `[lint] disable`.
 
 ## Build output (any engine)

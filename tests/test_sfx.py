@@ -194,3 +194,20 @@ def test_pitch_cents_offsets(project: Project) -> None:
     for bad in ("A4+15", "A4+1300c", "H4+10c"):
         _, findings = load(project, "sfx", "d", text.replace("A4+15c", bad))
         assert rules(findings) == ["E013"], bad
+
+
+def test_distorted_layer_gain_is_balance_not_timbre(project: Project) -> None:
+    """#7: a distorted layer's `gain` (fixed or keyframes) applies after the distortion."""
+    from segan.kitshow import context_for
+    from segan.sfxrender import render_layer
+
+    text = "name: g\nduration: 0.2\nlayers:\n  - { id: a, osc: saw, pitch: A3, distort: 0.8, gain: {gain} }\n"
+    ctx = context_for(project.config.mix)
+    loud, _ = load(project, "sfx", "g", text.replace("{gain}", "0"))
+    quiet, _ = load(project, "sfx", "g", text.replace("{gain}", "-6"))
+    a, _ = render_layer(loud.layers[0], ctx, 0.2, 1, 0.0, 0.0)
+    b, _ = render_layer(quiet.layers[0], ctx, 0.2, 1, 0.0, 0.0)
+    assert np.allclose(b, a * 10 ** (-6 / 20), atol=1e-9)  # same shape, just quieter
+    ramp, _ = load(project, "sfx", "g", text.replace("{gain}", "[[0, 0], [0.2, -12]]"))
+    c, _ = render_layer(ramp.layers[0], ctx, 0.2, 1, 0.0, 0.0)
+    assert np.abs(c[:200]).max() > 3 * np.abs(c[-200:]).max()  # keyframes still shape it
