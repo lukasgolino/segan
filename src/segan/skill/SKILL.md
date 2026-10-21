@@ -26,7 +26,9 @@ You will never hear what you make. SEGAN gives you two substitutes, and you must
    - LUFS curve (songs): loudness over time; the green line is the target.
 2. **The numbers** (`segan preview --json`): `lufs` vs. `target_lufs`, `true_peak_dbtp`, `leading_silence_ms`,
    `seam_click`, `onsets_s` (when each hit starts), `pitch_hz` (SFX start/end/min/max), `pitch_check` (songs:
-   every note's detected pitch vs. the written one, in cents; only tracks that play one note at a time),
+   every note's detected pitch vs. the written one, in cents; only tracks that play one note at a time; low notes
+   are also read as their 3rd/5th harmonic; `detune_cents` = an instrument whose notes all share one offset, e.g. a sample
+   recorded slightly sharp: its notes count as off only relative to that),
    `notes_per_pattern` (songs: compare with what you meant to write; a dropped note shows here first),
    `centroid_hz` (brightness), `clipped_samples`, `normalisation_gain_db` (how much the build had to raise or
    lower it: large values are fine, the level is set by the target either way).

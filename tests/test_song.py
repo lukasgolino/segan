@@ -269,3 +269,18 @@ def test_song_sets_its_own_rate_and_channels(project: Project) -> None:
 def test_song_rate_and_channel_errors(project: Project, field: str, message: str) -> None:
     song, findings = load(project, "song", "tune", SONG.replace("variants:", f"{field}\nvariants:"))
     assert song is None and any(f.rule == "E001" and message in f.message for f in findings), findings
+
+
+def test_pitch_check_reads_harmonics_and_sample_detune(project: Project) -> None:
+    """#27: a low note tracked on its 3rd harmonic isn't "-500 cents", and an instrument whose every note sits at
+    the same offset is reported as detuned, not as wrong notes."""
+    from segan.songpreview import _cents_off, pitch_check
+
+    assert abs(_cents_off(3 * 73.42, 73.42)) < 1 and abs(_cents_off(5 * 69.3, 69.3)) < 1  # D2, C#2 on harmonics
+    assert abs(_cents_off(3 * 440.0, 440.0) + 498) < 1  # higher up a 3rd harmonic is still a real error (a fifth)
+    kit = (project.root / "kits" / "t.kit.yaml").read_text()
+    (project.root / "kits" / "t.kit.yaml").write_text(kit.replace("duty: 0.25,", "duty: 0.25, detune: 40,"))
+    song, findings = load(project, "song", "tune", SONG)
+    assert song is not None, findings
+    lead = pitch_check(song, project)["lead"]
+    assert lead["off"] == [] and 30 < lead["detune_cents"]["lead"] < 50 and lead["notes_checked"] >= 3

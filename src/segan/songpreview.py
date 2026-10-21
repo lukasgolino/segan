@@ -77,10 +77,26 @@ def song_sheet(song: Song, output: Output, analysis: dict[str, Any], project: Pr
                      tracks=roll_tracks(song, timeline, variant, output.info.get("tracks")), loop=loop, markers=markers, loudness_curve=True, notes=notes)  # fmt: skip
 
 
+LOW_NOTE_HZ = 131.0  # below C3, pitch trackers lock on the 3rd/5th harmonic of plucked and bowed notes
+DETUNE_MIN_NOTES = 3  # notes of one instrument needed to call a shared offset the sample's own tuning
+
+
+def _cents_off(detected: float, expected: float) -> float:
+    """Detected vs. written pitch in cents, octaves folded; for low notes also read as the 3rd or 5th harmonic
+    (whichever is closest), since that's what the tracker often follows there."""
+    def fold(c: float) -> float:
+        return (c + 600) % 1200 - 600
+
+    candidates = [detected] + ([detected / 3, detected / 5] if expected < LOW_NOTE_HZ else [])
+    return min((fold(1200 * math.log2(c / expected)) for c in candidates), key=abs)
+
+
 def pitch_check(song: Song, project: Project) -> dict[str, Any]:
     """Each roll note of a monophonic track: median detected pitch on the track's dry render vs. the written
-    pitch (cents, octaves folded). Instruments with arpeggios and one-shot samples (they ring over the next
-    notes) are skipped; pitch envelopes, sample attacks and the previous note's release are waited out."""
+    pitch (cents, octaves folded; low notes also as the 3rd/5th harmonic). Instruments with arpeggios and one-shot
+    samples (they ring over the next notes) are skipped; pitch envelopes, sample attacks and the previous note's
+    release are waited out. An instrument whose notes share one offset (a sample recorded a bit sharp or flat) gets
+    `detune_cents`, and its notes count as off only when they're more than 50 cents from that."""
     from segan.synth import is_one_shot
     from segan.kitshow import context_for
     from segan.sequence import song_events
@@ -98,8 +114,7 @@ def pitch_check(song: Song, project: Project) -> dict[str, Any]:
         if not mine or any(a.step + a.note.length > b.step for a, b in zip(mine, mine[1:], strict=False)):
             continue  # chords: one pitch per moment can't be checked this way
         audio = dry[track.name][:, 0]
-        checked, worst = 0, 0.0
-        off: list[dict[str, Any]] = []
+        notes: list[tuple[Any, str, float, float]] = []  # (placed note, instrument key, detected Hz, cents)
         previous_end = -1.0
         for p in mine:
             inst = song.kit.instruments.get(p.key)
@@ -118,11 +133,19 @@ def pitch_check(song: Song, project: Project) -> dict[str, Any]:
             if len(voiced) == 0:
                 continue
             detected = float(np.median(voiced))
-            cents = 1200 * math.log2(detected / midi_to_hz_scalar(p.midi, ctx.tuning))
-            cents = (cents + 600) % 1200 - 600
-            checked += 1
-            worst = max(worst, abs(cents))
-            if abs(cents) > 50 and len(off) < 10:
+            notes.append((p, p.key, detected, _cents_off(detected, midi_to_hz_scalar(p.midi, ctx.tuning))))
+        detune: dict[str, float] = {}
+        for key in sorted({k for _, k, _, _ in notes}):
+            own = [c for _, k, _, c in notes if k == key]
+            if len(own) >= DETUNE_MIN_NOTES and abs(shared := float(np.median(own))) > 10:
+                detune[key] = round(shared, 1)
+        off: list[dict[str, Any]] = []
+        worst = 0.0
+        for p, key, detected, cents in notes:
+            relative = cents - detune.get(key, 0.0)
+            worst = max(worst, abs(relative))
+            if abs(relative) > 50 and len(off) < 10:
                 off.append({"bar": round(timeline.bar_of(p.step), 2), "note": song.key.name(int(p.midi)), "detected_hz": round(detected, 1), "cents": round(cents)})
-        result[track.name] = {"notes_checked": checked, "max_abs_cents": round(worst, 1), "off": off}
+        result[track.name] = {"notes_checked": len(notes), "max_abs_cents": round(worst, 1), "off": off,
+                              **({"detune_cents": {(song.kit.instruments[k].name or k): v for k, v in detune.items()}} if detune else {})}  # fmt: skip
     return result

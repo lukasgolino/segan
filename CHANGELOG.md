@@ -59,6 +59,9 @@ check before upgrading. Patch bumps never change existing behaviour. Every relea
 - `segan init` catches a PAGAN output folder that contains (or sits inside) SEGAN's, including a PAGAN project elsewhere
   in the Godot project (e.g. `game/art/pagan.toml`); with `--godot` the audio then goes to `assets/audio` instead of
   inside PAGAN's `assets/generated` (#12).
+- The preview pitch check reads low notes (below C3) as their 3rd or 5th harmonic when that fits (low harp notes no
+  longer show ~-500 cents), and reports a shared offset of an instrument's notes as `detune_cents` instead of
+  flagging every note (a sample recorded a bit flat) (#27).
 
 ## [0.9.0] - 2026-10-21
 
