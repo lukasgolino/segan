@@ -46,7 +46,7 @@ generated text files.
   - `lint.py` lint (errors from parsing, warnings from source and rendered audio); `yamlwrite.py` YAML writer;
   - `manage.py` long-term management: catalogue (`segan status`), `mark`, `style bump`, `mix adjust` (text edits keep comments);
   - `samples.py` sampled instruments: WAV/SFZ/SF2 readers, zones, variable-rate Hermite playback;
-    `libraries/` sample libraries (`vsco2/`: SEGAN's SFZ maps + library.json; audio fetched on demand into the user cache);
+    `libraries/` sample libraries (`vsco2/`: SEGAN's SFZ maps + library.json; audio fetched on demand into the per-user cache);
   - `api.py` stable Python API for generator scripts (keys, chords, progressions, euclid, arpeggios, Pattern builder, YAML writers);
   - `midi.py` hand-written SMF reader + `segan import midi` (quantize, snap to key, GM -> kit, change report);
   - `mcp_server.py` `segan mcp`: MCP tools/resources/prompts over the CLI handlers (stdout captured, cwd pinned, one lock);
@@ -68,11 +68,11 @@ generated text files.
 - Same as PAGAN's CLAUDE.md unless noted here: Python 3.11+, typed (mypy strict), small modules, every feature
   with tests, deterministic output, `--json`, all findings collected with rule id/file/line/where/fix hint.
 - Modules copied from PAGAN say so in their docstring; port fixes between the two on purpose.
-- Commits: plain `git commit` under the owner's identity, imperative subject. NEVER AI attribution (no
-  Co-Authored-By trailers, no "Generated with" lines). Push to origin main is allowed (owner, 2026-10-19).
+- Commits: plain `git commit` under our identity, imperative subject. NEVER AI attribution (no
+  Co-Authored-By trailers, no "Generated with" lines). Push to origin main is allowed (decided 2026-10-19).
 - Versioning as PAGAN: bump `version` in pyproject.toml, CHANGELOG.md entry (Keep a Changelog), tag `vX.Y.Z`
   for any change to the notation, segan.toml settings, manifest/exporter output or rendered samples.
-- Questions for the owner: ask as you go (tight questions, each with a recommended default).
+- Open questions: ask as you go (tight questions, each with a recommended default).
 - Bugs, feature requests and future work live in GitHub issues (`gh issue list --repo lukasgolino/segan`); games
   report through the `agent-report` template. No plan/report files in the repo.
 - Dependencies: numpy, scipy, Pillow, PyYAML; extras `mcp`, `ogg` (soundfile); dev: pytest, mypy, types-PyYAML, mcp, soundfile.
@@ -142,8 +142,8 @@ generated text files.
   and ignored. The key comes from --key, else the key signature, else Krumhansl-Schmuckler on the notes.
 - 2026-10-19: `segan.api` is versioned (`API_VERSION = 1`); its writers use `yamlwrite.py`, so generated sources
   look hand-written (block style, flow leaves, `|` lanes).
-- 2026-10-19: Release v0.1.0 tagged and pushed (owner directive §14 allows tags; not published to PyPI).
-- 2026-10-19: Samples (owner): WAV + SFZ subset + SF2, hand-written readers. Zones are read at a variable rate with
+- 2026-10-19: Release v0.1.0 tagged and pushed (directive §14 allows tags; not published to PyPI).
+- 2026-10-19: Samples (decided): WAV + SFZ subset + SF2, hand-written readers. Zones are read at a variable rate with
   4-point Hermite at the oversampled rate (high harp notes carry -23 dB above 16 kHz: rendering at the output rate
   would alias when pitched up). Samples are mixed to mono (tracks pan, the room widens). Note velocity 1.0 = MIDI 80.
 - 2026-10-19: Orchestral sounds = VSCO 2 Community Edition (CC0), fetched on demand from a pinned commit and checked
@@ -157,7 +157,7 @@ generated text files.
 - 2026-10-19: ORCHESTRATOR_PLAN S1-S3: song `stems: { groups, mixes, main_mix }` (stems normalised over the loudest
   listed mix; the full mix is normalised on its own), `variations.include_main`, `[room]` sends, `tail_trim_db`.
   S4 unison phases within a quarter turn. Release v0.2.0.
-- 2026-10-20: Long-form music (owner): section changes + `flow` (section graph) + soundtracks + a Godot director.
+- 2026-10-20: Long-form music (decided): section changes + `flow` (section graph) + soundtracks + a Godot director.
   Measured on Godot 4.7.2: AudioStreamWAV has no bpm (Interactive ignores beat/bar sync on WAV clips);
   Interactive auto-advance switches one mix chunk (~11.6 ms) early per clip, cuts tails and ignores `next_clip`
   changed while a clip plays; Playlist without fade glitches 2 frames per seam. So no native Interactive/Playlist
@@ -171,7 +171,7 @@ generated text files.
   the song variant's.
 - 2026-10-20: Soundtracks are their own source type (like kits), not a third asset kind: no render, preview,
   status or MCP surface; lint checks them against the project's songs/SFX; manifest top-level `soundtracks`.
-- 2026-10-20: LOOSE! report (v0.4.0, owner said do all of it). Families: explicit soundtrack `families`, exact
+- 2026-10-20: LOOSE! report (v0.4.0, all of it, as decided). Families: explicit soundtrack `families`, exact
   labels (`song` = the main version only; variants listed as `song.variant`); a state's `crossfade` applies only
   song-to-song inside a family (the next song is picked when the current one starts, so a flow song keeps walking
   past its play time until the bar where the next one comes in). Stem mixes: no per-mix render gain (stems are
@@ -182,7 +182,7 @@ generated text files.
   Measured on Godot 4.7.2: its Vorbis decode = libvorbis's (1.5e-7), same 2-frame playback latency as WAV, and a
   loop restarts at frame floor(loop_offset * rate) after the file's last frame: `loop_offset` = (start + 0.25) / rate.
 - 2026-10-21: ORCHESTRATOR_PLAN.md (open items) and PLAN.md's "Later" list became GitHub issues #1-#35; ORCHESTRATOR_PLAN.md
-  and QUESTIONS.md deleted (owner). Questions are asked as you go instead of logged.
+  and QUESTIONS.md deleted (decided). Questions are asked as you go instead of logged.
 - 2026-10-21: #26: parallel rendering fills the render cache from a process pool (forkserver, else spawn; `SEGAN_JOBS` /
   `-j`, default the CPU count up to 8) before lint/build read it, so every render is the same code path as in one
   process. A song's cache key holds only the kit instruments it plays (notes plus variant/section swap targets).

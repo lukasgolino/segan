@@ -1,11 +1,11 @@
 # PLAN.md — SEGAN (Sound Effect Grammar And Notation)
 
-> **To the agent reading this:** this is your brief for a new tool. Read it fully, then read PAGAN's
+> This is the brief for a new tool. Read it fully, then read PAGAN's
 > `PLAN.md`, `CLAUDE.md` and `src/pagan/skill/` (in `lukasgolino/PAGAN`). The new tool copies PAGAN's
-> design almost one-for-one, so you need to know it. The owner is busy: batch your questions, give each one a
-> recommended default, and keep building on the defaults while you wait for answers.
+> design almost one-for-one, so it needs to be known. We're busy: batch questions, give each one a
+> recommended default, and keep building on the defaults while answers are pending.
 >
-> Name (owner, 2026-10-19, final): **SEGAN** (*Sound Effect Grammar And Notation*). It is PAGAN's
+> Name (decided 2026-10-19, final): **SEGAN** (*Sound Effect Grammar And Notation*). It is PAGAN's
 > **sister library**: same design, conventions and quality bar, with sound instead of pixels. Despite
 > "Sound Effect" in the name, SEGAN covers **both SFX and music** (songs, §5.2). PAGAN lives at
 > `/home/lgolino/repos/PAGAN` (GitHub `lukasgolino/pagan`); read it whenever you need to see how something was done.
@@ -48,7 +48,7 @@ That gives cohesion, and it's something an agent can write as text.
 ## 1. The big picture
 
 SEGAN translates between AI and game audio. Agents write sound as palette-keyed YAML: instrument kits,
-step-grid patterns and parametric SFX. SEGAN lints them, renders previews the agent can *look at*, and builds
+step-grid patterns and parametric SFX. SEGAN lints them, renders previews an agent can *look at*, and builds
 engine-ready assets: WAVs with embedded loop points, `manifest.json`, and Godot resources.
 
 Same principles as PAGAN, unchanged:
@@ -88,7 +88,7 @@ This table is the design. Every PAGAN power has an audio equivalent.
 | `extends` template models | `extends` template SFX/songs | weapon families |
 | `pagan palette adjust` (OKLab) | **`segan mix adjust`** (brightness/EQ tilt, warmth, room, crush, loudness) | everything re-renders |
 | `pagan import png` (snap to palette) | **`segan import midi`** (quantize + snap to scale/kit, with a change report) | |
-| preview PNG / contact sheet / GIF | **listen sheet PNG** + WAV (see §6) | how the agent "looks" at audio |
+| preview PNG / contact sheet / GIF | **listen sheet PNG** + WAV (see §6) | how an agent "looks" at audio |
 | tiling check | **loop-seam check** (end→start splice view + click metric) | |
 | gallery | **gallery** (every SFX side by side + a loudness chart) | catches inconsistencies across the set |
 | `pagan.api` (Canvas, corner_tiles…) | `segan.api` (scales, chords, euclid, arpeggiate, pattern writers) | for generator scripts |
@@ -128,7 +128,7 @@ crush, oversample, normalisation, limiter), `analysis.py` (peak, LUFS, onsets, p
 
 - **numpy** (synthesis, analysis) and **Pillow** (listen sheets), as in PAGAN.
 - **PyYAML**, stdlib `tomllib`, stdlib `wave` (+ hand-written chunks; no audio I/O library needed for WAV).
-- **scipy**: needs owner approval (§12). It provides `scipy.signal.sosfilt` for the filters, the K-weighting
+- **scipy**: needs approval (§12). It provides `scipy.signal.sosfilt` for the filters, the K-weighting
   (BS.1770 LUFS) and resampling/decimation. Pure-Python per-sample IIR loops are ~100× too slow for songs.
   Time-varying filters (filter envelopes) run in 64-sample blocks, carrying filter state (`zi`) across blocks.
 - Optional later: `soundfile` (OGG/Opus export), `mcp` extra (same as PAGAN).
@@ -169,7 +169,7 @@ Instrument fields (all optional except a source):
 - `crush: { bits, rate }` per instrument (the project-wide one is in `[mix]`).
 
 `segan kit show <kit>` renders every instrument playing a test phrase (C-major arpeggio, or a single hit for
-drums) as one listen sheet + WAVs. This is the `palette show` equivalent: the first thing an owner signs off on.
+drums) as one listen sheet + WAVs. This is the `palette show` equivalent: the first thing that gets signed off.
 
 ### 5.2 Song — `music/<name>.song.yaml` (≈ sprite)
 
@@ -315,10 +315,10 @@ Every setting goes in the `settings.py` registry with a default, a meaning and w
 
 ---
 
-## 6. Previews: how the agent "looks" at sound
+## 6. Previews: how an agent "looks" at sound
 
 `segan preview <asset>` writes `<asset>.wav` (for the human) and **`<asset>.listen.png`**, and prints the paths.
-The skill makes the agent open the PNG every iteration. The listen sheet has, top to bottom, all on one time axis:
+The skill has the PNG opened on every iteration. The listen sheet has, top to bottom, all on one time axis:
 
 1. **Header**: name, duration, tempo/key, peak dBFS, integrated LUFS vs. target, true-peak, seam score.
 2. **Arrangement strip** (songs): section/pattern blocks with bar numbers and loop/marker flags.
@@ -335,13 +335,13 @@ and `oversample` are mandatory, §8).
 
 Also:
 - `--json` analysis: onsets (s), per-note detected pitch vs. intended (cents), spectral centroid, peak, LUFS,
-  seam metric, clipping count, leading silence. The agent compares numbers, not just pictures.
+  seam metric, clipping count, leading silence. Numbers get compared, not just pictures.
 - **Seam view** (looping assets): the last 1 s + the first 1 s spliced together, with the splice marked. ≈ tiling check.
 - **Gallery** (`segan gallery`): every SFX's mini sheet in a grid plus a bar chart of LUFS by category. Shows
   "one of these is not like the others" across the whole set.
 - Scope limits: `--from/--to` (bars or seconds), so long songs are previewed one section at a time at readable resolution.
 
-**What the agent can't judge:** whether a melody is good or a sound is pleasant. The skill says so plainly.
+**What can't be judged from the sheet:** whether a melody is good or a sound is pleasant. The skill says so plainly.
 Every asset stays `status: draft` until a human listens and approves. The MCP `preview` tool returns the image
 (Claude can see it) plus the WAV as an MCP audio resource (for clients/humans).
 
@@ -451,8 +451,8 @@ MCP tools mirror PAGAN's 1:1 (`status`, `read_docs`, `write_doc`, `log_feedback`
 
 ## 11. Milestones
 
-Each one ends like PAGAN's: tests + mypy green, CLAUDE.md updated, a summary to the owner listing **which WAVs
-and listen sheets to check**, and a commit (plain git under the owner's identity, never AI attribution, never push unasked).
+Each one ends like PAGAN's: tests + mypy green, CLAUDE.md updated, a summary listing **which WAVs
+and listen sheets to check**, and a commit (plain git under our identity, never AI attribution, never push unasked).
 
 ### ☑ Milestone 0 — Scaffolding
 Repo exists (`/home/lgolino/repos/SEGAN`, GitHub `lukasgolino/segan`, this file is its `PLAN.md`). Copy and adapt PAGAN's infrastructure (§3). CLI skeleton,
@@ -464,18 +464,18 @@ install + mypy + pytest pass and CI is in place.
 drum macros), `oversample` + decimator, `wavio.py` (`smpl`/`cue` chunks), `analysis.py` (peak, LUFS BS.1770,
 onsets, YIN pitch, aliasing metric), `listen.py` (waveform + spectrogram + header), kit parsing/validation,
 `kit show`, `init`, `new kit`. Ship 3 demo kits (e.g. `nes`, `fm_soft`, `arcade_synth`). Golden tests (±1 LSB)
-+ determinism test. **Done when:** the owner listens to the kit-show WAVs and picks/tweaks; aliasing metric < threshold on the pulse/saw tests.
++ determinism test. **Done when:** the kit-show WAVs have been listened to and picked/tweaked; aliasing metric < threshold on the pulse/saw tests.
 
 ### ☑ Milestone 2 — SFX
 SFX format (layers, keyframes, presets, variations, phases, extends), lint E013/W004/W005/W008/W010/W011,
 `render`, `preview` (pitch overlay), `gallery`, `bake sfx`. **Done when:** a fresh agent with only the reference
-makes the 11 preset SFX in `examples/demo/`, they're lint-clean, and the owner approves at least 8 by ear.
+makes the 11 preset SFX in `examples/demo/`, they're lint-clean, and at least 8 are approved by ear.
 
 ### ☑ Milestone 3 — Songs
 Tracks, roll/drum lanes, labels, patterns, derived patterns, sections/arrangement/loop/markers, swing, variants
 + axes, sequencer → events → mix; piano roll + arrangement strip + seam view in the listen sheet; E002–E015,
 W002/W003/W007/W009/W012. **Done when:** two demo loops (exploration + combat), each with a variant, loop without
-a click (W007 clean) and the owner judges them listenable.
+a click (W007 clean) and they're judged listenable.
 
 ### ☑ Milestone 4 — Build + manifest + Godot
 Loudness normalisation + limiter, stems, manifest, stale cleanup, the Godot exporter (§9), example Godot project,
@@ -499,16 +499,16 @@ scope, W009 wording, preset layer ids, API example) was folded into the skill, t
 `import midi` (hand-written SMF parser): quantize to the grid, snap pitches to the key (≈ snap to palette) and
 instruments to the kit (GM program → nearest kit instrument), with a change report (notes moved, dropped, merged).
 
-### ☑ Milestone 8 — Samples (owner request, 2026-10-19)
+### ☑ Milestone 8 — Samples (requested 2026-10-19)
 `sample:` source (WAV, SFZ subset, SF2 via hand-written readers) for kit instruments and SFX layers; the `vsco2`
 library (VSCO 2 CE, CC0) mapped by SEGAN and fetched on demand (pinned, verified, user cache);
 `segan init --style orchestral`; `examples/orchestra` (CI fetches and builds it). Plus ORCHESTRATOR_PLAN S1-S3
 (stem groups/mixes, stems-only/variations-only builds, room sends and tail trim) and the bug reports. v0.2.0.
 
-### ☑ Milestone 9 — Long-form music and soundtracks (owner request, 2026-10-20)
+### ☑ Milestone 9 — Long-form music and soundtracks (requested 2026-10-20)
 
 Problem: a song is one linear arrangement with one loop, so a game hears the same 8-16 bars back to back.
-Owner decisions: section shuffling + cheap long forms; a SEGAN Godot director + manifest; a soundtrack file.
+Decided: section shuffling + cheap long forms; a SEGAN Godot director + manifest; a soundtrack file.
 
 **Measured on Godot 4.7.2 (why a director, not native resources):** `AudioStreamWAV` has no bpm, so
 `AudioStreamInteractive` ignores next-bar/beat timing on WAV clips (a 10-line GDScript `AudioStream` wrapper fixes
@@ -569,9 +569,9 @@ Playlist `.tres` for flows and soundtracks are not generated.
 check on every edge); the director's output in headless Godot equals the clips; the soundtrack lints and lands in
 the manifest; reference.md documents all of it. v0.3.0.
 *(Done 2026-10-20: walk of clips = linear render within 1e-3; director output = concatenated clip files within
-1e-6 in headless Godot 4.7.2; no seam clicks with QOA or a 48 kHz mix rate. Musical quality of flows: owner's ear.)*
+1e-6 in headless Godot 4.7.2; no seam clicks with QOA or a 48 kHz mix rate. Musical quality of flows: judged by ear.)*
 
-### ☑ Milestone 10 — The LOOSE! report (owner request, 2026-10-20)
+### ☑ Milestone 10 — The LOOSE! report (requested 2026-10-20)
 Soundtrack `families` + state `crossfade` (loops of one family flow into each other); stem mix `trim_db` + W017;
 song `sample_rate` / `channels`; `export` "ogg" (music as Ogg Vorbis, `[ogg] quality`, extra `segan[ogg]`);
 W001 song hint. v0.4.0.
@@ -584,7 +584,7 @@ PAGAN ↔ SEGAN link).
 
 ---
 
-## 12. Questions for the owner (defaults used until answered)
+## 12. Open questions (defaults used until answered)
 
 1. ~~Name~~: decided, SEGAN (*Sound Effect Grammar And Notation*). PyPI availability still to be checked (don't publish).
 2. ~~Repo~~: decided, public GitHub repo `lukasgolino/segan` (like `lukasgolino/pagan`); pushing is allowed.
@@ -599,7 +599,7 @@ PAGAN ↔ SEGAN link).
 ## 13. Risks
 
 - **Musical quality** is the real unknown. Mitigation: kits and presets carry most of the quality; songs stay
-  short, loop-based and grid-constrained; humans approve. Get the owner to judge M3 output before investing further in music.
+  short, loop-based and grid-constrained; humans approve. Have M3 output judged by ear before investing further in music.
 - **Agent blind spot**: spectrograms show correctness, not taste. Don't overclaim in the skill.
 - **Copied infrastructure drifts** from PAGAN. Note in each copied module where it came from; port fixes on purpose.
 - **Godot audio resource formats** (`AudioStreamInteractive` especially) are newer and less stable than
@@ -610,21 +610,21 @@ PAGAN ↔ SEGAN link).
 
 ---
 
-## 14. Owner directives (2026-10-19): autonomous build
+## 14. Directives (2026-10-19): autonomous build
 
-The owner is away and won't review as you go. Build SEGAN **to completion (Milestones 0–7)** without waiting:
+We're away and won't review as you go. Build SEGAN **to completion (Milestones 0–7)** without waiting:
 - **Don't block on questions.** Use the defaults in §12 and log every question that's open or decided
-  by default in `QUESTIONS.md` (repo root), each with your recommendation, so the owner can answer in the morning.
+  by default in `QUESTIONS.md` (repo root), each with a recommendation, to be answered in the morning.
   Treat scipy as approved-by-default (log it).
 - **Commit and push** to `origin main` at every milestone (and more often if useful). You may tag releases
   (`v0.1.0`, ...) and push tags, following PAGAN's versioning/CHANGELOG conventions. **Never publish to PyPI.**
-- Commits are plain `git commit` under the owner's configured identity. **Never any AI attribution**: no
+- Commits are plain `git commit` under our configured identity. **Never any AI attribution**: no
   `Co-Authored-By`, no "Generated with ...". A local commit-msg hook rejects these.
 - Keep CI green on GitHub (`gh run list` / `gh run view --log-failed` to check after pushing).
 - Follow PAGAN's principles and conventions (its `CLAUDE.md`), and read `/home/lgolino/repos/PAGAN` whenever
   you need a reference implementation. **Never modify the PAGAN repo.**
-- "Done" means: every milestone's done-criteria met, by your own judgement where the plan says "the owner
-  approves by ear" (you can't hear: use the listen sheets + analysis, and record which assets need the owner's ear in QUESTIONS.md).
+- "Done" means: every milestone's done-criteria met, by your own judgement where the plan says "approved
+  by ear" (you can't hear: use the listen sheets + analysis, and record which assets need a listen in QUESTIONS.md).
 
 ---
 
