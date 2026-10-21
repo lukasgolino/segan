@@ -73,6 +73,7 @@ class Variations:
     timbre: float = 0.0  # 0-1 amount of jitter in duty, filter and envelope times
     gain: float = 0.0  # +/- dB
     include_main: bool = True  # false: build only the variations (the game plays them through a randomizer)
+    timing: float = 0.0  # +/- seconds each layer's start moves (never before 0)
 
 
 @dataclass(frozen=True)
@@ -322,9 +323,9 @@ def parse_sfx(data: dict[str, Any], path: Path | None, project: Project, report:
 def _variations(raw: Any, report: Report, line: int | None) -> Variations | None:
     if raw is None:
         return None
-    allowed = ("count", "seed", "pitch", "timbre", "gain", "include_main")
+    allowed = ("count", "seed", "pitch", "timbre", "gain", "timing", "include_main")
     if not isinstance(raw, dict) or any(k not in allowed for k in raw):
-        report.error("E013", "variations must be { count, seed, pitch (semitones), timbre (0-1), gain (dB), include_main }", line, "variations")
+        report.error("E013", "variations must be { count, seed, pitch (semitones), timbre (0-1), gain (dB), timing (s), include_main }", line, "variations")
         return None
     count, seed = raw.get("count", 4), raw.get("seed", 0)
     pitch, timbre, gain = raw.get("pitch", 0.0), raw.get("timbre", 0.0), raw.get("gain", 0.0)
@@ -334,10 +335,12 @@ def _variations(raw: Any, report: Report, line: int | None) -> Variations | None
         report.error("E013", "variations.seed must be a whole number (change it for a different set)", line, "variations.seed")
     elif not (is_number(pitch) and 0 <= pitch <= 12 and is_number(timbre) and 0 <= timbre <= 1 and is_number(gain) and 0 <= gain <= 12):
         report.error("E013", "variations: pitch 0-12 semitones, timbre 0-1, gain 0-12 dB (each is the most a variation moves)", line, "variations")
+    elif not (is_number(timing := raw.get("timing", 0.0)) and 0 <= timing <= 0.5):
+        report.error("E013", "variations.timing must be 0-0.5 seconds: the most each layer's start moves, earlier or later", line, "variations.timing")
     elif not isinstance(include_main := raw.get("include_main", True), bool):
         report.error("E013", "variations.include_main must be true or false (false: build only <name>.1..N.wav)", line, "variations.include_main")
     else:
-        return Variations(count, seed, float(pitch), float(timbre), float(gain), include_main)
+        return Variations(count, seed, float(pitch), float(timbre), float(gain), include_main, float(timing))
     return None
 
 

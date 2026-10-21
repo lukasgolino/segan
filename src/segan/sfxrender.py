@@ -201,7 +201,8 @@ def render_sfx(sfx: Sfx, project: Project) -> Render:
         emit("", sfx.name, sfx.layers, sfx.duration, sfx.loop, sfx.crossfade)
         if sfx.variations is not None:
             for i, (pitch, timbre, gain) in enumerate(variation_params(sfx.name, sfx.variations), start=1):
-                emit(f"variation:{i}", f"{sfx.name}.{i}", sfx.layers, sfx.duration, sfx.loop, sfx.crossfade, i, pitch, timbre, gain)
+                layers = variation_layers(sfx.name, sfx.layers, sfx.variations, i)
+                emit(f"variation:{i}", f"{sfx.name}.{i}", layers, sfx.duration, sfx.loop, sfx.crossfade, i, pitch, timbre, gain)
     for phase in sfx.phases.values():
         emit(f"phase:{phase.name}", f"{sfx.name}.{phase.name}", phase.layers, phase.duration, phase.loop, phase.crossfade)
     return Render(sfx.name, "sfx", outputs)
@@ -220,6 +221,7 @@ def layer_levels(sfx: Sfx, project: Project, output_id: str) -> list[dict[str, o
     elif output_id.startswith("variation:") and sfx.variations is not None:
         variation = int(output_id.split(":", 1)[1])
         pitch, timbre, _ = variation_params(sfx.name, sfx.variations)[variation - 1]
+        layers = variation_layers(sfx.name, layers, sfx.variations, variation)
     available = duration + (crossfade if loop else 0.0)
     total = round(available * ctx.rate)
 
@@ -242,6 +244,18 @@ def layer_levels(sfx: Sfx, project: Project, output_id: str) -> list[dict[str, o
         out.append({"layer": layer.id or f"layers.{layer.index}", "start_s": layer.start, **levels(placed)})
     out.append({"layer": "(dry mix)", "start_s": 0.0, **(levels(dry) if total else {"peak_db": SILENCE_DB, "lufs": SILENCE_DB, "crest_db": 0.0})})
     return out
+
+
+def variation_layers(name: str, layers: tuple[Layer, ...], v: Variations, variation: int) -> tuple[Layer, ...]:
+    """The layers of one variation: with `timing`, each layer's start moves by up to +/- timing seconds (seeded per
+    layer, never before 0), so bursts and bubbles don't land at the same moments in every variation."""
+    if not v.timing:
+        return layers
+    out = []
+    for layer in layers:
+        jitter = (uniform(seed_of(name, "variation", v.seed, variation, "timing", layer.index), 0) * 2 - 1) * v.timing
+        out.append(replace(layer, start=round(max(0.0, layer.start + jitter), 6)))
+    return tuple(out)
 
 
 def variation_params(name: str, v: Variations) -> list[tuple[float, float, float]]:
