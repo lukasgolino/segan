@@ -19,6 +19,17 @@ check before upgrading. Patch bumps never change existing behaviour. Every relea
 
 ## [Unreleased]
 
+### Added
+
+- W018: an SFX noise layer whose filter removes more than 12 dB of its level (a narrow band-pass), so it plays far
+  quieter than its gain says (#7).
+
+### Changed
+
+- **Rendering:** a distorted SFX layer's `gain` (fixed or keyframes) now applies after `distort`, so changing the
+  gain only changes its level, not its timbre. SFX layers with `distort` sound different; set their gain by ear
+  again (#7).
+
 ## [0.9.0] - 2026-10-21
 
 ### Added

@@ -39,6 +39,7 @@ WARNING_RULES = {
     "W015": "flow section shorter than the ring-out before it",
     "W016": "soundtrack cross-fade between clashing keys",
     "W017": "stem mix can't reach its target",
+    "W018": "a filter removes most of an SFX noise layer's level",
 }
 
 
@@ -244,7 +245,43 @@ def lint_audio(asset: Any, project: Project) -> list[Finding]:
                 found.append(Finding("W011", f"{label}: layer {layer} is still sounding at duration {output.info.get('duration'):g}s and gets cut "
                                      "(a click or a truncated tail): lengthen duration, or shorten the layer's length/release", path, None, f"duration ({layer})"))  # fmt: skip
     found += _asset_aliasing(asset, ctx, cfg.max_aliasing_db)
+    if asset.kind == "sfx":
+        found += _filter_loss(asset, ctx)
     return list(dict.fromkeys(found))
+
+
+FILTER_LOSS_DB = 12.0  # W018
+
+
+def _filter_loss(asset: Any, ctx: Context) -> list[Finding]:
+    """W018: a noise layer whose filter takes away more than 12 dB of its level (a narrow band-pass): it ends up far
+    quieter than its gain suggests. Measured dry, the layer with and without its filter (and cutoff keyframes)."""
+    from dataclasses import replace
+
+    import numpy as np
+
+    from segan.dsp import seed_of
+    from segan.sfxrender import render_layer
+
+    out = []
+    layers = [*asset.layers, *(layer for phase in asset.phases.values() for layer in phase.layers)]
+    for layer in layers:
+        inst = layer.inst
+        if inst.is_drum or inst.is_sample or inst.wave not in ("noise", "bitnoise") or (inst.filter is None and not layer.cutoff):
+            continue  # pitched waves lose level through a band-pass by design (formants); noise is where it surprises
+        seed = seed_of(asset.name, layer.index, 0)
+        available = layer.start + layer.inst.tail() + (layer.length or asset.duration)
+        filtered, _ = render_layer(layer, ctx, available, seed, 0.0, 0.0)
+        plain, _ = render_layer(replace(layer, inst=replace(layer.inst, filter=None), cutoff=None), ctx, available, seed, 0.0, 0.0)
+        power, reference = float(np.mean(filtered**2)), float(np.mean(plain**2))
+        if reference <= 0:
+            continue
+        loss = 10.0 * np.log10(reference / max(power, 1e-30))
+        if loss > FILTER_LOSS_DB:
+            name = layer.id or f"layers.{layer.index}"
+            out.append(Finding("W018", f"layer {name}: its filter removes {loss:.0f} dB of the noise's level (a narrow band-pass or a low cutoff), so it plays far "
+                               "quieter than its gain says: raise its gain to put it back in balance, or widen the filter", asset.path, layer.line, name))  # fmt: skip
+    return out
 
 
 def _asset_aliasing(asset: Any, ctx: Context, threshold: float) -> list[Finding]:
