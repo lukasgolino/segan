@@ -125,7 +125,9 @@ layer has no filter), `distort` (0-1; the layer's `gain` applies after it, so ga
 More SFX fields:
 - `variations`: `count` 1-32, `seed` (change it for a different set), `pitch` (+/- semitones), `timbre` (0-1:
   duty, filter, envelope jitter), `gain` (+/- dB), `timing` (+/- seconds each layer's start moves, 0-0.5; never
-  before 0: bursts and bubbles land at different moments). Each variation is its own WAV, all normalised to the target
+  before 0: bursts and bubbles land at different moments), `envelope` (0-1: each layer's attack/decay/release up to
+  2x longer or shorter), `length` (0-0.5: the whole sound - duration, starts, lengths, keyframe times - up to that
+  much longer or shorter). Each variation is its own WAV, all normalised to the target
   (a +dB variation aims above the target: near the limiter cap it gets W001). `include_main: false` builds only
   `<name>.1..N.wav` (no `<name>.wav`) when the game plays the randomizer.
 - `room: 0-1`: this SFX's room send (x `[mix] room`; 0 = dry, no tail). Default: its category's `[room]` entry, else 1.
@@ -440,7 +442,7 @@ Turn warnings off for one asset with `lint: { disable: [...] }`, project-wide wi
 `tags`, `status`, `style_version`, `sample_rate`, and
 - every audio file as `{ file, seconds, samples, channels, loop }` (`loop` = `{start, end}` in samples, end
   exclusive, or null), `lufs`, `target_lufs`, `limiting_db`;
-- SFX: `dry_seconds` on every one-shot file entry (the sound without its room tail: how long a voice pool should
+- SFX: `lufs`/`target_lufs`/`limiting_db` on the main sound and on each variation; `dry_seconds` on every one-shot file entry (the sound without its room tail: how long a voice pool should
   count it busy; `seconds` includes the tail), `variations` (list, + `pitch_offset_semitones`), `godot_randomizer`, `phases` (name -> file entry);
 - songs: `bpm`, `meter`, `steps_per_beat`, `key`, `beat_seconds`, `beat_count`, `bars`, `sections` (name ->
   start/end in samples, seconds and bars, first occurrence), `arrangement` (every section in order), `markers`

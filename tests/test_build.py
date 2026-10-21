@@ -143,3 +143,12 @@ def test_stems_only_and_variations_only(tmp_path: Path) -> None:
     assert tune["stem_mixes"]["calm"]["stems"] == ["base"] and tune["stems_normalised_over"] == "full"
     assert "sfx/coin.wav" not in manifest["files"] and "music/tune.wav" not in manifest["files"]
     assert not any("mix." in f for f in manifest["files"])
+
+
+def test_manifest_has_each_variations_loudness(tmp_path: Path) -> None:
+    """#16: per-variation `lufs` (and target, limiting) in the manifest, not only in previews."""
+    root = setup(tmp_path)
+    result = build(load_project(root))
+    coin = json.loads((root / "build" / "audio" / "manifest.json").read_text())["assets"]["coin"]
+    assert all(isinstance(v["lufs"], float) and v["target_lufs"] == coin["target_lufs"] for v in coin["variations"])
+    assert not result.errors
