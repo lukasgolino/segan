@@ -146,3 +146,53 @@ Status (v0.4.0, 2026-10-20):
 - Size: `export = [..., "ogg"]` (music as Ogg Vorbis, `[ogg] quality`, ~10x smaller than WAV); song
   `sample_rate` / `channels` for small chip loops.
 - W001 on a song now suggests a quieter category of its own.
+
+## From LOOSE! (2026-10-21, SFX variety and mix on 0.4.0)
+Owner: "The sounds are a bit repetitive... tone them down, more subtle, way more variations of each sound effect."
+- **Structural variations.** `variations` only jitters pitch/timbre/gain of one recipe. To get takes that differ in
+  layers, envelope and length, LOOSE! generates 2-4 separate assets per sound (`impact_wood`, `impact_wood__2`,
+  `impact_wood__3`, each with `variations` x3-4, `include_main: false`) and the game groups them by the `__`
+  suffix. Wanted: a `takes:` list (per-take layer overrides merged by id, own duration) under one asset, all
+  variations in one manifest entry + one randomizer. Also per-variation `lufs` in the manifest (only previews
+  have it) and `variations.envelope` / `variations.length` jitter knobs.
+- **Mix buses / game-side levels.** Categories are loudness targets only. The game had to invent a per-sound
+  dB table, repetition attenuation, per-sound instance caps and rate limits (Godot side). Wanted: `[bus]`
+  definitions (category -> bus + default dB) exported to the manifest / a Godot `AudioBusLayout`, and optional
+  per-SFX playback hints in the manifest (`max_instances`, `min_gap_s`, `repeat_attenuation_db`) a Godot helper
+  could honour.
+- **Godot randomizer can't say "never the same twice" across takes**: one `AudioStreamRandomizer` per asset;
+  with several assets per sound the game has to pick itself. A grouped randomizer (or a `group:` tag) would fix it.
+- **W017 after upgrading 0.2 -> 0.4** fired on 3 percussive stem songs whose quiet bed the game already lifts from
+  `stem_mixes.*.lufs`; had to disable it per song. A project-level `[lint] disable` is all-or-nothing; a
+  per-category disable (`[lint.battle_music] disable = ["W017"]`) would fit.
+- Previews: no way to audition all variations of a sound at once; LOOSE! wrote a reel script (all variation WAVs
+  back to back). A `segan preview <sfx> --output reel` would help humans judge variety.
+
+## From LOOSE! (2026-10-21, serious orchestral score on 0.4.0)
+Owner: "The music is kid-like. It's not a kids game." The pool is being rewritten as a serious minor-key score
+(low string ostinatos, brass calls/swells, war drums), kit `war` (30 vsco2 instruments).
+- **Per-note dynamics in roll lanes.** Only drum lanes have `X` accent / `o` ghost; every roll note is velocity 80.
+  Brass swells, string crescendos, accented spiccato ostinatos (3+3+2) and pp horn calls need it. Wanted: accent
+  and ghost marks in roll lanes (e.g. a per-track `accent_key`/`ghost_key` alias, or a `vel:` lane under a roll
+  track) plus a track `dynamics:` ramp (`[[step, dB], ...]` per pattern, cresc/dim) applied to sample velocity
+  layers and gain.
+- **No choir / vocal pad.** vsco2 has none and kits have no formant/vowel oscillator. A `formant:`/`vowel:` synth
+  (F1/F2/F3 bands on a saw/pulse source, `vowel: [ah, oh]`) usable as a kit instrument would give "low choir" pads
+  (also asked for SFX voices, see the 2026-10-20 log).
+- **No muted brass.** Faked with `trumpet_stac` + band-pass `filter`. A mute preset (straight/cup/harmon EQ +
+  shortened envelope) or a mute sample set would be more convincing.
+- **Sample ranges not discoverable.** `segan samples list` shows only sizes; the lowest/highest key per instrument
+  had to be parsed out of the bundled SFZs. Show ranges in `samples list` and `kit show --json`.
+- **Long one-shot rings double loop files.** timpani_roll / tam_tam / crash / low harp ring so long that
+  `loop.offset` became 8 bars: 8-bar loops rendered as 16-bar (40 s) files. Workaround: kit
+  `sample: { library: vsco2, instrument: x, one_shot: false }` + an env release (note length chokes it). Wanted:
+  per-instrument `max_ring` (choke after N s with a fade) for songs, and/or a project `max_loop_offset_bars` that
+  fades tails longer than that; also a lint hint when the offset exceeds ~2 bars.
+- **Render time / cache granularity.** 25 orchestral songs: ~5 min cold; after any kit edit >10 min, because every
+  song using the kit re-renders even if it doesn't use the changed instrument. Wanted: cache keyed per instrument
+  actually used, and parallel song rendering (`-j`).
+- **pitch_check false positives.** Low harp notes (D2/Db2) report ~-500 cents (locks on the 3rd harmonic); horn_sus
+  G3 reports -51 cents in every song. Wanted: harmonic-aware detection for low plucked notes and a per-instrument
+  tolerance or known sample detune table.
+- **Preview export for humans.** Previews are WAV only; `segan preview --format ogg|mp3` would make sharing
+  auditions with an owner easier.
