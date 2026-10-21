@@ -58,6 +58,11 @@ class LintConfig:
     max_limiting_db: float = 3.0  # W001
     max_dc_offset: float = 0.01  # W008
     loudness_tolerance: float = 1.0  # W013
+    category_disable: dict[str, tuple[str, ...]] = field(default_factory=dict)  # [lint.<category>] disable: warnings off for that category
+
+    def disabled_for(self, category: str | None) -> frozenset[str]:
+        """Warnings off for an asset of `category` (its own `lint: disable` comes on top)."""
+        return frozenset(self.category_disable.get(category or "", ()))
 
 
 @dataclass(frozen=True)
@@ -344,8 +349,20 @@ def _parse_lint(data: Any, error: Callable[[str, str], None]) -> LintConfig:
         "max_dc_offset": (lambda v: _number(v) and 0 < v <= 1, "must be 0-1"),
         "loudness_tolerance": (lambda v: _number(v) and 0 < v <= 20, "must be 0-20 LU"),
     }
+    categories: dict[str, tuple[str, ...]] = {}
+    if isinstance(data, dict):
+        data = dict(data)
+        for key in [k for k, value in data.items() if isinstance(value, dict)]:
+            table = data.pop(key)
+            if not re.fullmatch(r"[a-z][a-z0-9_]*", key) or set(table) - {"disable"}:
+                error(f"[lint.{key}] is a category's own lint settings: only `disable = [\"W017\"]`", f"lint.{key}")
+            elif not rules["disable"][0](table.get("disable", [])):
+                error(f"lint.{key}.disable {rules['disable'][1]}", f"lint.{key}.disable")
+            else:
+                categories[key] = tuple(table.get("disable", []))
     v = _table(data, "lint", LintConfig(), rules, error)
     return LintConfig(
+        category_disable=categories,
         disable=tuple(v["disable"]), max_seam_click=float(v["max_seam_click"]),
         max_leading_silence_ms=float(v["max_leading_silence_ms"]), max_instruments=int(v["max_instruments"]),
         max_aliasing_db=float(v["max_aliasing_db"]), max_limiting_db=float(v["max_limiting_db"]),

@@ -111,7 +111,8 @@ def lint_paths(project: Project, paths: list[Path] | None = None, render: bool =
             continue
         asset, asset_findings = load_asset(path, project)
         if asset is not None:
-            asset_findings = [f for f in asset_findings if not (f.severity == "warning" and f.rule in asset.meta.lint_disable)]
+            off = asset.meta.lint_disable | project.config.lint.disabled_for(getattr(asset, "category", None))
+            asset_findings = [f for f in asset_findings if not (f.severity == "warning" and f.rule in off)]
         findings.extend(asset_findings)
         if asset is None:
             continue
@@ -175,7 +176,8 @@ def lint_asset(asset: Any, project: Project, render: bool = True) -> list[Findin
         found += lint_song_source(asset, project)
     if render and not meta.template:
         found += lint_audio(asset, project)
-    return [f for f in found if f.rule not in meta.lint_disable]
+    off = set(meta.lint_disable) | project.config.lint.disabled_for(getattr(asset, "category", None))
+    return [f for f in found if f.rule not in off]
 
 
 def lint_audio(asset: Any, project: Project) -> list[Finding]:

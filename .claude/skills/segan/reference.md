@@ -434,7 +434,8 @@ pattern, W013 loudness off target with `normalize: false`, W014 a note held long
 it goes silent before it ends, W015 a flow section shorter than the ring-out of a section before it, W016 a
 soundtrack cross-fade between songs in clashing keys, W017 a stem mix that can't reach its target even with its
 trim, W018 an SFX noise layer whose filter removes more than 12 dB of its level (a narrow band-pass): raise its gain.
-Turn warnings off for one asset with `lint: { disable: [...] }`, project-wide with `[lint] disable`.
+Turn warnings off for one asset with `lint: { disable: [...] }`, for every asset of a category with
+`[lint.<category>] disable = ["W017"]` (e.g. `[lint.battle_music]`), project-wide with `[lint] disable`.
 
 ## Build output (any engine)
 
