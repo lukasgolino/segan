@@ -17,6 +17,19 @@ def test_adsr_shape() -> None:
     assert env[999] == 0.5 and env[1500] < 0.5 and env[2999] < 1e-6 and env.min() >= 0
 
 
+def test_adsr_exp_curve_rings_on() -> None:
+    """#5: `curve: exp`: decay falls 60 dB per `decay` seconds and keeps going; release reaches zero at its end."""
+    rate = 10000
+    env = adsr(Env(0.0, 0.1, 0.0, 0.2, "exp"), 5000, 7000, rate, declick=False)
+    assert abs(env[1000] - 0.001) < 1e-9  # -60 dB after one decay time
+    assert 0 < env[2000] < env[1500] < env[1000]  # still falling, never flat at zero while held
+    cubic = adsr(Env(0.0, 0.1, 0.0, 0.2), 5000, 7000, rate, declick=False)
+    assert cubic[1000] == 0.0 and cubic[2000] == 0.0  # the old shape stops dead
+    held = adsr(Env(0.0, 0.0, 0.8, 0.2, "exp"), 1000, 3000, rate, declick=False)
+    assert abs(held[999] - 0.8) < 1e-12 and abs(held[1000 + 1000] - 0.8 * (0.001 ** 0.5 - 0.001) / 0.999) < 1e-9
+    assert held[2999] < 1e-4 and held.min() >= 0 and np.all(np.diff(held[1000:]) <= 0)
+
+
 @pytest.mark.parametrize("wave", ["saw", "pulse"])
 def test_aliasing_below_threshold_at_c7_with_2x(wave: str) -> None:
     inst = Instrument(wave=wave, duty=0.25, env=STEADY)

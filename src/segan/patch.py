@@ -46,9 +46,10 @@ class Env:
     decay: float = 0.1
     sustain: float = 0.7
     release: float = 0.1
+    curve: str = "cubic"  # decay/release shape: "cubic" (1 - x)^3, reaches zero; "exp": decay/release = time to fall 60 dB
 
-    def as_list(self) -> list[float]:
-        return [self.attack, self.decay, self.sustain, self.release]
+    def as_list(self) -> list[float | str]:
+        return [self.attack, self.decay, self.sustain, self.release, *(["exp"] if self.curve == "exp" else [])]
 
 
 @dataclass(frozen=True)
@@ -219,21 +220,29 @@ def number(
     return float(value)
 
 
+ENV_CURVES = ("cubic", "exp")
+
+
 def parse_env(value: Any, report: Report, rule: str, where: str, line: int | None) -> Env | None:
-    """`[attack, decay, sustain, release]` or `{attack, decay, sustain, release}` (seconds, 0-1 sustain)."""
+    """`[attack, decay, sustain, release]` (+ `exp` as a fifth item) or `{attack, decay, sustain, release, curve}`
+    (seconds, 0-1 sustain; curve cubic | exp)."""
     names = ("attack", "decay", "sustain", "release")
+    curve: Any = "cubic"
     if isinstance(value, list):
+        if len(value) == 5:
+            *value, curve = value
         if len(value) != 4 or not all(is_number(v) for v in value):
-            report.error(rule, "env must be [attack, decay, sustain, release] (seconds, seconds, 0-1, seconds)", line, where)
+            report.error(rule, "env must be [attack, decay, sustain, release] (seconds, seconds, 0-1, seconds), optionally + exp", line, where)
             return None
         parts = [float(v) for v in value]
     elif isinstance(value, dict):
-        unknown = [k for k in value if k not in names]
+        unknown = [k for k in value if k not in (*names, "curve")]
         if unknown:
-            report.error(rule, f"unknown env field {unknown[0]!r}; allowed: {', '.join(names)}", line, where)
+            report.error(rule, f"unknown env field {unknown[0]!r}; allowed: {', '.join(names)}, curve", line, where)
             return None
         defaults = Env()
         parts = [float(value.get(n, getattr(defaults, n))) if is_number(value.get(n, 0)) else math.nan for n in names]
+        curve = value.get("curve", "cubic")
     else:
         report.error(rule, "env must be [attack, decay, sustain, release]", line, where)
         return None
@@ -241,7 +250,10 @@ def parse_env(value: Any, report: Report, rule: str, where: str, line: int | Non
     if not all(0 <= t <= 30 for t in (attack, decay, release)) or not 0 <= sustain <= 1:
         report.error(rule, "env times must be 0-30 seconds and sustain 0-1 (e.g. [0.005, 0.1, 0.7, 0.2])", line, where)
         return None
-    return Env(attack, decay, sustain, release)
+    if curve not in ENV_CURVES:
+        report.error(rule, "env curve must be cubic ((1 - x)^3, reaches zero at the end) or exp (decay/release = time to fall 60 dB; rings on)", line, where)
+        return None
+    return Env(attack, decay, sustain, release, curve)
 
 
 def parse_keyframes(

@@ -42,7 +42,7 @@ Instrument fields (a source is required; everything else optional):
 | `duty` | pulse width 0.01-0.99 (0.5 square, 0.25 and 0.125 thinner, NES-like) |
 | `pwm` | `[rate_hz, depth]` pulse-width modulation |
 | `fm` | `{ ratio, index, env }`: modulator frequency ratio (whole numbers = harmonic, e.g. 1, 2; 3.5 = bell-like), modulation index (brightness), optional index envelope |
-| `env` | `[attack, decay, sustain, release]` (seconds, seconds, 0-1, seconds) or `{attack, decay, sustain, release}` |
+| `env` | `[attack, decay, sustain, release]` (seconds, seconds, 0-1, seconds) or `{attack, decay, sustain, release, curve}`; decay/release are (1 - x)^3 and stop at zero; `[..., exp]` / `curve: exp` = exponential: decay = time to fall 60 dB and it rings on (bells, plucks), release = time to -60 dB then zero |
 | `pitch_env` | `[semitones, seconds]` (start that far off and glide to the note) or keyframes `[[t, semitones], ...]` |
 | `vibrato` | `[rate_hz, depth_semitones]` or `[rate, depth, delay_s]` |
 | `tremolo` | `[rate_hz, depth 0-1]` |

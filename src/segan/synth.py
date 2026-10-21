@@ -9,6 +9,8 @@ within 1 LSB across machines.
 
 from __future__ import annotations
 
+import math
+
 from collections.abc import Callable
 from dataclasses import dataclass
 
@@ -52,9 +54,18 @@ class Context:
 
 # --- envelopes ---------------------------------------------------------------------------------
 
+_LOG2_10 = round(math.log2(10.0), 12)
+
+
+def exp10_neg3(x: Signal) -> Signal:
+    """10 ** (-3 x) (-60 dB per unit of x) through the exp2 table, so it's the same on every machine."""
+    return exp2(np.maximum(-1000.0, -3.0 * _LOG2_10 * np.asarray(x, dtype=np.float64)))
+
 
 def adsr(env: Env, n_gate: int, n_total: int, rate: float, declick: bool) -> Signal:
-    """Attack is linear; decay and release follow (1 - x)^3 (exponential-like, reaches zero exactly)."""
+    """Attack is linear; decay and release follow (1 - x)^3 (exponential-like, reaches zero exactly), or with
+    `curve: exp` a true exponential: decay falls 60 dB (towards the sustain) per `decay` seconds and keeps going, so
+    bells ring out instead of stopping dead; release falls 60 dB over `release`, bent to reach zero at its end."""
     attack = max(env.attack, DECLICK_ATTACK) if declick else env.attack
     release = max(env.release, DECLICK_RELEASE) if declick else env.release
     a, d, r = round(attack * rate), round(env.decay * rate), round(release * rate)
@@ -64,15 +75,21 @@ def adsr(env: Env, n_gate: int, n_total: int, rate: float, declick: bool) -> Sig
     if a > 0:
         m = i < a
         out[m] = i[m] / a
+    exp = env.curve == "exp"
     if d > 0:
-        m = (i >= a) & (i < a + d)
+        m = (i >= a) if exp else (i >= a) & (i < a + d)
         x = (i[m] - a) / d
-        out[m] = s + (1.0 - s) * (1.0 - x) ** 3
+        out[m] = s + (1.0 - s) * (exp10_neg3(x) if exp else (1.0 - x) ** 3)
     gate = min(n_gate, n_total)
     if gate < n_total:
         level = out[gate - 1] if gate > 0 else 0.0
         tail = i[gate:] - gate
-        out[gate:] = level * (1.0 - tail / r) ** 3 if r > 0 else 0.0
+        if r <= 0:
+            out[gate:] = 0.0
+        elif exp:
+            out[gate:] = level * (exp10_neg3(tail / r) - 0.001) / 0.999
+        else:
+            out[gate:] = level * (1.0 - tail / r) ** 3
         out[gate:][tail >= r] = 0.0
     return out
 

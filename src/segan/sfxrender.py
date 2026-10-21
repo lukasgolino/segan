@@ -56,7 +56,7 @@ def _jitter(inst: Instrument, amount: float, seed: int) -> Instrument:
     scale = [1.0 + 0.4 * amount * u(i) for i in range(3)]
     changes: dict[str, object] = {
         "duty": min(0.95, max(0.05, inst.duty * (1.0 + 0.3 * amount * u(3)))),
-        "env": Env(env.attack * scale[0], env.decay * scale[1], env.sustain, env.release * scale[2]),
+        "env": Env(env.attack * scale[0], env.decay * scale[1], env.sustain, env.release * scale[2], env.curve),
     }
     if inst.filter is not None:
         changes["filter"] = replace(inst.filter, cutoff=min(20000.0, inst.filter.cutoff * 2.0 ** (amount * u(4))))
