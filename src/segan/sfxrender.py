@@ -10,6 +10,7 @@ from __future__ import annotations
 import math
 from collections.abc import Callable
 from dataclasses import replace
+from typing import Any
 
 import numpy as np
 
@@ -211,7 +212,8 @@ def render_sfx(sfx: Sfx, project: Project) -> Render:
         if sfx.variations is not None:
             for i, (pitch, timbre, gain) in enumerate(variation_params(sfx.name, sfx.variations), start=1):
                 layers = variation_layers(sfx.name, sfx.layers, sfx.variations, i)
-                emit(f"variation:{i}", f"{sfx.name}.{i}", layers, sfx.duration, sfx.loop, sfx.crossfade, i, pitch, timbre, gain)
+                duration = round(sfx.duration * variation_stretch(sfx.name, sfx.variations, i), 6)
+                emit(f"variation:{i}", f"{sfx.name}.{i}", layers, duration, sfx.loop, sfx.crossfade, i, pitch, timbre, gain)
     for phase in sfx.phases.values():
         emit(f"phase:{phase.name}", f"{sfx.name}.{phase.name}", phase.layers, phase.duration, phase.loop, phase.crossfade)
     return Render(sfx.name, "sfx", outputs)
@@ -231,6 +233,7 @@ def layer_levels(sfx: Sfx, project: Project, output_id: str) -> list[dict[str, o
         variation = int(output_id.split(":", 1)[1])
         pitch, timbre, _ = variation_params(sfx.name, sfx.variations)[variation - 1]
         layers = variation_layers(sfx.name, layers, sfx.variations, variation)
+        duration = round(duration * variation_stretch(sfx.name, sfx.variations, variation), 6)
     available = duration + (crossfade if loop else 0.0)
     total = round(available * ctx.rate)
 
@@ -255,15 +258,38 @@ def layer_levels(sfx: Sfx, project: Project, output_id: str) -> list[dict[str, o
     return out
 
 
+def variation_stretch(name: str, v: Variations, variation: int) -> float:
+    """How much `length` stretches one variation (1 = as written)."""
+    return round(1.0 + (uniform(seed_of(name, "variation", v.seed, variation, "length"), 0) * 2 - 1) * v.length, 9) if v.length else 1.0
+
+
 def variation_layers(name: str, layers: tuple[Layer, ...], v: Variations, variation: int) -> tuple[Layer, ...]:
-    """The layers of one variation: with `timing`, each layer's start moves by up to +/- timing seconds (seeded per
-    layer, never before 0), so bursts and bubbles don't land at the same moments in every variation."""
-    if not v.timing:
+    """The layers of one variation: `length` stretches every time in them (start, length, keyframes) by one factor;
+    `timing` then moves each layer's start by up to +/- timing seconds (never before 0), so bursts and bubbles don't
+    land at the same moments; `envelope` scales each layer's attack, decay and release by up to 2x either way."""
+    if not (v.timing or v.envelope or v.length):
         return layers
+    stretch = variation_stretch(name, v, variation)
+
+    def times(frames: tuple[tuple[float, float], ...] | None) -> tuple[tuple[float, float], ...] | None:
+        return None if frames is None else tuple((round(t * stretch, 6), value) for t, value in frames)
+
     out = []
     for layer in layers:
-        jitter = (uniform(seed_of(name, "variation", v.seed, variation, "timing", layer.index), 0) * 2 - 1) * v.timing
-        out.append(replace(layer, start=round(max(0.0, layer.start + jitter), 6)))
+        start = layer.start * stretch
+        if v.timing:
+            start += (uniform(seed_of(name, "variation", v.seed, variation, "timing", layer.index), 0) * 2 - 1) * v.timing
+        changes: dict[str, Any] = {"start": round(max(0.0, start), 6)}
+        if stretch != 1.0:
+            changes.update(pitch=times(layer.pitch), gain=times(layer.gain), cutoff=times(layer.cutoff))
+            if layer.length is not None:
+                changes["length"] = round(layer.length * stretch, 6)
+        if v.envelope:
+            seed = seed_of(name, "variation", v.seed, variation, "envelope", layer.index)
+            env = layer.inst.env
+            a, d, r = (2.0 ** (v.envelope * (uniform(seed, i) * 2 - 1)) for i in range(3))
+            changes["inst"] = replace(layer.inst, env=replace(env, attack=env.attack * a, decay=env.decay * d, release=env.release * r))
+        out.append(replace(layer, **changes))
     return tuple(out)
 
 

@@ -1377,37 +1377,49 @@
           "channels": 1,
           "dry_seconds": 0.12,
           "file": "res://assets/generated/audio/sfx/step.1.wav",
+          "limiting_db": 0.0,
           "loop": null,
+          "lufs": -23.4,
           "pitch_offset_semitones": -0.6557,
           "samples": 21425,
-          "seconds": 0.485828
+          "seconds": 0.485828,
+          "target_lufs": -23.404868
         },
         {
           "channels": 1,
           "dry_seconds": 0.12,
           "file": "res://assets/generated/audio/sfx/step.2.wav",
+          "limiting_db": 0.0,
           "loop": null,
+          "lufs": -22.63,
           "pitch_offset_semitones": -1.3334,
           "samples": 21070,
-          "seconds": 0.477778
+          "seconds": 0.477778,
+          "target_lufs": -22.629501
         },
         {
           "channels": 1,
           "dry_seconds": 0.12,
           "file": "res://assets/generated/audio/sfx/step.3.wav",
+          "limiting_db": 2.44,
           "loop": null,
+          "lufs": -21.99,
           "pitch_offset_semitones": 0.5335,
           "samples": 21393,
-          "seconds": 0.485102
+          "seconds": 0.485102,
+          "target_lufs": -21.000111
         },
         {
           "channels": 1,
           "dry_seconds": 0.12,
           "file": "res://assets/generated/audio/sfx/step.4.wav",
+          "limiting_db": 2.25,
           "loop": null,
+          "lufs": -21.58,
           "pitch_offset_semitones": -0.7165,
           "samples": 19584,
-          "seconds": 0.444082
+          "seconds": 0.444082,
+          "target_lufs": -20.753156
         }
       ]
     }

@@ -211,3 +211,24 @@ def test_distorted_layer_gain_is_balance_not_timbre(project: Project) -> None:
     ramp, _ = load(project, "sfx", "g", text.replace("{gain}", "[[0, 0], [0.2, -12]]"))
     c, _ = render_layer(ramp.layers[0], ctx, 0.2, 1, 0.0, 0.0)
     assert np.abs(c[:200]).max() > 3 * np.abs(c[-200:]).max()  # keyframes still shape it
+
+
+def test_variation_envelope_and_length(project: Project) -> None:
+    """#16: `variations.envelope` scales envelope times per layer, `variations.length` stretches the whole sound."""
+    from segan.sfxrender import variation_layers, variation_stretch
+
+    text = BASIC + "variations: { count: 4, envelope: 0.5, length: 0.3 }\n"
+    sfx, findings = load(project, "sfx", "zap", text)
+    assert sfx is not None, findings
+    v = sfx.variations
+    stretches = [variation_stretch("zap", v, i) for i in range(1, 5)]
+    assert all(0.7 <= s <= 1.3 for s in stretches) and len(set(stretches)) == 4
+    layer = variation_layers("zap", sfx.layers, v, 1)[0]
+    assert layer.pitch is not None and layer.length == round(0.1 * stretches[0], 6) and layer.pitch[1][0] == round(0.15 * stretches[0], 6)
+    base = sfx.layers[0].inst.env
+    assert layer.inst.env != base and 0.5 * base.decay <= layer.inst.env.decay <= 2 ** 0.5 * base.decay
+    render = render_asset(sfx, project, use_cache=False)
+    assert {o.info["duration"] for o in render.outputs[1:]} == {round(0.2 * s, 6) for s in stretches}
+    assert render.main.info["duration"] == 0.2
+    _, findings = load(project, "sfx", "zap", text.replace("length: 0.3", "length: 0.8"))
+    assert rules(findings) == ["E013"]

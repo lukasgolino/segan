@@ -134,6 +134,7 @@ def build(project: Project) -> BuildResult:
                 for output in variations:
                     info = emit(output, "sfx")
                     info["pitch_offset_semitones"] = round(float(output.info.get("pitch_offset", 0.0)), 4)
+                    info.update(_levels(output))  # each variation's own loudness (a +dB variation aims above the target)
                     entry["variations"].append(info)
                 if godot_root is not None:
                     streams = [v["file"] for v in entry["variations"]]
