@@ -182,3 +182,15 @@ def test_variation_timing_moves_layer_starts(project: Project) -> None:
     assert plain is not None and variation_layers("zap", plain.layers, plain.variations, 1) == plain.layers
     _, findings = load(project, "sfx", "zap", text.replace("timing: 0.02", "timing: 1"))
     assert rules(findings) == ["E013"]
+
+
+def test_pitch_cents_offsets(project: Project) -> None:
+    """#6: a note with a cents offset ("A4+15c") in `pitch:` and its keyframes, e.g. for detuned copies of a layer."""
+    text = "name: d\nduration: 0.2\nlayers:\n  - { id: a, osc: saw, pitch: A4 }\n  - { id: b, osc: saw, pitch: A4+15c }\n  - { id: c, osc: saw, pitch: [[0, C6-30c], [0.1, C6+0.5c]] }\n"
+    sfx, findings = load(project, "sfx", "d", text)
+    assert sfx is not None, findings
+    assert sfx.layers[1].pitch == ((0.0, 69.15),)
+    assert sfx.layers[2].pitch == ((0.0, 83.7), (0.1, 84.005))
+    for bad in ("A4+15", "A4+1300c", "H4+10c"):
+        _, findings = load(project, "sfx", "d", text.replace("A4+15c", bad))
+        assert rules(findings) == ["E013"], bad
