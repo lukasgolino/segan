@@ -117,7 +117,8 @@ variations: { count: 4, seed: 7, pitch: 0.5, timbre: 0.1, gain: 1 }   # -> coin.
 ```
 
 Layer fields = instrument fields (above) plus: `id`, `instrument` (a kit key to start from), `start` (s),
-`length` (s), `pitch` (+ `slide`), `gain` keyframes, `cutoff` keyframes (`[[t, Hz], ...]`; adds a low-pass if the
+`length` (s), `pitch` (note, Hz or keyframes; a note can carry a cents offset, `A4+15c` / `C6-30c`, for detuned
+copies of a layer) (+ `slide`), `gain` keyframes, `cutoff` keyframes (`[[t, Hz], ...]`; adds a low-pass if the
 layer has no filter), `distort` (0-1), `ring` (`{ freq: Hz, mix: 0-1 }` ring modulation), `delay`
 (`{ time: s, feedback: 0-0.95, mix: 0-1 }`).
 

@@ -19,6 +19,7 @@ phases:
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from importlib.resources import files
 from pathlib import Path
@@ -125,11 +126,20 @@ def preset_data(name: str) -> dict[str, Any]:
     return data
 
 
+_CENTS_RE = re.compile(r"^(.+?)([+-]\d+(?:\.\d+)?)c$")
+
+
 def _midi_value(value: Any) -> float | None:
-    """A note name or MIDI number as text ("A4"), or a number in Hz."""
+    """A note name or MIDI number as text ("A4"), optionally with a cents offset ("A4+15c", "C6-30c"; up to an
+    octave), or a number in Hz."""
     if isinstance(value, str):
+        cents = 0.0
+        if (match := _CENTS_RE.match(value.strip())) is not None:
+            value, cents = match.group(1), float(match.group(2))
+            if abs(cents) > 1200:
+                return None
         midi = parse_note_value(value)
-        return float(midi) if midi is not None else None
+        return round(float(midi) + cents / 100.0, 9) if midi is not None else None
     if is_number(value) and 20 <= value <= 20000:
         return round(hz_to_midi(float(value)), 9)
     return None
@@ -183,11 +193,11 @@ def parse_layer(raw: Any, index: int, kit: Kit | None, report: Report, where: st
         value = raw["pitch"]
         pline = line_of(raw, "pitch", line)
         if isinstance(value, list):
-            pitch = parse_keyframes(value, report, rule, f"{where}.pitch", pline, _midi_value, "note (A4) or Hz")
+            pitch = parse_keyframes(value, report, rule, f"{where}.pitch", pline, _midi_value, "note (A4, A4+15c) or Hz")
         elif (single := _midi_value(value)) is not None:
             pitch = ((0.0, single),)
         else:
-            report.error(rule, "pitch must be a note (A4), Hz (440) or keyframes [[seconds, note|Hz], ...]", pline, f"{where}.pitch")
+            report.error(rule, "pitch must be a note (A4, or A4+15c with a cents offset), Hz (440) or keyframes [[seconds, note|Hz], ...]", pline, f"{where}.pitch")
     slide = raw.get("slide", False)
     if not isinstance(slide, bool):
         report.error(rule, "slide must be true (glide between pitch keyframes) or false (step)", line_of(raw, "slide", line), f"{where}.slide")
