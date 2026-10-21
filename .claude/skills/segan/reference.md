@@ -354,7 +354,7 @@ tail_trim_db = -70.0          # room tail cut this far below the peak (-40 = sho
 
 [room]                        # room send per category, 0-1 x mix.room (unlisted: 1); e.g. ui = 0 (dry, no tail)
 
-[loudness]                    # LUFS per category (songs: integrated; SFX: loudest 400 ms; unlisted categories, songs too, use sfx)
+[loudness]                    # LUFS per category, -60..-5 (songs: integrated; SFX: loudest 400 ms; unlisted categories, songs too, use sfx)
 music = -16.0
 sfx = -14.0
 ui = -20.0

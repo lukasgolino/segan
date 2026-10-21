@@ -5,6 +5,7 @@ from pathlib import Path
 import pytest
 
 from segan.cli import template
+from segan.findings import SeganError
 from segan.project import Config, parse_config
 from segan.settings import SETTINGS, describe, parse_value, remove_from_toml, set_in_toml
 
@@ -57,3 +58,14 @@ def test_config_cli(in_tmp: Path, capsys: pytest.CaptureFixture[str]) -> None:
     assert code == 0 and data["new"] == 0.15
     code, data = run_json(["config", "set", "mix.wobble", "1"], capsys)
     assert code == 1
+
+
+def test_loudness_targets_reach_minus_60(tmp_path: Path) -> None:
+    """#9: quiet categories (a hover tick at -45 LUFS) are allowed; -60 is the floor."""
+    from segan.project import load_project
+
+    (tmp_path / "segan.toml").write_text('[loudness]\nhover = -45\n')
+    assert load_project(tmp_path).config.target("hover") == -45
+    (tmp_path / "segan.toml").write_text('[loudness]\nhover = -61\n')
+    with pytest.raises(SeganError):
+        load_project(tmp_path)

@@ -22,6 +22,7 @@ MODES = ("strict", "open")
 EXPORTERS = ("wav", "godot", "stems", "ogg")
 SAMPLE_RATES = (22050, 32000, 44100, 48000)
 OVERSAMPLE = (1, 2, 4, 8)
+MIN_TARGET_LUFS = -60.0  # quietest [loudness] target (a hover tick can sit at -45)
 CHANNELS = ("mono", "stereo")
 GODOT_COMPRESS = ("none", "ima", "qoa")
 DEFAULT_LOUDNESS = {"music": -16.0, "sfx": -14.0, "ui": -20.0, "foley": -22.0}
@@ -309,8 +310,8 @@ def _parse_loudness(data: Any, error: Callable[[str, str], None]) -> dict[str, f
     for key, value in data.items():
         if not re.fullmatch(r"[a-z][a-z0-9_]*", key):
             error(f"loudness category {key!r} must be lowercase letters, digits or '_'", f"loudness.{key}")
-        elif not (_number(value) and -40 <= value <= -5):
-            error(f"loudness.{key} must be a target in LUFS, -40..-5 (e.g. -16)", f"loudness.{key}")
+        elif not (_number(value) and MIN_TARGET_LUFS <= value <= -5):
+            error(f"loudness.{key} must be a target in LUFS, {MIN_TARGET_LUFS:g}..-5 (e.g. -16)", f"loudness.{key}")
         else:
             out[key] = float(value)
     return out
