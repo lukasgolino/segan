@@ -147,6 +147,49 @@ More SFX fields:
   target, however quiet or loud the layers are written (`normalisation_gain_db` in the analysis); write gains for
   the balance between layers, not for the absolute level.
 
+### Recorded layers (realistic SFX)
+
+```yaml
+name: lion_roar
+description: "Big cat roar, distant, ~2 s: a CC BY recording pitched down and stretched, with a sub growl."
+duration: 2.2
+layers:
+  - id: roar
+    sample: freesound:123456       # in sounds.lock (`segan sounds add freesound:123456`); or a file: sounds/roar.wav
+    trim: [0.12, 2.0]              # seconds of the file: [start, end] (or just the start)
+    shift: -4                      # semitones, the length stays (-24..24)
+    stretch: 1.15                  # x the length, the pitch stays (0.25-4)
+    fade: [0, 0.4]                 # seconds: [in, out]
+    filter: { type: lp, cutoff: 3000 }
+  - { id: sub, osc: sine, pitch: [[0, A1], [1.6, E1]], slide: true, env: [0.05, 0.6, 0.4, 0.5], gain: -8 }
+variations: { count: 3, seed: 1, gain: 1 }
+```
+
+`sample:` in an SFX layer makes it a **recorded layer** when it is a sound file path (`.wav`, `.ogg`, `.flac`,
+`.mp3`; relative to the project; ogg/flac/mp3 need `pip install "segan[ogg]"`), `freesound:<id>`, or a list of
+them (one is picked per variation, from the seed; the same every render). A recorded layer plays its file as
+recorded: one-shot, mixed to mono, peak-normalised (so `gain` is the balance against the other layers, whatever
+level it was recorded at). Its own fields: `trim`, `reverse: true`, `fade: [in, out]`, `shift` (semitones) and
+`stretch` (x length): pitch and length change **independently** (phase vocoder with phase locking; transients
+soften a little at big stretches). Applied in that order: trim, reverse, stretch/shift, fades. Every other layer
+field works too: `pitch` keyframes are varispeed (C4 = as recorded: `pitch: [[0, C4], [1, G3]]` slows down like
+tape), `gain`/`cutoff` keyframes, `filter`, `env` (default: plays as recorded), `length` (chokes it, then
+`env`'s release), `distort`, `ring`, `delay`, `start`. `osc`/`drum`/`instrument` can't be on a recorded layer:
+synth sounds go on their own layers (they mix freely). The mapping form `sample: { wav: x.wav, root: A4 }` stays
+a pitched sampled instrument.
+
+**Licences** (E020): only CC0 and CC BY (any version), never non-commercial, share-alike or unknown. A Freesound
+sound's licence, author and page come from `sounds.lock`; a local file needs `licence:` (`CC0`, `CC-BY-4.0`, or the
+creativecommons.org URL), `source:` (the page it came from, or "own recording") and, for CC BY, `author:` on
+the layer, or a sounds.lock entry (`segan sounds add sounds/x.wav --licence CC-BY-4.0 --source URL --author NAME`).
+
+**sounds.lock** (next to segan.toml; commit it): one `[sounds."<ref>"]` table per sound with `name`, `author`,
+`licence`, `licence_url`, `url` (the Freesound page) or `source`, `file` (`preview-hq-ogg`, `local`), `download`,
+`sha256`. Freesound files live in the user cache (`$SEGAN_SOUNDS`, else `~/.cache/segan/sounds`), fetched on first
+use and checked against the sha256 (a mismatch is E019); `segan sounds vendor` copies them into
+`<project>/sounds/freesound/`, which builds use first. SEGAN fetches Freesound's HQ Ogg preview (~192 kbit/s;
+the API key alone allows it); originals need an OAuth2 login and aren't supported.
+
 ## Song - `music/<name>.song.yaml`
 
 ```yaml
@@ -366,6 +409,10 @@ foley = -22.0                 # add any category: boss = -12
 [godot]
 compress = "qoa"              # qoa | ima | none
 
+[sfx]
+source = "auto"               # auto: synthesise stylised sounds, record real-world ones (the skill's rule);
+                              # synth: no recordings (W020); recorded: prefer recordings
+
 [ogg]
 quality = 0.4                 # Vorbis quality 0-1 (0.4 is about 128 kbit/s stereo)
 
@@ -391,6 +438,11 @@ asset actually plays, so editing one instrument re-renders only what uses it.
 | `segan init [dir] [--open] [--style chiptune\|synth] [--godot DIR]` | create a project with a starter kit; `--godot` builds into `DIR/assets/generated/audio`, or `DIR/assets/audio` when a PAGAN project there already builds into `assets/generated`; warns when the two output folders are the same or nested |
 | `segan new kit <name>` / `new song <name> [--kit K] [--key "A minor"] [--tempo 120] [--bars 2]` / `new sfx <name> [--preset P] [--kit K]` | starter files (always pass `--description`) |
 | `segan samples list [library\|file.sf2]` / `segan samples fetch <library> <instrument...> [--all]` | sample libraries: instruments, key ranges and what's downloaded / download instruments |
+| `segan sounds search "<query>" [--max-seconds N] [--licence cc0\|cc-by] [--limit 15] [--sort score\|rating_desc\|...]` | Freesound search (needs `FREESOUND_API_KEY`): ref, name, author, licence, duration, rating, tags; only CC0 / CC BY |
+| `segan sounds add freesound:<id>` / `add <file> --licence L --source URL [--author A]` | check the licence, fetch the HQ preview into the user cache, record it in `sounds.lock` (a local file: its licence, source, author) |
+| `segan sounds inspect <ref...>` | length, peak, loudness, brightness (centroid), pitch, onsets of recordings (a Freesound ref is fetched into the cache, not recorded) |
+| `segan sounds credits [--out FILE]` | `SOUND_CREDITS.md`: attribution for every recorded sound (required for CC BY) |
+| `segan sounds vendor [--all]` | copy the Freesound sounds in use into `<project>/sounds/` (offline builds; off by default) |
 | `segan kit show [kits]` | every instrument playing a test phrase: `previews/kits/<kit>.listen.png` + WAVs; `--json` gives each instrument's `range` |
 | `segan lint [paths] [--warnings-as-errors] [--no-render] [-j N]` | errors + warnings (audio warnings render the asset; cached); exits 1 on errors, 0 when there are only warnings, 1 on warnings too with `--warnings-as-errors` (CI) |
 | `segan preview <asset...> [--output main\|variant:X\|variation:N\|phase:X\|stem:T\|mix:M\|flow:CLIP\|walk[:SEED] ...] [--from 5 --to 8]` | WAV + listen sheet (+ seam view for loops) per output in `previews/<asset>/`, analysis in `--json` (SFX: `layers` = each layer dry on its own, `peak_db`/`lufs`/`crest_db`, plus the dry mix); flow songs also get a walk; `--output reel` (an SFX): the main sound and every variation back to back, 0.4 s apart, to judge the variety; `--format ogg\|mp3` also writes each preview compressed, to share (needs `segan[ogg]`) |
@@ -413,6 +465,7 @@ Slow steps print `segan: ...` progress lines on stderr (`--quiet` or `SEGAN_QUIE
 `config_set`/`config_unset`, `kit_list`, `kit_show` (image), `kit_write`, `mix_adjust` (dry run by default),
 `scaffold`, `read_asset`, `write_asset` (writes + lints + listen sheet image), `lint`, `preview` (image: sheet or
 seam; `audio: true` adds the WAV), `gallery` (image), `mark`, `style_bump`, `import_midi` (path or base64),
+`sounds_search`, `sounds_add`, `sounds_inspect`, `sounds_credits` (recorded sounds; search needs `FREESOUND_API_KEY`),
 `build` (`verify_godot` needs `--allow-godot`), `manifest`. Resources: `segan://workflow`, `segan://reference`,
 `segan://brief`, `segan://sound`, `segan://manifest`, `segan://kit/{name}`, `segan://asset/{name}`,
 `segan://audio/{name}`. Prompts: `setup_new_game`, `make_sound`, `change_the_sound`, `review_asset`.
@@ -427,7 +480,8 @@ pattern problem, E011 row label doesn't match its row, E012 duplicate asset name
 notes at once than an instrument's voices, E015 hold with nothing to hold, E016 `stems:` problem (a track in no
 group or two, unknown stem in a mix), E017 `flow:` problem (unknown or unreachable section, dead end, bad weight,
 a section that isn't whole bars), E018 soundtrack problem (unknown state, song, variant, stinger SFX or start
-section; a bad field).
+section; a bad field), E019 recorded sound can't be used (file missing or undecodable, not in sounds.lock, sha256
+mismatch, fetch failed), E020 recorded sound's licence (missing, not CC0/CC BY, no source, CC BY without an author).
 
 Warnings: W001 loudness target out of reach without more limiting than `max_limiting_db` (too short/spiky:
 stagger layer starts 3-9 ms, tame the peakiest layer (`preview --json` `layers`), give it body, or a quieter category; for a percussive song: `category: music_soft` + `music_soft = -19` under
@@ -440,7 +494,7 @@ it goes silent before it ends, W015 a flow section shorter than the ring-out of 
 soundtrack cross-fade between songs in clashing keys, W017 a stem mix that can't reach its target even with its
 trim, W018 an SFX noise layer whose filter removes more than 12 dB of its level (a narrow band-pass): raise its gain,
 W019 a looping song's file runs more than 2 bars past the song because its last notes ring that long: give those
-instruments `max_ring`.
+instruments `max_ring`, W020 a recorded layer in a project with `[sfx] source = "synth"`.
 Turn warnings off for one asset with `lint: { disable: [...] }`, for every asset of a category with
 `[lint.<category>] disable = ["W017"]` (e.g. `[lint.battle_music]`), project-wide with `[lint] disable`.
 

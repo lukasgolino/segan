@@ -19,6 +19,42 @@ check before upgrading. Patch bumps never change existing behaviour. Every relea
 
 ## [Unreleased]
 
+### Added
+
+- Recorded SFX (#58). An SFX layer plays a recording when its `sample:` is a sound file (`.wav`; `.ogg`, `.flac`,
+  `.mp3` with `segan[ogg]`), `freesound:<id>`, or a list of them (one picked per variation, seeded). Recorded layers
+  get `trim`, `reverse`, `fade`, and **independent** `shift` (semitones) and `stretch` (x length): a phase vocoder
+  with identity phase locking plus polyphase resampling, deterministic, numpy/scipy only. Every other layer field
+  still works (varispeed `pitch` keyframes, filters, gain/cutoff keyframes, distort, envelope, variations), and
+  recorded and synth layers mix freely.
+- The licence rule: recorded sounds must be CC0 or CC BY (any version); never non-commercial, share-alike or
+  unknown. E020 when a recorded layer has no allowed licence, no source, or is CC BY without an author (from the
+  layer's `licence`/`source`/`author` fields or its sounds.lock entry). E019 when a recorded sound can't be used
+  (missing, not in sounds.lock, sha256 mismatch, undecodable).
+- `segan sounds search "<query>" [--max-seconds N] [--licence cc0|cc-by]`: Freesound API v2 search with
+  `FREESOUND_API_KEY` (id, name, author, licence, duration, rating, tags; allowed licences only, filtered on the
+  server and again locally). `segan sounds add freesound:<id>` checks the licence, fetches the HQ Ogg preview into
+  the user cache (`$SEGAN_SOUNDS`, else `~/.cache/segan/sounds`) and records it in the project's `sounds.lock`
+  (name, author, licence, page URL, file kind, download URL, sha256); `segan sounds add <file> --licence --source
+  --author` records a local file. Builds fetch missing files into the cache on first use and check the sha256.
+- `segan sounds inspect <ref...>` (length, peak, loudness, spectral centroid, pitch, onsets), `segan sounds credits`
+  (`SOUND_CREDITS.md`: TASL attribution for every recorded sound), `segan sounds vendor` (copies the Freesound
+  sounds in use into `<project>/sounds/`; off by default). MCP tools `sounds_search`, `sounds_add`,
+  `sounds_inspect`, `sounds_credits`.
+- `[sfx] source = "auto" | "synth" | "recorded"` in segan.toml (default `auto`); W020 on a recorded layer when it's
+  `synth`. The skill has the synth-or-record rule (synthesise UI, retro, lasers, magic, sci-fi, stingers; record
+  animals, voices, footsteps, impacts, weapons, fire, water, weather, vehicles, ambience; hybrids), the recorded-SFX
+  workflow (with and without a key) and what a game agent should put in a sound request.
+- Demo: `boss_gong`, a hybrid SFX from a CC0 recording (a VSCO 2 CE gong hit, shifted an octave down and
+  stretched) over synth rumble and sub layers.
+
+### Changed
+
+- **Breaking:** in an SFX layer, `sample: <file>.wav` (the plain string form) is now a recorded layer: one-shot, as
+  recorded, and it needs a licence (E020). The mapping form `sample: { wav: x.wav, root: A4 }` is still a pitched
+  sampled instrument, and kits are unchanged.
+- Listen sheets: a one-shot sample layer's bar runs to the sample's end (it showed only the release).
+
 ## [0.10.0] - 2026-10-21
 
 ### Added

@@ -41,6 +41,7 @@ WARNING_RULES = {
     "W017": "stem mix can't reach its target",
     "W018": "a filter removes most of an SFX noise layer's level",
     "W019": "a looping song's file is over 2 bars longer than the song (long ring-out)",
+    "W020": "a recorded layer in a project set to synthesised SFX only ([sfx] source = \"synth\")",
 }
 
 
@@ -182,6 +183,12 @@ def lint_asset(asset: Any, project: Project, render: bool = True) -> list[Findin
         from segan.songlint import lint_song_source
 
         found += lint_song_source(asset, project)
+    if asset.kind == "sfx" and project.config.sfx.source == "synth":
+        layers = {id(layer): layer for layer in [*asset.layers, *(layer for phase in asset.phases.values() for layer in phase.layers)]}
+        for layer in layers.values():
+            if layer.choices:
+                found.append(Finding("W020", f"layer {layer.id or layer.index} plays a recording, but segan.toml says [sfx] source = \"synth\": synthesise it, "
+                                     "or set source to auto if recordings are fine for this game", asset.path, layer.line, f"layers.{layer.id or layer.index}"))  # fmt: skip
     if render and not meta.template:
         found += lint_audio(asset, project)
     off = set(meta.lint_disable) | project.config.lint.disabled_for(getattr(asset, "category", None))
@@ -307,8 +314,8 @@ def _asset_aliasing(asset: Any, ctx: Context, threshold: float) -> list[Finding]
     """W010: each pitched instrument at the highest note this asset plays."""
     tops: dict[str, tuple[Instrument, int, int | None, str]] = {}
     if asset.kind == "sfx":
-        layers = [*asset.layers, *(layer for phase in asset.phases.values() for layer in phase.layers)]
-        for layer in layers:
+        layers = {id(layer): layer for layer in [*asset.layers, *(layer for phase in asset.phases.values() for layer in phase.layers)]}
+        for layer in layers.values():
             name = layer.id or f"layers.{layer.index}"
             tops[name] = (layer.inst, min(127, round(layer.top_midi())), layer.line, name)
     else:

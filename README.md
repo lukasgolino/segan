@@ -23,6 +23,11 @@ patterns:
   key, so an off-key note can't be written. Row labels are checked, so a missing row can't shift the grid.
 - **SFX are synth layers** with pitch/gain/filter keyframes, 11 presets (coin, jump, laser, explosion, hit, hurt,
   powerup, blip, select, door, step), variations, phases and seamless loops.
+- **Recorded SFX** for real-world sounds: `segan sounds search` finds recordings on Freesound (CC0 and CC BY
+  only), `segan sounds add` records them in `sounds.lock` (fetched into a user cache, checked by sha256, nothing
+  copied into the repo), and an SFX layer plays them (`sample: freesound:<id>` or a file) trimmed, reversed,
+  faded, pitch-shifted and time-stretched independently, layered with synth sounds. `segan sounds credits`
+  writes the attribution CC BY requires. See [examples/demo/sfx/boss_gong.sfx.yaml](examples/demo/sfx/boss_gong.sfx.yaml).
 - **Sampled instruments**: `sample:` plays WAVs, SFZ maps and SoundFonts (`.sf2`), and the `vsco2` library
   (VSCO 2 Community Edition, CC0: string sections, brass, woodwinds, harp, timpani, percussion, piano) downloads
   on demand with `segan samples fetch`. See [examples/orchestra](examples/orchestra).
@@ -43,7 +48,7 @@ Requires Python 3.11+. SEGAN isn't on PyPI yet; install a tagged release from Gi
 ```sh
 pip install "git+https://github.com/lukasgolino/segan.git@v0.10.0"                 # the CLI + library
 pip install "segan[mcp] @ git+https://github.com/lukasgolino/segan.git@v0.10.0"    # + the MCP server
-pip install "segan[ogg] @ git+https://github.com/lukasgolino/segan.git@v0.10.0"    # + Ogg Vorbis music export
+pip install "segan[ogg] @ git+https://github.com/lukasgolino/segan.git@v0.10.0"    # + Ogg Vorbis music export, .ogg/.flac/.mp3 recordings
 segan --version
 ```
 

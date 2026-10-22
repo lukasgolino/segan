@@ -61,6 +61,11 @@ foley = -22.0             # footsteps, cloth, small handling sounds: frequent, s
 [godot]
 compress = "qoa"          # how Godot compresses the WAVs: qoa, ima or none
 
+# Where SFX sounds come from: "auto" synthesises stylised sounds (UI, retro, lasers, magic) and uses recordings for
+# real-world ones (animals, footsteps, impacts, weapons, weather); "synth" never records; "recorded" prefers recordings.
+[sfx]
+source = "auto"
+
 # Only with export "ogg".
 [ogg]
 quality = 0.4             # Vorbis quality 0-1 (0.4 is about 128 kbit/s stereo)

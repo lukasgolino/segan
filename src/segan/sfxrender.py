@@ -103,6 +103,8 @@ def render_layer(layer: Layer, ctx: Context, available: float, seed: int, pitch_
     """One layer at the output rate, at most `available` seconds long; and whether it was still sounding
     when it got cut off (W011)."""
     inst = _jitter(layer.inst, timbre, seed_of(seed, "timbre"))
+    if len(layer.choices) > 1:  # a recorded layer with several files: one per variation, from the seed
+        inst = replace(inst, sample=layer.choices[seed_of(seed, "pick") % len(layer.choices)])
     if layer.length is not None and inst.sample is not None and inst.sample.one_shot is not False:
         inst = replace(inst, sample=replace(inst.sample, one_shot=False))  # an explicit length chokes a one-shot (then its release)
     gate = layer.length if layer.length is not None else max(0.001, available - layer.start - inst.tail())

@@ -1,0 +1,11 @@
+# Recorded sounds this project uses: written by `segan sounds add`; keep it in version control.
+# Builds fetch missing files into the user cache and check each against its sha256.
+
+[sounds."sounds/gong_hit.wav"]
+name = "Gong hit (fff)"
+author = "Sam Gossner (Versilian Studios)"
+licence = "CC0-1.0"
+licence_url = "https://creativecommons.org/publicdomain/zero/1.0/"
+source = "https://github.com/sgossner/VSCO-2-CE (Percussion/gongHit_fff.wav, VSCO 2 Community Edition)"
+file = "local"
+sha256 = "f90d7ccdc26924c034275a098563ce2030094ab5090519d956db0ca88be58d1e"

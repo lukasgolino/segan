@@ -70,6 +70,14 @@ class GodotConfig:
     compress: str = "qoa"
 
 
+SFX_SOURCES = ("auto", "synth", "recorded")
+
+
+@dataclass(frozen=True)
+class SfxConfig:
+    source: str = "auto"  # auto: synthesise stylised sounds, record real-world ones; synth: no recordings; recorded: prefer recordings
+
+
 @dataclass(frozen=True)
 class OggConfig:
     quality: float = 0.4  # Vorbis quality 0-1 (q0-q10 / 10); 0.4 is about 128 kbit/s stereo
@@ -88,6 +96,7 @@ class Config:
     lint: LintConfig = field(default_factory=LintConfig)
     godot: GodotConfig = field(default_factory=GodotConfig)
     ogg: OggConfig = field(default_factory=OggConfig)
+    sfx: SfxConfig = field(default_factory=SfxConfig)
     room: dict[str, float] = field(default_factory=dict)  # category -> room send (0-1, x mix.room)
 
     def target(self, category: str) -> float:
@@ -203,7 +212,7 @@ def parse_config(data: dict[str, Any], path: Path) -> Config:
         findings.append(Finding("E001", message, path, None, where))
 
     defaults = Config()
-    allowed = ("mode", "default_kit", "output_dir", "preview_dir", "export", "style_version", "mix", "loudness", "room", "lint", "godot", "ogg")
+    allowed = ("mode", "default_kit", "output_dir", "preview_dir", "export", "style_version", "mix", "loudness", "room", "lint", "godot", "ogg", "sfx")
     for key in data:
         if key not in allowed:
             error(f"unknown setting {key!r}; allowed: {', '.join(allowed)}", key)
@@ -242,6 +251,7 @@ def parse_config(data: dict[str, Any], path: Path) -> Config:
     lint = _parse_lint(data.get("lint", {}), error)
     godot = _parse_godot(data.get("godot", {}), error)
     ogg = _parse_ogg(data.get("ogg", {}), error)
+    sfx = _parse_sfx(data.get("sfx", {}), error)
     if findings:
         raise SeganError(findings)
     return Config(
@@ -256,6 +266,7 @@ def parse_config(data: dict[str, Any], path: Path) -> Config:
         lint=lint,
         godot=godot,
         ogg=ogg,
+        sfx=sfx,
         room=room,
     )
 
@@ -380,3 +391,9 @@ def _parse_ogg(data: Any, error: Callable[[str, str], None]) -> OggConfig:
     rules: dict[str, tuple[Check, str]] = {"quality": (lambda v: _number(v) and 0 <= v <= 1, "must be 0-1 (Vorbis q0-q10 / 10)")}
     v = _table(data, "ogg", OggConfig(), rules, error)
     return OggConfig(quality=float(v["quality"]))
+
+
+def _parse_sfx(data: Any, error: Callable[[str, str], None]) -> SfxConfig:
+    rules: dict[str, tuple[Check, str]] = {"source": (lambda v: v in SFX_SOURCES, f"must be one of {', '.join(SFX_SOURCES)}")}
+    v = _table(data, "sfx", SfxConfig(), rules, error)
+    return SfxConfig(source=v["source"])

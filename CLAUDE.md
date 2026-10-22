@@ -47,6 +47,9 @@ generated text files.
   - `manage.py` long-term management: catalogue (`segan status`), `mark`, `style bump`, `mix adjust` (text edits keep comments);
   - `samples.py` sampled instruments: WAV/SFZ/SF2 readers, zones, variable-rate Hermite playback;
     `libraries/` sample libraries (`vsco2/`: SEGAN's SFZ maps + library.json; audio fetched on demand into the per-user cache);
+  - `recorded.py` recorded sounds for SFX layers (decode, trim/reverse/fades, peak-normalise); `stretch.py` phase
+    vocoder time-stretch + pitch-shift; `licences.py` the CC0/CC BY rule; `sounds.py` Freesound API, user cache,
+    `sounds.lock`, credits, vendoring (`segan sounds`);
   - `api.py` stable Python API for generator scripts (keys, chords, progressions, euclid, arpeggios, Pattern builder, YAML writers);
   - `midi.py` hand-written SMF reader + `segan import midi` (quantize, snap to key, GM -> kit, change report);
   - `mcp_server.py` `segan mcp`: MCP tools/resources/prompts over the CLI handlers (stdout captured, cwd pinned, one lock);
@@ -186,3 +189,11 @@ generated text files.
 - 2026-10-21: #26: parallel rendering fills the render cache from a process pool (forkserver, else spawn; `SEGAN_JOBS` /
   `-j`, default the CPU count up to 8) before lint/build read it, so every render is the same code path as in one
   process. A song's cache key holds only the kit instruments it plays (notes plus variant/section swap targets).
+- 2026-10-22: #58 recorded SFX. A layer's string `sample:` naming a sound file or `freesound:<id>` (or a list) is a
+  recorded layer (kind "rec": one-shot, mono, peak-normalised, played through the sample path so every layer field
+  works); the mapping form stays a pitched instrument. Shift/stretch = phase vocoder (2048 at 44.1 kHz, hop/4, IF
+  from a second frame N/8 later, identity phase locking) + `resample_poly`. Licences: CC0 and CC BY only (E020).
+  Freesound: `/apiv2/search/` (the docs deprecate `/apiv1/search/text`), token in the `Authorization` header, HQ Ogg
+  previews only (originals need OAuth2: not done). Licence filter `license:("Creative Commons 0" OR "Attribution")`
+  plus a local check of every result. Fetched files in `$SEGAN_SOUNDS`/`~/.cache/segan/sounds`, pinned by sha256
+  in the project's `sounds.lock` (TOML).
