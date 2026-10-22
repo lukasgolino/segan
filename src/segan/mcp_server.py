@@ -46,10 +46,12 @@ DOCS = ("BRIEF.md", "SOUND.md")
 
 READ = ToolAnnotations(read_only_hint=True, destructive_hint=False, idempotent_hint=True, open_world_hint=False)
 WRITE = ToolAnnotations(read_only_hint=False, destructive_hint=False, idempotent_hint=True, open_world_hint=False)
+ONLINE = ToolAnnotations(read_only_hint=True, destructive_hint=False, idempotent_hint=True, open_world_hint=True)
+FETCH = ToolAnnotations(read_only_hint=False, destructive_hint=False, idempotent_hint=True, open_world_hint=True)
 OVERWRITE = ToolAnnotations(read_only_hint=False, destructive_hint=True, idempotent_hint=True, open_world_hint=False)
 
 INSTRUCTIONS = """\
-SEGAN turns text into game audio: instrument kits, songs (step grids) and SFX (synth layers) written as YAML,
+SEGAN turns text into game audio: instrument kits, songs (step grids) and SFX (synth layers, recordings) written as YAML,
 linted, previewed as listen sheets and built into WAVs + engine resources. Read segan://workflow first (notation:
 segan://reference). Call `status` and `read_docs` (BRIEF.md, SOUND.md) before making anything.
 Loop: `scaffold` -> `write_asset` (lints it, returns the listen sheet) -> fix findings -> `preview` and LOOK at the
@@ -368,6 +370,41 @@ def create_server(root: Path, allow_godot: bool = False) -> MCPServer:
                 result["analysis"] = outputs[0].get("analysis")
                 picture = _image(segan.root / sheet)
         return _with_media(result, picture)
+
+    # --- recorded sounds -------------------------------------------------------------------
+
+    @server.tool(annotations=ONLINE)
+    def sounds_search(query: str, max_seconds: float | None = None, licence: Literal["cc0", "cc-by"] | None = None, limit: int = 15) -> dict[str, Any]:
+        """Search Freesound for recordings (needs FREESOUND_API_KEY on the server). Only CC0 and CC BY sounds come
+        back. Each result: ref (freesound:<id>), name, author, licence, duration, rating, tags. Compare candidates with
+        `sounds_inspect`, keep one with `sounds_add`, then use it in an SFX layer as `sample: freesound:<id>`."""
+        argv = ["sounds", "search", query, "--limit", str(limit)]
+        if max_seconds is not None:
+            argv += ["--max-seconds", str(max_seconds)]
+        if licence is not None:
+            argv += ["--licence", licence]
+        return segan.cli(*argv)
+
+    @server.tool(annotations=FETCH)
+    def sounds_add(ref: str, licence: str | None = None, source: str | None = None, author: str | None = None, name: str | None = None) -> dict[str, Any]:
+        """Record a sound in the project's sounds.lock: `freesound:<id>` (licence checked, HQ preview fetched into the
+        user cache), or a sound file in the project with its licence (CC0 / CC-BY-4.0), source (URL) and author."""
+        argv = ["sounds", "add", ref]
+        for flag, value in (("--licence", licence), ("--source", source), ("--author", author), ("--name", name)):
+            if value is not None:
+                argv += [flag, value]
+        return segan.cli(*argv)
+
+    @server.tool(annotations=ONLINE)
+    def sounds_inspect(refs: list[str]) -> dict[str, Any]:
+        """Length, loudness, peak, brightness (spectral centroid), pitch and onsets of recordings (freesound:<id> or
+        project files), so candidates can be compared without hearing them."""
+        return segan.cli("sounds", "inspect", *refs)
+
+    @server.tool(annotations=WRITE)
+    def sounds_credits() -> dict[str, Any]:
+        """Write SOUND_CREDITS.md (the attribution CC BY requires) from sounds.lock and the SFX's recorded layers."""
+        return segan.cli("sounds", "credits")
 
     @server.tool(annotations=READ)
     def lint(assets: list[str] | None = None) -> dict[str, Any]:

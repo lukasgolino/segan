@@ -18,6 +18,24 @@
       "tags": [],
       "target_lufs": -20.0
     },
+    "boss_gong": {
+      "category": "sfx",
+      "channels": 1,
+      "description": "Boss-reveal gong: a recorded gong hit an octave down and stretched into a long roll, low-passed, over a synth rumble and sub thump (hybrid: recording + synth).",
+      "dry_seconds": 3.6,
+      "file": "res://assets/generated/audio/sfx/boss_gong.wav",
+      "kind": "sfx",
+      "limiting_db": 0.0,
+      "loop": null,
+      "lufs": -14.0,
+      "sample_rate": 44100,
+      "samples": 158760,
+      "seconds": 3.6,
+      "status": "draft",
+      "style_version": 1,
+      "tags": [],
+      "target_lufs": -14.0
+    },
     "coin": {
       "category": "pickup",
       "channels": 1,
@@ -1470,6 +1488,7 @@
     "music/shop.wav",
     "segan_music.gd",
     "sfx/blip.wav",
+    "sfx/boss_gong.wav",
     "sfx/coin.wav",
     "sfx/door.wav",
     "sfx/door_creak.wav",

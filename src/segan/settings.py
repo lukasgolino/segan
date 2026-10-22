@@ -69,6 +69,7 @@ SETTINGS: tuple[Setting, ...] = (
     Setting("lint.max_dc_offset", 0.01, "W008: largest DC offset (fraction of full scale)", "lint"),
     Setting("lint.loudness_tolerance", 1.0, "W013: how far (LU) an un-normalised asset may be from its target", "lint"),
     Setting("godot.compress", "qoa", 'how Godot compresses imported WAVs: "qoa" (default, good), "ima" (IMA-ADPCM), "none"', "build"),
+    Setting("sfx.source", "auto", 'where SFX sounds come from: "auto" (synthesise stylised sounds, record real-world ones; see the skill), "synth" (no recordings: W020 on recorded layers), "recorded" (prefer recordings)', "lint"),
     Setting("ogg.quality", 0.4, 'Vorbis quality 0-1 for export "ogg" (0.4 is about 128 kbit/s stereo, 10x smaller than WAV)', "build"),
 )
 BY_KEY = {s.key: s for s in SETTINGS}

@@ -1,0 +1,25 @@
+name: boss_gong
+description: "Boss-reveal gong: a recorded gong hit an octave down and stretched into a long roll, low-passed, over a synth rumble and sub thump (hybrid: recording + synth)."
+category: sfx
+duration: 3.6
+layers:
+  - id: gong
+    sample: sounds/gong_hit.wav     # CC0, recorded in sounds.lock
+    shift: -12                      # an octave down, same length
+    stretch: 1.3                    # longer roll, same pitch
+    fade: [0.01, 1.2]
+    filter: { type: lp, cutoff: 2400 }
+  - id: rumble
+    osc: noise
+    filter: { type: lp, cutoff: 1200 }
+    env: [0.25, 1.2, 0.3, 1.4]
+    length: 1.6
+    gain: -8
+  - id: sub
+    osc: sine
+    pitch: [[0, A1], [0.8, E1]]
+    slide: true
+    env: [0.005, 0.5, 0.0, 0.3]
+    gain: -6
+status: draft
+style_version: 1

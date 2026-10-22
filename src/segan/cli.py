@@ -318,6 +318,149 @@ def cmd_samples_fetch(args: argparse.Namespace, out: Output) -> int:
     return 0
 
 
+# --- segan sounds ------------------------------------------------------------------------------
+
+
+def _sounds_error(exc: Exception) -> SeganError:
+    return usage_error(str(exc))
+
+
+def used_sounds(project: Project) -> tuple[dict[str, list[str]], dict[str, dict[str, Any]]]:
+    """Recorded sounds the project's SFX play: {lock key: [sfx names]}, and what their layers say about the ones
+    not in sounds.lock (licence, source, author)."""
+    from segan.asset import load_asset
+    from segan.lint import source_files
+    from segan.sounds import lock_key
+
+    used: dict[str, list[str]] = {}
+    declared: dict[str, dict[str, Any]] = {}
+    for path in source_files(project, [project.sfx_dir]):
+        if not path.name.endswith(SFX_SUFFIX):
+            continue
+        asset, _ = load_asset(path, project)
+        if asset is None:
+            continue
+        layers = [*asset.layers, *(layer for phase in asset.phases.values() for layer in phase.layers)]
+        for layer in layers:
+            for sound in layer.recorded:
+                key = lock_key(sound.ref, project.root)
+                names = used.setdefault(key, [])
+                if asset.name not in names:
+                    names.append(asset.name)
+                declared.setdefault(key, {k: v for k, v in (("name", sound.name or Path(sound.ref).stem), ("author", sound.author),
+                                                            ("licence", sound.licence), ("source", sound.source)) if v})  # fmt: skip
+    return used, declared
+
+
+def cmd_sounds_search(args: argparse.Namespace, out: Output) -> int:
+    from segan import sounds
+
+    licences = tuple(dict.fromkeys(args.licence or ["cc0", "cc-by"]))
+    try:
+        found = sounds.search(args.query, args.max_seconds, licences, args.limit, args.sort)
+    except sounds.SoundsError as exc:
+        raise _sounds_error(exc) from None
+    rows = [{k: v for k, v in row.items() if k not in ("previews", "licence_given")} for row in found["results"]]
+    out.say(f"{found['count']} matches on Freesound ({', '.join(licences)}); showing {len(rows)}" + (f", {found['refused']} refused (licence)" if found["refused"] else ""))
+    for row in rows:
+        out.say(f"  {row['ref']:<17} {row['duration']:6.2f}s  {row['licence']:<10} {row['rating']:.1f}*({row['ratings']:>3})  {row['author']}: {row['name']}")
+        if row["tags"]:
+            out.say(f"  {'':<17} tags: {' '.join(row['tags'][:12])}")
+    if rows:
+        out.say("Compare with `segan sounds inspect <ref>`; keep one with `segan sounds add <ref>`.")
+    out.result({"query": args.query, "count": found["count"], "refused": found["refused"], "results": rows})
+    return 0
+
+
+def cmd_sounds_add(args: argparse.Namespace, out: Output) -> int:
+    from segan import sounds
+
+    project = require_project()
+    try:
+        key, entry = sounds.add(args.ref, project.root, args.format, args.licence, args.source, args.author, args.name)
+    except sounds.SoundsError as exc:
+        raise _sounds_error(exc) from None
+    out.say(f"added {key}: {entry['name']!r}" + (f" by {entry['author']}" if entry.get("author") else "") + f", {entry['licence']} -> {sounds.LOCK_NAME}")
+    out.say(f"use it in an SFX layer as sample: {key}" + ("  (CC BY: `segan sounds credits` writes the attribution)" if entry["licence"].startswith("CC-BY") else ""))
+    out.result({"ref": key, "entry": entry, "lock": str(project.root / sounds.LOCK_NAME)})
+    return 0
+
+
+def _sound_file(ref: str, root: Path) -> tuple[Path, dict[str, Any] | None]:
+    """The file to inspect: a locked or local sound, or a Freesound sound fetched into the cache (not locked)."""
+    from segan import sounds
+
+    sound_id = sounds.freesound_id(ref)
+    entry = sounds.lock_entry(root, ref)
+    if sound_id is not None and entry is None:
+        path, row, _ = sounds.fetch_freesound(sound_id)
+        return path, {k: row[k] for k in ("name", "author", "licence", "url")}
+    if sound_id is None and not (root / ref).is_file() and Path(ref).is_file():
+        return Path(ref).resolve(), entry
+    return sounds.resolve(ref, root), entry
+
+
+def cmd_sounds_inspect(args: argparse.Namespace, out: Output) -> int:
+    from segan import sounds
+    from segan.recorded import inspect
+    from segan.samples import SampleError
+
+    root = find_project_root(Path.cwd()) or Path.cwd()
+    results = []
+    for ref in args.refs:
+        try:
+            path, entry = _sound_file(ref, root)
+            info = inspect(str(path))
+        except (sounds.SoundsError, SampleError) as exc:
+            raise _sounds_error(exc) from None
+        info = {"ref": ref, **info, **({"about": entry} if entry else {})}
+        results.append(info)
+        pitch = info["pitch"]
+        pitch_text = f"{pitch['note']}{pitch['cents']:+d}c ({pitch['hz']} Hz, voiced {pitch['voiced']:.0%})" if isinstance(pitch, dict) else "none (noisy/unpitched)"
+        onsets = info["onsets_s"]
+        assert isinstance(onsets, list)
+        out.say(f"{ref}: {info['seconds']}s @ {info['sample_rate']} Hz, peak {info['peak_dbfs']} dBFS, {info['lufs_max_momentary']} LUFS (max momentary), "
+                f"centroid {info['centroid_hz']:.0f} Hz, pitch {pitch_text}, {len(onsets)} onsets" + (f" at {', '.join(f'{t:g}' for t in onsets[:8])}s" if onsets else ""))  # fmt: skip
+    out.result({"sounds": results})
+    return 0
+
+
+def cmd_sounds_credits(args: argparse.Namespace, out: Output) -> int:
+    from segan import sounds
+
+    project = require_project()
+    try:
+        entries = dict(sounds.read_lock(project.root))
+    except sounds.SoundsError as exc:
+        raise _sounds_error(exc) from None
+    used, declared = used_sounds(project)
+    for key, meta in declared.items():
+        entries.setdefault(key, meta)
+    target = Path(args.out) if args.out else project.root / "SOUND_CREDITS.md"
+    text = sounds.credits_text(entries, used)
+    target.write_text(text, encoding="utf-8")
+    need = sorted(k for k, v in entries.items() if str(v.get("licence", "")).startswith("CC-BY"))
+    out.say(f"wrote {display_path(target)}: {len(entries)} sounds, {len(need)} need attribution (CC BY): ship it with the game's credits")
+    out.result({"written": display_path(target), "sounds": len(entries), "attribution_required": need, "unused": sorted(set(entries) - set(used))})
+    return 0
+
+
+def cmd_sounds_vendor(args: argparse.Namespace, out: Output) -> int:
+    from segan import sounds
+
+    project = require_project()
+    try:
+        refs = list(sounds.read_lock(project.root)) if args.all else list(used_sounds(project)[0])
+        copied = sounds.vendor(project.root, refs)
+    except sounds.SoundsError as exc:
+        raise _sounds_error(exc) from None
+    for ref, path in copied:
+        out.say(f"copied {ref} -> {display_path(path)}")
+    out.say(f"{len(copied)} copied into {sounds.VENDOR_DIR}/ (builds use these before the cache); commit them for offline builds")
+    out.result({"copied": [{"ref": ref, "path": display_path(path)} for ref, path in copied]})
+    return 0
+
+
 def _instrument_range(inst: Instrument) -> list[str] | None:
     """The notes an instrument plays: its `range`, else (samples) the keys its zones map; None = any / unpitched."""
     if inst.range is not None:
@@ -1157,6 +1300,34 @@ def build_parser() -> argparse.ArgumentParser:
     samples_fetch.add_argument("instruments", nargs="*", help="instrument names (see `segan samples list`)")
     samples_fetch.add_argument("--all", action="store_true", help="every instrument in the library")
     samples_fetch.set_defaults(handler=cmd_samples_fetch)
+
+    snd = commands.add_parser("sounds", help="recorded sounds for SFX: Freesound search, sounds.lock, credits")
+    snd_cmds = snd.add_subparsers(title="sounds commands", metavar="<command>")
+    snd_search = snd_cmds.add_parser("search", parents=[common], help="search Freesound (needs FREESOUND_API_KEY); only CC0 / CC BY")
+    snd_search.add_argument("query", help='what to find, e.g. "lion roar"')
+    snd_search.add_argument("--max-seconds", type=float, help="only sounds up to this long")
+    snd_search.add_argument("--licence", "--license", action="append", choices=["cc0", "cc-by"], help="only this licence (repeat for both; default both)")
+    snd_search.add_argument("--limit", type=int, default=15, help="results to show (default 15, at most 150)")
+    snd_search.add_argument("--sort", default="score", choices=["score", "rating_desc", "downloads_desc", "duration_asc", "duration_desc", "created_desc"],
+                            help="order (default: relevance)")  # fmt: skip
+    snd_search.set_defaults(handler=cmd_sounds_search)
+    snd_add = snd_cmds.add_parser("add", parents=[common], help="record a sound in sounds.lock (freesound:<id> is fetched into the user cache)")
+    snd_add.add_argument("ref", help="freesound:<id>, or a sound file in the project")
+    snd_add.add_argument("--format", choices=["ogg", "mp3"], default="ogg", help="Freesound preview to fetch (default: HQ ogg)")
+    snd_add.add_argument("--licence", "--license", help="a local file's licence: CC0 or CC-BY-4.0 (or its creativecommons.org URL)")
+    snd_add.add_argument("--source", help='a local file\'s origin: the page it came from, or "own recording"')
+    snd_add.add_argument("--author", help="a local file's author (required for CC BY)")
+    snd_add.add_argument("--name", help="title for the credits (default: Freesound's name or the file name)")
+    snd_add.set_defaults(handler=cmd_sounds_add)
+    snd_inspect = snd_cmds.add_parser("inspect", parents=[common], help="length, loudness, peak, brightness, pitch and onsets of sounds")
+    snd_inspect.add_argument("refs", nargs="+", help="freesound:<id> (fetched into the cache if needed) or sound files")
+    snd_inspect.set_defaults(handler=cmd_sounds_inspect)
+    snd_credits = snd_cmds.add_parser("credits", parents=[common], help="write the attribution file (CC BY needs it) from sounds.lock")
+    snd_credits.add_argument("--out", help="output file (default: SOUND_CREDITS.md in the project)")
+    snd_credits.set_defaults(handler=cmd_sounds_credits)
+    snd_vendor = snd_cmds.add_parser("vendor", parents=[common], help="copy the Freesound sounds in use into <project>/sounds/ (offline builds)")
+    snd_vendor.add_argument("--all", action="store_true", help="every sound in sounds.lock, used or not")
+    snd_vendor.set_defaults(handler=cmd_sounds_vendor)
 
     kit = commands.add_parser("kit", help="kit tools")
     kit_cmds = kit.add_subparsers(title="kit commands", metavar="<command>")

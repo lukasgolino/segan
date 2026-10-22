@@ -1,12 +1,12 @@
 ---
 name: segan
-description: Make and maintain game audio with SEGAN (Sound Effect Grammar And Notation) - sound effects (coin, jump, laser, explosion, hit, footsteps, doors, UI blips, engine hums), music loops and long-form soundtracks (exploration, combat, menus, shops, jingles; section graphs, game states, transitions), instrument kits, adaptive stems and variants - and change a game's sound over time (brighter, warmer, more reverb, lo-fi, louder or quieter). Use whenever a user or an orchestrating agent asks for game audio, a sound, an SFX, music, a song, a loop, a jingle or a kit, or mentions segan / segan.toml.
+description: Make and maintain game audio with SEGAN (Sound Effect Grammar And Notation) - sound effects (coin, jump, laser, explosion, hit, footsteps, doors, UI blips, engine hums), music loops and long-form soundtracks (exploration, combat, menus, shops, jingles; section graphs, game states, transitions), instrument kits, adaptive stems and variants, realistic SFX from recordings (Freesound, CC0/CC BY) - and change a game's sound over time (brighter, warmer, more reverb, lo-fi, louder or quieter). Use whenever a user or an orchestrating agent asks for game audio, a sound, an SFX, music, a song, a loop, a jingle or a kit, or mentions segan / segan.toml.
 ---
 
 # SEGAN: making game audio as text
 
 SEGAN turns text into game audio. You write instrument kits, songs (step grids, like pixel grids) and SFX
-(synth layers) in YAML; the `segan` CLI lints them, renders **listen sheets** (PNG pictures of the sound) and
+(synth layers and processed recordings) in YAML; the `segan` CLI lints them, renders **listen sheets** (PNG pictures of the sound) and
 numbers you can check, and builds engine-ready WAVs, `manifest.json` and Godot resources. Full notation:
 [reference.md](reference.md). Everything below is the workflow.
 
@@ -108,6 +108,14 @@ bass, maybe a pad or arpeggio, 3-5 drums.
 
 ## 4. Making a sound effect
 
+0. **Synthesise or record?** Read `[sfx] source` in segan.toml (`segan config get sfx.source`): `synth` = never
+   record (W020), `recorded` = prefer recordings, `auto` (default) = decide per sound:
+   - **Synthesise**: UI, coins and pickups, retro/arcade sounds, lasers, magic, sci-fi, musical stingers. Steps 1-4.
+   - **Record**: anything real-world: animals, voices, footsteps, material impacts (wood, metal, glass, gravel),
+     weapons (swords, guns, bows), fire, water, weather, vehicles, ambience. "Recorded SFX" below.
+   - **Hybrid**: a recording with synth layers for what it lacks: a sub thump under an explosion or a cannon, a
+     shimmer on a magic impact, a tail.
+   A request that doesn't say: realistic (record) or stylised (synthesise)? Use the game's style in SOUND.md.
 1. Start from the closest **preset**: `segan new sfx <name> --preset <coin|jump|laser|explosion|hit|hurt|powerup|blip|select|door|step> --description "..."`
    (no preset fits: `segan new sfx <name>` gives a one-layer starter). Presets are good starting points;
    change one preset layer by its `id` (only the fields you give change; the scaffold lists the preset's layer
@@ -146,6 +154,39 @@ bass, maybe a pad or arpeggio, 3-5 drums.
    `segan preview <name>` -> **open the listen sheet** and check: the pitch
    movement you wanted (white lines, cyan dots), the attack is instant, the tail decays smoothly, LUFS on
    target, nothing red. Iterate (about 4 rounds at most), then hand the WAV to a human.
+
+### Recorded SFX
+
+Real-world sounds start from recordings that are processed and layered, the way film sound is made (a film lion
+is often a tiger pitched down, stretched and layered with a sub growl). Synth recipes can't get there.
+
+1. **Find candidates** (needs `FREESOUND_API_KEY`): `segan sounds search "lion roar" --max-seconds 4 --json`.
+   Only CC0 and CC BY sounds come back (never non-commercial). Pick 3-5 by name, tags, duration and rating, then
+   `segan sounds inspect freesound:<id> ...` compares them without hearing: length, loudness, peak, brightness
+   (`centroid_hz`), pitch, onsets (one clean hit or a clatter of several?). Prefer clean, close, dry recordings:
+   a room can be added, never removed.
+   **No key?** Say so in your report, and find a sound on the web yourself (a Freesound page, or another site
+   with a clear CC0 / CC BY licence), check the licence on its page, download it into the project (`sounds/`) and
+   use it as a local file with `licence:`, `source:` (the page URL) and `author:` (or `segan sounds add <file>
+   --licence ... --source ... --author ...`, so it's recorded in sounds.lock). Never use a sound whose licence
+   you couldn't check.
+2. **Keep it**: `segan sounds add freesound:<id>`: checks the licence, fetches the preview into the user cache
+   (not the repo) and records it in `sounds.lock` (commit sounds.lock; builds fetch and check the file).
+3. **Write the layer**: `sample: freesound:<id>` (or a file path, or a list: one per variation), then shape it:
+   `trim: [start, end]` (seconds of the file), `shift: -7` (semitones, length stays), `stretch: 1.5` (x length,
+   pitch stays), `reverse`, `fade: [in, out]`, plus the usual `gain`, `filter`, `cutoff` keyframes, `distort`,
+   `start`, `length`. Bigger and heavier = shift down a few semitones and stretch a little; distant = low-pass
+   (`filter: { type: lp, cutoff: 2500 }`), quieter transient, more room. Add synth layers for weight (a `sine`
+   sub or `drum: kick` thump) or sparkle. Variations: a list of 2-4 similar recordings beats pitch jitter.
+4. `segan lint` (E019 a missing/changed file, E020 a licence problem), `segan preview` and check the sheet as
+   for any SFX (W011 if the recording runs past `duration`: `trim` it or `fade` it out).
+5. **Credits**: CC BY requires attribution. `segan sounds credits` writes `SOUND_CREDITS.md`; tell the game
+   agent/owner to ship it with the game's credits. `segan sounds vendor` copies the sounds in use into the
+   project, only when asked (offline builds).
+
+**What a game agent should put in a sound request** (tell your orchestrator, or ask): what it is and what
+makes it ("a lion roar"), realistic or stylised, length ("~2 s"), distance and context ("distant, in a canyon";
+"close, UI feedback"), how often it plays (frequent sounds get variations), and the game's style reference.
 
 ## 5. Making a song
 

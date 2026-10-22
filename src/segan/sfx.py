@@ -23,13 +23,14 @@ import re
 from dataclasses import dataclass, field
 from importlib.resources import files
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 
 from segan.asset import META_FIELDS, SFX_SUFFIX, Meta, load_source, merge_template, parse_meta, resolve_extends, resolve_kit
 from segan.dsp import hz_to_midi
 from segan.findings import Finding
 from segan.kit import Kit
-from segan.patch import Instrument, Report, is_number, line_of, parse_keyframes, parse_note_value, parse_patch
+from segan.patch import Env, Instrument, Report, is_number, line_of, parse_keyframes, parse_note_value, parse_patch
+from segan.samples import Processing, SampleSpec
 from segan.yamlio import LineMap, parse_yaml
 
 if TYPE_CHECKING:
@@ -38,9 +39,22 @@ if TYPE_CHECKING:
 PRESETS = ("coin", "jump", "laser", "explosion", "hit", "hurt", "powerup", "blip", "select", "door", "step")
 SFX_FIELDS = (*META_FIELDS, "category", "kit", "instruments", "groups", "preset", "duration", "layers", "variations", "phases", "room",
               "loop", "crossfade", "normalize")  # fmt: skip
-LAYER_EXTRA = ("id", "instrument", "start", "length", "pitch", "slide", "gain", "cutoff", "distort", "delay", "ring")
+RECORDED_FIELDS = ("trim", "reverse", "fade", "shift", "stretch", "source", "licence", "license", "author")
+LAYER_EXTRA = ("id", "instrument", "start", "length", "pitch", "slide", "gain", "cutoff", "distort", "delay", "ring", *RECORDED_FIELDS)
 PHASE_FIELDS = ("duration", "loop", "layers", "crossfade")
 MAX_DURATION = 30.0
+
+
+@dataclass(frozen=True)
+class RecordedSound:
+    """One file a recorded layer may play, and where it came from (for the licence rule and the credits)."""
+
+    ref: str  # as written: a path or freesound:<id>
+    path: str  # the file played
+    licence: str  # allowed licence id (CC0-1.0, CC-BY-4.0, ...)
+    source: str | None = None  # where it came from (URL, "own recording")
+    author: str | None = None
+    name: str | None = None
 
 
 @dataclass(frozen=True)
@@ -58,6 +72,8 @@ class Layer:
     ring: tuple[float, float] | None = None  # Hz, mix
     line: int | None = None
     index: int = 0
+    choices: tuple[SampleSpec, ...] = ()  # a recorded layer's files: one is picked per variation (seeded)
+    recorded: tuple[RecordedSound, ...] = ()  # the same files' origin and licence
 
     def base_midi(self) -> float:
         return self.pitch[0][1] if self.pitch else float(self.inst.note)
@@ -162,14 +178,19 @@ def parse_layer(raw: Any, index: int, kit: Kit | None, report: Report, where: st
         return None
     line = raw.line if isinstance(raw, LineMap) else None
     base: Instrument | None = None
-    if "instrument" in raw:
+    recorded = _recorded(raw, report, where, line)
+    if recorded is False:
+        return None
+    if recorded is not None:
+        base = recorded[0]
+    elif "instrument" in raw:
         key = raw["instrument"]
         if kit is None or not isinstance(key, str) or key not in kit.instruments:
             known = " ".join(kit.instruments) if kit else "no kit"
             report.error(rule, f"instrument {key!r} isn't in the kit (keys: {known})", line_of(raw, "instrument", line), f"{where}.instrument")
             return None
         base = kit.instruments[key]
-    patch_fields = {k: v for k, v in raw.items() if not (k == "gain" and isinstance(v, list))}
+    patch_fields = {k: v for k, v in raw.items() if not (k == "gain" and isinstance(v, list)) and not (recorded is not None and k == "sample")}
     if isinstance(raw, LineMap):
         patch = LineMap()
         patch.update(patch_fields)
@@ -231,7 +252,159 @@ def parse_layer(raw: Any, index: int, kit: Kit | None, report: Report, where: st
             report.error(rule, "ring must be { freq: Hz 1-8000, mix: 0-1 } (ring modulation)", line_of(raw, "ring", line), f"{where}.ring")
     if len(report.findings) > errors:
         return None
-    return Layer(inst, lid, float(start), float(length) if length is not None else None, pitch, slide, gain, cutoff, float(distort), delay, ring, line, index)
+    choices, sounds = (recorded[1], recorded[2]) if recorded is not None else ((), ())
+    return Layer(inst, lid, float(start), float(length) if length is not None else None, pitch, slide, gain, cutoff, float(distort), delay, ring, line, index,
+                 choices, sounds)  # fmt: skip
+
+
+def is_recorded(value: Any) -> bool:
+    """`sample:` names recorded sounds: a sound file path (.wav .ogg .flac .mp3), freesound:<id>, or a list of them."""
+    from segan.recorded import RECORDED_SUFFIXES
+
+    if isinstance(value, list):
+        return True
+    return isinstance(value, str) and (value.startswith("freesound:") or Path(value).suffix.lower() in RECORDED_SUFFIXES)
+
+
+def _recorded(raw: Any, report: Report, where: str, line: int | None) -> tuple[Instrument, tuple[SampleSpec, ...], tuple[RecordedSound, ...]] | Literal[False] | None:
+    """A recorded layer's instrument (one-shot, as recorded), its files and their origin; None if the layer isn't
+    recorded; False after an error."""
+    from segan.patch import project_root
+    from segan.recorded import RECORDED_SUFFIXES
+    from segan.samples import SampleError, file_stamp, load_set
+
+    value = raw.get("sample")
+    extras = [k for k in RECORDED_FIELDS if k in raw]
+    if not is_recorded(value):
+        if extras:
+            report.error("E013", f"{', '.join(extras)}: only for recorded layers (sample: a sound file, freesound:<id>, or a list of them)", line_of(raw, extras[0], line), f"{where}.{extras[0]}")
+            return False
+        return None
+    sline = line_of(raw, "sample", line)
+    for clash in ("osc", "drum", "instrument"):
+        if clash in raw:
+            report.error("E013", f"a recorded layer plays its sample: drop {clash} (layer a synth sound on top as its own layer)", line_of(raw, clash, line), f"{where}.{clash}")
+            return False
+    refs = value if isinstance(value, list) else [value]
+    if not refs or not all(isinstance(r, str) and is_recorded(r) for r in refs):
+        report.error("E013", "sample: a list of recorded sounds (sound file paths .wav/.ogg/.flac/.mp3 or freesound:<id>), one picked per variation", sline, f"{where}.sample")
+        return False
+    process = _processing(raw, report, where, line)
+    meta = _meta_fields(raw, report, where, line)
+    if process is None or meta is None:
+        return False
+    root = project_root(report.path)
+    specs: list[SampleSpec] = []
+    sounds: list[RecordedSound] = []
+    for ref in refs:
+        path = _resolve_ref(ref, root, report, where, sline)
+        if path is None:
+            return False
+        if Path(path).suffix.lower() not in RECORDED_SUFFIXES:
+            report.error("E019", f"{ref}: {Path(path).suffix or 'no extension'} isn't a sound file SEGAN can decode (.wav, .ogg, .flac, .mp3)", sline, f"{where}.sample")
+            return False
+        spec = SampleSpec("rec", path, stamp=(file_stamp(Path(path)),), process=process)
+        try:
+            load_set(spec)
+        except SampleError as exc:
+            report.error("E019", f"sample {ref}: {exc}", sline, f"{where}.sample")
+            return False
+        sound = _licensed(ref, path, meta, root, report, where, sline)
+        if sound is None:
+            return False
+        specs.append(spec)
+        sounds.append(sound)
+    inst = Instrument(source="sample", wave="sample", sample=specs[0], env=Env(0.0, 0.0, 1.0, 0.1), sample_text=value)
+    return inst, tuple(specs), tuple(sounds)
+
+
+def _resolve_ref(ref: str, root: Path, report: Report, where: str, line: int | None) -> str | None:
+    """The file a recorded sound reference plays (a path relative to the project folder, or freesound:<id>)."""
+    from segan.sounds import SoundsError, resolve
+
+    try:
+        return str(resolve(ref, root))
+    except SoundsError as exc:
+        report.error("E019", str(exc), line, f"{where}.sample")
+        return None
+
+
+def _licensed(ref: str, path: str, meta: dict[str, str], root: Path, report: Report, where: str, line: int | None) -> RecordedSound | None:
+    """The licence rule (E020): CC0 or CC BY only, with a source, and an author for CC BY (credits name them).
+    The layer's own fields come first, then the sound's sounds.lock entry."""
+    from segan.licences import ALLOWED_TEXT, classify
+    from segan.sounds import lock_entry
+
+    entry = lock_entry(root, ref) or {}
+    licence_text = meta.get("licence") or entry.get("licence")
+    source = meta.get("source") or entry.get("url") or entry.get("source")
+    author = meta.get("author") or entry.get("author")
+    if licence_text is None:
+        report.error("E020", f"recorded sound {ref} has no licence: add licence: CC0 or CC-BY-4.0 (as its source says) and source: <where it came from>, "
+                     "or record it with `segan sounds add`", line, f"{where}.licence")  # fmt: skip
+        return None
+    licence = classify(licence_text)
+    if licence is None:
+        report.error("E020", f"recorded sound {ref}: licence {licence_text!r} isn't allowed; only {ALLOWED_TEXT} (never non-commercial, share-alike or unknown)",
+                     line, f"{where}.licence")  # fmt: skip
+        return None
+    if not source:
+        report.error("E020", f"recorded sound {ref}: add source: <the page it came from> (or \"own recording\"), so its licence can be checked", line, f"{where}.source")
+        return None
+    if licence.attribution and not author:
+        report.error("E020", f"recorded sound {ref} is {licence.title}: add author: <who made it> (the credits must name them)", line, f"{where}.author")
+        return None
+    return RecordedSound(ref, path, licence.id, str(source), str(author) if author else None, entry.get("name"))
+
+
+def _processing(raw: Any, report: Report, where: str, line: int | None) -> Processing | None:
+    rule = "E013"
+    trim_start, trim_end = 0.0, None
+    if "trim" in raw:
+        trim = raw["trim"]
+        if is_number(trim) and 0 <= trim <= 600:
+            trim_start = float(trim)
+        elif isinstance(trim, list) and len(trim) == 2 and all(is_number(v) for v in trim) and 0 <= trim[0] < trim[1] <= 600:
+            trim_start, trim_end = float(trim[0]), float(trim[1])
+        else:
+            report.error(rule, "trim must be [start, end] seconds of the file (or just the start)", line_of(raw, "trim", line), f"{where}.trim")
+            return None
+    reverse = raw.get("reverse", False)
+    if not isinstance(reverse, bool):
+        report.error(rule, "reverse must be true or false", line_of(raw, "reverse", line), f"{where}.reverse")
+        return None
+    fade_in = fade_out = 0.0
+    if "fade" in raw:
+        fade = raw["fade"]
+        if isinstance(fade, list) and len(fade) == 2 and all(is_number(v) and 0 <= v <= MAX_DURATION for v in fade):
+            fade_in, fade_out = float(fade[0]), float(fade[1])
+        else:
+            report.error(rule, "fade must be [in, out] seconds (e.g. [0, 0.3]: no fade-in, a 0.3 s fade-out)", line_of(raw, "fade", line), f"{where}.fade")
+            return None
+    shift = raw.get("shift", 0.0)
+    if not (is_number(shift) and -24 <= shift <= 24):
+        report.error(rule, "shift must be -24..24 semitones (pitch moves, length stays)", line_of(raw, "shift", line), f"{where}.shift")
+        return None
+    stretch = raw.get("stretch", 1.0)
+    if not (is_number(stretch) and 0.25 <= stretch <= 4):
+        report.error(rule, "stretch must be 0.25-4 (x the length; pitch stays)", line_of(raw, "stretch", line), f"{where}.stretch")
+        return None
+    return Processing(trim_start, trim_end, reverse, round(float(stretch), 9), round(float(shift), 9), fade_in, fade_out)
+
+
+def _meta_fields(raw: Any, report: Report, where: str, line: int | None) -> dict[str, str] | None:
+    if "licence" in raw and "license" in raw:
+        report.error("E013", "give licence or license, not both", line_of(raw, "license", line), f"{where}.license")
+        return None
+    out: dict[str, str] = {}
+    for key in ("licence", "license", "source", "author"):
+        if key in raw:
+            value = raw[key]
+            if not isinstance(value, str) or not value.strip():
+                report.error("E013", f"{key} must be text", line_of(raw, key, line), f"{where}.{key}")
+                return None
+            out["licence" if key == "license" else key] = value.strip()
+    return out
 
 
 def _layers(raw: Any, kit: Kit | None, report: Report, where: str, line: int | None) -> tuple[Layer, ...] | None:

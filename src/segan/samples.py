@@ -33,7 +33,7 @@ import numpy as np
 
 from segan.dsp import Signal
 
-SAMPLE_KINDS = ("wav", "sfz", "sf2", "library")
+SAMPLE_KINDS = ("wav", "sfz", "sf2", "library", "rec")
 DEFAULT_RELEASE = 0.3
 
 
@@ -42,11 +42,25 @@ class SampleError(ValueError):
 
 
 @dataclass(frozen=True)
+class Processing:
+    """How a recorded sound is prepared before it plays (SFX recorded layers; see recorded.py): trim (seconds of
+    the file), reverse, time-stretch and pitch-shift (independent), then fades (seconds of the result)."""
+
+    trim_start: float = 0.0
+    trim_end: float | None = None  # None = the file's end
+    reverse: bool = False
+    stretch: float = 1.0  # x length, same pitch
+    shift: float = 0.0  # semitones, same length
+    fade_in: float = 0.0
+    fade_out: float = 0.0
+
+
+@dataclass(frozen=True)
 class SampleSpec:
     """What an instrument's `sample:` field names (paths resolved; `stamp` = file sizes and mtimes, so
     render caches notice a replaced file)."""
 
-    kind: str  # wav | sfz | sf2 | library
+    kind: str  # wav | sfz | sf2 | library | rec (a recorded sound: any decodable file, played as recorded)
     path: str
     root: int = 60  # wav: the pitch it was recorded at
     loop: bool | None = None  # wav: None = the smpl chunk's loop if it has one
@@ -56,6 +70,7 @@ class SampleSpec:
     velocity: int | None = None  # always play this velocity layer (1-127); None = from the note
     base: str = ""  # sfz sample folder (library: the download cache)
     stamp: tuple[tuple[str, int, int], ...] = ()
+    process: Processing | None = None  # rec: trim, reverse, stretch, shift, fades
 
 
 @dataclass(frozen=True)
@@ -70,7 +85,7 @@ class ZoneEnv:
 @dataclass(frozen=True)
 class Zone:
     source: str  # file path
-    fmt: str  # "wav" or "sf2"
+    fmt: str  # "wav", "sf2" or "rec" (a processed recording)
     rate: int
     start: int  # first frame (after offsets)
     end: int  # frame after the last
@@ -89,6 +104,7 @@ class Zone:
     env: ZoneEnv = field(default_factory=ZoneEnv)
     scale_tuning: float = 1.0  # semitones per key (SF2 scaleTuning / 100)
     sf2_data: tuple[int, int, int] | None = None  # sf2: (smpl chunk offset, sm24 offset or 0, total frames)
+    process: Processing | None = None  # rec
 
     @property
     def seconds(self) -> float:
@@ -167,6 +183,13 @@ def load_set(spec: SampleSpec) -> SampleSet:
             loop = info.loop
         zone = Zone(str(path), "wav", info.rate, 0, info.frames, float(spec.root), loop=loop, one_shot=bool(spec.one_shot))
         return SampleSet((zone,))
+    if spec.kind == "rec":
+        from segan.recorded import processed_shape
+
+        process = spec.process or Processing()
+        frames, rate = processed_shape(str(path), process)
+        one_shot = True if spec.one_shot is None else spec.one_shot
+        return SampleSet((Zone(str(path), "rec", rate, 0, frames, float(spec.root), one_shot=one_shot, process=process),))
     if spec.kind in ("sfz", "library"):
         result = parse_sfz(path.read_text(encoding="utf-8", errors="replace"), Path(spec.base) if spec.base else path.parent)
     elif spec.kind == "sf2":
@@ -206,6 +229,10 @@ def zone_audio(zone: Zone) -> Signal:
     if zone.fmt == "sf2":
         assert zone.sf2_data is not None
         return _sf2_audio(zone.source, *zone.sf2_data)
+    if zone.fmt == "rec":
+        from segan.recorded import processed
+
+        return processed(zone.source, zone.process or Processing())
     return _wav_audio(zone.source)
 
 

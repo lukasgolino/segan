@@ -131,6 +131,8 @@ class Instrument:
         if self.is_drum:
             return f"drum {self.wave}"
         if self.sample is not None:
+            if self.sample.kind == "rec":
+                return f"recording {Path(self.sample.path).name}"
             return f"sample {self.sample.kind} {Path(self.sample.path).stem}"
         return f"{self.wave}" + (f" duty {self.duty:g}" if self.wave == "pulse" else "")
 

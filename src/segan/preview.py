@@ -106,7 +106,7 @@ def level_stats(analysis: dict[str, Any], threshold_click: float | None = None) 
 
 def _layer_targets(layer: Layer, start: float, end: float, tuning: float) -> list[tuple[float, float, float]]:
     """Intended pitch of a layer over time, as short segments (for the white lines on the spectrogram)."""
-    if layer.inst.is_drum or layer.inst.wave in ("noise", "bitnoise"):
+    if layer.inst.is_drum or layer.inst.wave in ("noise", "bitnoise") or layer.choices:  # a recording has no intended pitch
         return []
     frames = layer.pitch or ((0.0, float(layer.inst.note)),)
     out: list[tuple[float, float, float]] = []
@@ -127,6 +127,11 @@ def layer_end(layer: Layer, duration: float) -> float:
     inst = layer.inst
     if inst.is_drum:
         return min(duration, layer.start + inst.tail())
+    if layer.length is None and inst.sample is not None:
+        from segan.synth import is_one_shot
+
+        if is_one_shot(inst):  # rings to its end
+            return min(duration, layer.start + inst.tail())
     gate = layer.length if layer.length is not None else max(0.001, duration - layer.start - inst.tail())
     env = inst.env
     span = gate + env.release
