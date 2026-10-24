@@ -299,6 +299,22 @@ Grid rules:
 - Every row has exactly `length` steps; `|` anywhere in a row is ignored (use it to mark beats).
 - The label after the row (`A5`, `k`) is optional but checked: write it every time (E011 catches shifted rows).
 - A lane left out of a pattern is silent. `-` at the start of a row or after a rest is E015.
+- **Dynamics** (any track, mostly rolls): `velocity: { lead: "X...o...|x.3.5..." }` sets the velocity of the notes
+  starting at each step: `X` accent (1.5, +3.5 dB), `x` plain, `o` ghost (0.35), `1`-`9` = 0.2-1.8 (`5` = plain),
+  `.`/`-` unchanged; one mark per step (`|` ignored). `dynamics: { strings: [[1, -12], [16, 0]] }` then scales a
+  track's notes by a ramp in dB (steps from 1, linear between points, held outside them): crescendos, swells,
+  fades. Velocity picks sample layers (accent = MIDI 120, ghost 28) and scales synth notes. A derived pattern keeps
+  its source's velocities unless it sets its own.
+
+```yaml
+  swell:
+    length: 16
+    strings: |
+      v---------------  A4
+      ...
+    velocity: { horn: "X.......o...o..." }
+    dynamics: { strings: [[1, -15], [12, 0], [16, -3]] }
+```
 
 Derived patterns: `{ from: <pattern>, ... }` with
 `transpose` (scale steps; a number for every roll track or `{ track: steps }`), `semitones` (must land on rows of
@@ -329,7 +345,10 @@ A quieter mix (a bed without drums can sit 10+ dB under the loudest) gets a `tri
 target too; it's capped so the mix's true peak stays under `[mix] limiter`. W017: a mix too peaky to reach its
 target even with its trim.
 
-More song fields: `category` (default `music`: loudness target), `normalize: false`, `sample_rate` (22050 |
+More song fields: `humanize: { timing: ms (0-40), velocity: 0-0.5 }` (every note a little early or late and
+louder or softer, seeded: the same nudge each time a section plays, in loops and flow clips; `humanize: 8` = timing
+only), `seed` (the song's own seed: change it for another take of the humanize; default from the name),
+`category` (default `music`: loudness target), `normalize: false`, `sample_rate` (22050 |
 32000 | 44100 | 48000) and `channels` (`mono` | `stereo`): this song's own output format over `[mix]`'s (a chip
 loop at 22050 Hz mono is a quarter of the size; it aliases more, which lint checks at that rate), `extends` (a
 song with `template: true`; tracks, patterns, sections, variants merge by name), and the common fields below.
@@ -439,6 +458,7 @@ preview_dir = "previews"
 export = ["wav"]              # + "godot" (.import loops/compression, randomizer/synchronized .tres), "stems",
                               #   "ogg" (music as Ogg Vorbis, ~10x smaller; SFX stay WAV; pip install "segan[ogg]")
 style_version = 1
+seed = 4417312093             # the project seed (`segan init` picks one): suggestions and rolled kits branch from it; renders don't use it
 
 [mix]                         # shared by every asset; any change re-renders everything
 sample_rate = 44100           # 22050 | 32000 | 44100 | 48000
@@ -499,8 +519,10 @@ asset actually plays, so editing one instrument re-renders only what uses it.
 
 | Command | Purpose |
 |---|---|
-| `segan init [dir] [--open] [--style chiptune\|synth] [--godot DIR]` | create a project with a starter kit; `--godot` builds into `DIR/assets/generated/audio`, or `DIR/assets/audio` when a PAGAN project there already builds into `assets/generated`; warns when the two output folders are the same or nested |
-| `segan new kit <name>` / `new song <name> [--kit K] [--key "A minor"] [--tempo 120] [--bars 2]` / `new sfx <name> [--preset P] [--kit K]` | starter files (always pass `--description`) |
+| `segan init [dir] [--open] [--style chiptune\|synth\|orchestral\|"<words>"] [--godot DIR]` | create a project with a random project `seed` and a starter kit (words, e.g. `--style "cold ship, warm crew"`: a kit `core` rolled from the seed, with an `identity` group); `--godot` builds into `DIR/assets/generated/audio`, or `DIR/assets/audio` when a PAGAN project there already builds into `assets/generated`; warns when the two output folders are the same or nested |
+| `segan new kit <name>` / `new song <name> [--kit K] [--key "A minor"] [--tempo 120] [--meter 3/4] [--bars 2]` / `new sfx <name> [--preset P] [--kit K]` | starter files (always pass `--description`); a song without `--key`/`--tempo` gets the seeded suggestion (below), away from the project's songs |
+| `segan suggest song <name> [--mood "words"] [--take N]` | a plan for a new song away from the project's songs: key and mode, tempo, meter, opening texture, opening voicing (inversion, spread, register), progression, instruments (the kit's identity + extras, maybe a new one), a `seed`, and the `segan new song` command; seeded by the project seed (`--take` = another plan) |
+| `segan kit roll <name> --style "words" [--around KIT] [--samples\|--no-samples] [--take N] [--dry-run] [--force]` | a kit from style words and the project seed: `identity` group (2-3 signature instruments), bass, harmony, colour, 3-5 drums, from the models, effects and drums above (samples when the words ask for acoustic/orchestral, or `--samples`); `--around` keeps another kit's identity instruments |
 | `segan samples list [library\|file.sf2]` / `segan samples fetch <library> <instrument...> [--all]` | sample libraries: instruments, key ranges and what's downloaded / download instruments |
 | `segan sounds search "<query>" [--max-seconds N] [--licence cc0\|cc-by] [--limit 15] [--sort score\|rating_desc\|...]` | Freesound search (needs `FREESOUND_API_KEY`): ref, name, author, licence, duration, rating, tags; only CC0 / CC BY |
 | `segan sounds add freesound:<id>` / `add <file> --licence L --source URL [--author A]` | check the licence, fetch the HQ preview into the user cache, record it in `sounds.lock` (a local file: its licence, source, author) |
@@ -641,8 +663,10 @@ chunk early and cuts tails, the second clicks at every seam.
 For many similar sounds or procedural music, write a Python script with `segan.api` (stable, `API_VERSION`):
 `note("A4")`, `scale(key, low, high)`, `chord(degree, key, octave, size=3)`, `progression("i VI III VII", key)`,
 `euclid(hits, steps, rotate)`, `arpeggiate(notes, steps, rate, order)`, `humanize(row, seed, amount)`,
+`invert(notes, inversion)`, `voicing(notes, inversion, spread="close"|"open"|"wide", octave, bass)`, `Rng(seed, ...)`
+(seeded `random()`, `choice()`, `range()`, `weighted()`: the same on every machine),
 `Track.roll(name, key, low, high)`, `Track.drums(name, keys)`, `Pattern(length).note(track, step, pitch, length,
-key)` / `.hit(track, step, drum, mark)` / `.row(track, drum, "x...x...")` / `.lane(track)`,
+key, velocity=None)` (written as a `velocity:` row) / `.hit(track, step, drum, mark)` / `.row(track, drum, "x...x...")` / `.lane(track)`,
 `song_yaml(name, tracks=..., patterns=..., sections=..., arrangement=..., key=..., tempo=..., loop=...)`,
 `sfx_yaml(name, layers=[...], ...)` (both take `comments={"patterns.chorus": "text", ...}`: `#` lines above
 those keys). `dedupe(patterns, sections)` merges identical patterns (sections follow); `derive("a", a, b, tracks)`

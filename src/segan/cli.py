@@ -134,8 +134,11 @@ def cmd_init(args: argparse.Namespace, out: Output) -> int:
     skipped: list[Path] = []
     mode = "open" if args.open else "strict"
     style = args.style or "chiptune"
-    kit_name, style_text = STYLES[style]
+    rolled = style not in STYLES  # words: a kit rolled from the project seed
+    kit_name, style_text = ("core", f"rolled from {style!r}") if rolled else STYLES[style]
+    seed = int.from_bytes(os.urandom(7), "little") % (1 << 53)  # the project seed: suggestions and rolled kits branch from it
     config_text = Template(template("segan.toml")).substitute(mode=mode, default_kit=f'default_kit = "{kit_name}"')
+    config_text = set_in_toml(config_text, "seed", seed)
     output_dir = "build/audio"
     moved_from_pagan: Path | None = None
     if godot_root is not None:
@@ -177,11 +180,17 @@ def cmd_init(args: argparse.Namespace, out: Output) -> int:
             created.append(path)
     kit_path = root / "kits" / f"{kit_name}{KIT_SUFFIX}"
     if not kit_path.exists():
-        kit_path.write_text(template(f"{kit_name}{KIT_SUFFIX}"), encoding="utf-8")
+        if rolled:
+            from segan.suggest import roll_kit
+
+            kit_path.write_text(roll_kit(kit_name, style, seed).yaml(), encoding="utf-8")
+        else:
+            kit_path.write_text(template(f"{kit_name}{KIT_SUFFIX}"), encoding="utf-8")
         created.append(kit_path)
     clash = _pagan_clash(root, output_dir, godot_root)
 
-    out.say(f"Initialized SEGAN project in {display_path(root)} ({mode} mode, {style} starter kit '{kit_name}')")
+    out.say(f"Initialized SEGAN project in {display_path(root)} ({mode} mode, {'a kit rolled from ' + repr(style) if rolled else style + ' starter kit'} "
+            f"'{kit_name}', project seed {seed})")  # fmt: skip
     for path in created:
         out.say(f"  created {display_path(path)}")
     for path in skipped:
@@ -191,10 +200,9 @@ def cmd_init(args: argparse.Namespace, out: Output) -> int:
     if clash is not None:
         out.say(f"  warning: {display_path(clash)} writes to the same output_dir, or one inside the other; both tools write manifest.json "
                 "and clean up files they don't know. Give each its own folder (e.g. assets/art and assets/audio).")  # fmt: skip
-    if style == "orchestral":
-        from segan.kitshow import library_needs
+    from segan.kitshow import library_needs
 
-        needs = library_needs(kit_path)
+    if needs := library_needs(kit_path):
         out.say(f"The kit plays sampled instruments: `segan samples fetch vsco2 {' '.join(needs)}` downloads them first.")
     out.say(f"Next: `segan kit show {kit_name}` and look at previews/kits/{kit_name}.listen.png; fill in BRIEF.md and SOUND.md.")
     out.result(
@@ -203,6 +211,7 @@ def cmd_init(args: argparse.Namespace, out: Output) -> int:
             "mode": mode,
             "style": style,
             "default_kit": kit_name,
+            "seed": seed,
             "godot_project": display_path(godot_root) if godot_root is not None else None,
             "output_dir": output_dir,
             "pagan_clash": display_path(clash) if clash is not None else None,
@@ -559,13 +568,49 @@ instruments:              # inline instruments (open mode); or name a kit file w
 """
 
 
-def _song_scaffold(name: str, description: str, kit_line: str, kit: Kit | None, key_text: str, tempo: int, bars: int, style: int) -> str:
+def _meter(text: str) -> tuple[int, int]:
+    match = re.fullmatch(r"(\d{1,2})/(2|4|8|16)", text.strip())
+    if match is None or not 1 <= int(match.group(1)) <= 16:
+        raise usage_error(f"invalid --meter {text!r}: beats/unit, e.g. 4/4, 3/4, 6/8, 7/8")
+    return int(match.group(1)), int(match.group(2))
+
+
+def song_plan(project: Project, name: str, words: str, take: int = 0) -> dict[str, Any]:
+    """`segan suggest song`'s plan for a new song in this project (seeded by the project seed)."""
+    from segan import similarity
+    from segan.suggest import suggest_song
+    from segan.yamlio import load_yaml
+
+    songs = project_songs(project) if project.config_path is not None else {}
+    prints = [similarity.fingerprint(s, str(project.root)) for n, s in songs.items() if n != name]
+    kits: dict[str, Any] = {}
+    for kit_name in project.kit_names():
+        try:
+            data = load_yaml(project.kit_path(kit_name))
+        except Exception:  # noqa: BLE001 - a broken kit just isn't offered
+            continue
+        if isinstance(data, dict):
+            kits[kit_name] = data
+    return suggest_song(name, words, project_seed(project), prints, kits, take)
+
+
+def project_seed(project: Project) -> int:
+    """The project seed from segan.toml, else one derived from the project folder's name (older projects)."""
+    from segan.dsp import seed_of
+
+    return project.config.seed if project.config.seed is not None else seed_of("project", project.root.name) % (1 << 62)
+
+
+def _song_scaffold(name: str, description: str, kit_line: str, kit: Kit | None, key_text: str, tempo: int, bars: int, style: int,
+                   meter: tuple[int, int] = (4, 4)) -> str:  # fmt: skip
     from segan.notes import parse_key
 
     key = parse_key(key_text)
     if key is None:
         raise usage_error(f"invalid --key {key_text!r}: a root and a scale, e.g. 'A minor', 'C major', 'D dorian'")
-    length = bars * 16
+    steps_per_beat = 2 if meter[1] >= 8 else 4
+    beat = steps_per_beat
+    length = bars * meter[0] * steps_per_beat
     melodic = [k for k, i in (kit.instruments.items() if kit else []) if not i.is_drum]
     drums = [k for k, i in (kit.instruments.items() if kit else []) if i.is_drum][:3] or ["k", "s", "h"]
     lead = melodic[0] if melodic else "p"
@@ -578,15 +623,15 @@ def _song_scaffold(name: str, description: str, kit_line: str, kit: Kit | None, 
         return [key.name(m) for m in key.notes_between(low, low + 12)]
 
     def grid(labels: list[str]) -> str:
-        cells = "|".join(["...."] * (length // 4))
+        cells = "|".join(["." * beat] * (length // beat))
         return "".join(f"      {cells}  {label}\n" for label in labels)
 
     return f"""name: {name}
 description: {json.dumps(description)}
 {kit_line.rstrip()}
 tempo: {tempo}
-meter: [4, 4]
-steps_per_beat: 4             # 16th-note grid; `|` (ignored) marks each beat
+meter: [{meter[0]}, {meter[1]}]
+steps_per_beat: {steps_per_beat}             # 16th-note grid; `|` (ignored) marks each beat
 key: {key.describe()}
 status: draft
 style_version: {style}
@@ -662,7 +707,15 @@ def cmd_new_asset(args: argparse.Namespace, out: Output) -> int:
         if not 1 <= args.bars <= 8:
             raise usage_error("--bars must be 1-8 (make longer songs from several patterns)")
         kit_line, kit = _kit_line(project, args.kit)
-        text = _song_scaffold(name, description, kit_line, kit, args.key, args.tempo, args.bars, style)
+        key, tempo, meter = args.key, args.tempo, _meter(args.meter) if args.meter else None
+        if key is None or tempo is None:  # not given: the seeded suggestion, away from the project's songs
+            plan = song_plan(project, name, args.description or "")
+            key, tempo = key or plan["key"], tempo or plan["tempo"]
+            meter = meter or (int(plan["meter"][0]), int(plan["meter"][1]))
+            out.say(f"{key}, {tempo} bpm, {meter[0]}/{meter[1]} (suggested away from the project's songs; `segan suggest song {name}` adds an opening, "
+                    "texture and progression)")  # fmt: skip
+        meter = meter or (4, 4)
+        text = _song_scaffold(name, description, kit_line, kit, key, tempo, args.bars, style, meter)
         path = project.music_dir / f"{name}{SONG_SUFFIX}"
     else:
         if args.preset is not None and args.preset not in PRESETS:
@@ -895,6 +948,66 @@ def cmd_similarity(args: argparse.Namespace, out: Output) -> int:
         out.say("1 = the same; lint warns (W024) when two songs' first bars score over lint.max_similarity")
     out.result({"songs": list(prints), "pairs": [p.to_dict() | {"opening_score": round(sim.opening_score(p), 3)} for p in shown],
                 "closest": closest, "max_similarity": limit})  # fmt: skip
+    return 0
+
+
+# --- segan suggest / kit roll -----------------------------------------------------------------
+
+
+def cmd_suggest_song(args: argparse.Namespace, out: Output) -> int:
+    project = require_project()
+    if not NAME_RE.match(args.name):
+        raise usage_error(f"invalid name {args.name!r}: use lowercase letters, digits, '_' or '-'")
+    plan = song_plan(project, args.name, args.mood or "", args.take)
+    opening = plan["opening"]
+    out.say(f"{plan['name']}: {plan['key']}, {plan['tempo']} bpm, {plan['meter'][0]}/{plan['meter'][1]}" + (f" ({plan['mood']})" if plan["mood"] else ""))
+    out.say(f"  texture:     {plan['texture']} - {plan['texture_hint']}")
+    out.say(f"  progression: {plan['progression']}")
+    out.say(f"  opening:     {' '.join(opening['notes'])} ({opening['degree']}, {opening['inversion']}, {opening['spread']}, {opening['register']} register)")
+    inst = plan["instruments"]
+    if inst:
+        out.say(f"  kit {inst['kit']}: identity {', '.join(inst['identity']) or '(no identity group)'}; extras {', '.join(inst['extras']) or 'none'}")
+        if "new_instrument" in inst:
+            out.say(f"  try a new instrument: {inst['new_instrument']['name']}: {json.dumps(inst['new_instrument']['patch'])}")
+    for reason in plan["why"]:
+        out.say(f"  ({reason})")
+    out.say(f"  seed: {plan['seed']} (the song's own; another take: --take {args.take + 1})")
+    out.say(f"next: {plan['command']}")
+    out.result({"plan": plan})
+    return 0
+
+
+def cmd_kit_roll(args: argparse.Namespace, out: Output) -> int:
+    from segan.suggest import roll_kit
+    from segan.yamlio import load_yaml
+
+    project = require_project()
+    if not NAME_RE.match(args.name):
+        raise usage_error(f"invalid kit name {args.name!r}: use lowercase letters, digits, '_' or '-'")
+    around = None
+    if args.around:
+        if not project.kit_path(args.around).is_file():
+            raise usage_error(f"--around: no kit {args.around!r} (kits: {', '.join(project.kit_names()) or 'none'})")
+        data = load_yaml(project.kit_path(args.around))
+        around = data if isinstance(data, dict) else None
+    rolled = roll_kit(args.name, args.style, project_seed(project), around, args.samples, args.take)
+    text = rolled.yaml()
+    path = project.kit_path(args.name)
+    if not args.dry_run:
+        if path.exists() and not args.force:
+            raise usage_error("kit already exists (--force replaces it, --dry-run only prints)", path)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text, encoding="utf-8")
+        load_kit_file(path)  # what was written must be a valid kit
+        out.say(f"wrote {display_path(path)}")
+    if not out.as_json:
+        print(text, end="")
+    if rolled.libraries:
+        out.say(f"it plays sampled instruments: `segan samples fetch {' '.join(sorted({l.split('/')[0] for l in rolled.libraries}))} "
+                f"{' '.join(l.split('/')[1] for l in rolled.libraries)}` first")  # fmt: skip
+    out.say(f"next: `segan kit show {args.name}`; another take: --take {args.take + 1}")
+    out.result({"kit": args.name, "path": None if args.dry_run else display_path(path), "text": text, "identity": rolled.identity,
+                "libraries": rolled.libraries, "seed": rolled.seed})  # fmt: skip
     return 0
 
 
@@ -1222,7 +1335,8 @@ def build_parser() -> argparse.ArgumentParser:
     init = commands.add_parser("init", parents=[common], help="create a SEGAN project")
     init.add_argument("dir", nargs="?", default=".", help="project directory (default: current)")
     init.add_argument("--open", action="store_true", help="open mode: songs and SFX may define instruments inline")
-    init.add_argument("--style", choices=list(STYLES), help="starter kit: chiptune (default), synth or orchestral (sampled; needs `segan samples fetch`)")
+    init.add_argument("--style", help='starter kit: chiptune (default), synth or orchestral (sampled; needs `segan samples fetch`), or words for the '
+                      'game\'s sound ("cold ship, warm crew") to roll a kit `core` from the project seed')  # fmt: skip
     init.add_argument("--godot", metavar="DIR", help="Godot project dir: build into DIR/assets/generated/audio with Godot resources")
     init.set_defaults(handler=cmd_init)
 
@@ -1234,8 +1348,9 @@ def build_parser() -> argparse.ArgumentParser:
     new_song = new_kinds.add_parser("song", parents=[common], help="scaffold a song (tracks, an empty pattern, a loop)")
     new_song.add_argument("name", help="song name, e.g. overworld")
     new_song.add_argument("--kit", help="kit name (default: the project's default_kit)")
-    new_song.add_argument("--key", default="A minor", help='key, e.g. "A minor" (default), "C major", "D dorian"')
-    new_song.add_argument("--tempo", type=int, default=120, help="bpm (default 120)")
+    new_song.add_argument("--key", help='key, e.g. "A minor", "C major", "D dorian" (default: suggested away from the project\'s songs)')
+    new_song.add_argument("--tempo", type=int, help="bpm (default: suggested away from the project's songs)")
+    new_song.add_argument("--meter", help="beats/unit, e.g. 4/4, 3/4, 6/8 (default: suggested)")
     new_song.add_argument("--bars", type=int, default=2, help="bars in the first pattern (default 2)")
     new_song.add_argument("--description", help="what it is and how it should sound; kept in the file")
     new_song.set_defaults(handler=cmd_new_asset, kind="song")
@@ -1387,8 +1502,26 @@ def build_parser() -> argparse.ArgumentParser:
     similar.add_argument("--top", type=int, default=15, help="pairs to show (default 15)")
     similar.set_defaults(handler=cmd_similarity)
 
+    suggest = commands.add_parser("suggest", help="seeded proposals for new sources, away from what the project already uses")
+    suggest_kinds = suggest.add_subparsers(title="what", metavar="<what>")
+    suggest_song = suggest_kinds.add_parser("song", parents=[common], help="key, mode, tempo, meter, texture, opening voicing, progression, instruments")
+    suggest_song.add_argument("name", help="the new song's name")
+    suggest_song.add_argument("--mood", help='words for the song, e.g. "tense boss fight" or "quiet night town"')
+    suggest_song.add_argument("--take", type=int, default=0, help="another proposal for the same song (0, 1, 2...)")
+    suggest_song.set_defaults(handler=cmd_suggest_song)
+
     kit = commands.add_parser("kit", help="kit tools")
     kit_cmds = kit.add_subparsers(title="kit commands", metavar="<command>")
+    roll = kit_cmds.add_parser("roll", parents=[common], help="a new kit from style words and the project seed (identity group + bass, harmony, colour, drums)")
+    roll.add_argument("name", help="kit name")
+    roll.add_argument("--style", required=True, help='words, e.g. "cold ship, warm crew" or "dusty lo-fi jazz"')
+    roll.add_argument("--around", metavar="KIT", help="keep this kit's identity instruments and roll the rest around them")
+    roll.add_argument("--samples", action=argparse.BooleanOptionalAction, default=None,
+                      help="allow sampled library instruments (default: when the style asks for acoustic/orchestral sounds)")  # fmt: skip
+    roll.add_argument("--take", type=int, default=0, help="another kit for the same words (0, 1, 2...)")
+    roll.add_argument("--dry-run", action="store_true", help="print the kit, don't write it")
+    roll.add_argument("--force", action="store_true", help="replace an existing kit file")
+    roll.set_defaults(handler=cmd_kit_roll)
     show = kit_cmds.add_parser("show", parents=[common], help="every instrument playing a test phrase: listen sheet + WAVs")
     show.add_argument("kits", nargs="*", help="kit names or .kit.yaml paths (default: all in the project)")
     show.set_defaults(handler=cmd_kit_show)

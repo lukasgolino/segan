@@ -5,8 +5,12 @@
 # "open":   they may also define their own instruments inline.
 mode = "$mode"
 
-# Kit for songs and SFX that don't name one. Create one with `segan new kit <name>`.
+# Kit for songs and SFX that don't name one. Create one with `segan new kit <name>` or `segan kit roll <name>`.
 $default_kit
+
+# The project seed, picked at random by `segan init`: `segan suggest song`, `segan new song` and `segan kit roll`
+# branch from it, so two projects with the same brief start from different places. Renders don't use it.
+# seed = 0
 
 # Where `segan build` writes final assets, e.g. your game's audio folder. Keep it apart from PAGAN's
 # output_dir: both write a manifest.json.

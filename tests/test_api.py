@@ -89,3 +89,20 @@ def test_dedupe_derive_and_comments(project: Project) -> None:
     ups = sorted((n.step, song.tracks["lead"].rows[n.row]) for n in song.patterns["up"].notes if n.track == "lead")
     assert ups == [(0, 74), (4, 81)]  # D5 and A5: the derived pattern sounds like the built one
     assert "# the hook\nlayers:" in api.sfx_yaml("x", layers=[{"osc": "sine"}], comments={"layers": "the hook"})
+
+
+def test_velocities_voicings_and_rng(project: Project) -> None:
+    lead = api.Track.roll("lead", "A minor", "A4", "A5")
+    p = api.Pattern(8).note(lead, 0, "A4", 2, "p", velocity=1.5).note(lead, 4, "C5", 2, "p", velocity=0.3)
+    text = api.song_yaml("v", tracks=[lead], patterns={"a": p}, sections={"main": ["a"]}, arrangement=["main"], key="A minor")
+    assert 'velocity: { lead: "X...|o..." }' in text
+    song, findings = load(project, "song", "v", text)
+    assert song is not None, findings
+    assert sorted(n.velocity for n in song.patterns["a"].notes) == [0.35, 1.5]
+    plain = api.Pattern(8).note(lead, 0, "A4", 2, "p").note(lead, 4, "C5", 2, "p")
+    kept, _ = api.dedupe({"a": p, "b": plain}, {"m": ["a", "b"]})
+    assert set(kept) == {"a", "b"} and api.derive("a", p, plain, [lead]) is None
+    assert api.invert([57, 60, 64], 1) == [60, 64, 69] and api.invert([57, 60, 64], -1) == [52, 57, 60]
+    assert api.voicing([57, 60, 64], spread="open") == [48, 57, 64] and api.voicing([57, 60, 64], bass=True)[0] == 45
+    a, b = api.Rng(3, "verse"), api.Rng(3, "verse")
+    assert [a.random() for _ in range(5)] == [b.random() for _ in range(5)] and a.choice([1, 2, 3]) in (1, 2, 3)

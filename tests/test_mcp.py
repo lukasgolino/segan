@@ -70,7 +70,7 @@ def test_tools_and_resources_are_listed(root: Path) -> None:
     tools, resources = run(root, body)
     for name in ("status", "read_docs", "write_doc", "log_feedback", "config_show", "config_set", "config_unset", "kit_list", "kit_show",
                  "kit_write", "mix_adjust", "scaffold", "read_asset", "write_asset", "lint", "preview", "gallery", "mark", "style_bump",
-                 "import_midi", "build", "manifest", "sounds_search", "sounds_add", "sounds_inspect", "sounds_credits", "similarity"):  # fmt: skip
+                 "import_midi", "build", "manifest", "sounds_search", "sounds_add", "sounds_inspect", "sounds_credits", "similarity", "suggest_song", "kit_roll"):  # fmt: skip
         assert name in tools, name
     assert {"segan://workflow", "segan://reference", "segan://brief", "segan://sound", "segan://manifest"} <= set(resources)
 

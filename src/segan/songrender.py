@@ -50,7 +50,7 @@ def song_cache_parts(song: Song, project: Project) -> tuple[object, ...]:
             patterns, sorted(song.sections.items()), song.arrangement, song.loop, sorted(song.markers.items()),
             sorted(song.all_variants().items()), song.normalize, song.category, song_mix(song, project),
             project.config.target(song.category), project.config.lint.max_limiting_db, wants_stems(song, project), song.stems,
-            sorted(song.section_changes.items()), song.flow)  # fmt: skip
+            sorted(song.section_changes.items()), song.flow, song.seed, song.humanize)  # fmt: skip
 
 
 def wants_stems(song: Song, project: Project) -> bool:

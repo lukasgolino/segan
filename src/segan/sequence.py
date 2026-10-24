@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field, replace
 
-from segan.dsp import seed_of
+from segan.dsp import seed_of, uniform
 from segan.song import Note, Song, Variant, instrument_for, note_midi, section_key
 from segan.voices import NoteEvent
 
@@ -87,6 +87,8 @@ class Placed:
     step: int  # absolute step
     midi: float
     key: str
+    section: str = ""
+    local: int = 0  # step within its section (humanize is seeded by section and position, so flow clips match)
 
 
 def placed_notes(song: Song, timeline: Timeline, variant: Variant | None = None) -> list[Placed]:
@@ -112,7 +114,7 @@ def placed_notes(song: Song, timeline: Timeline, variant: Variant | None = None)
                     if pitch is None:
                         continue
                     midi = float(pitch)
-                out.append(Placed(note, span.start + note.step, midi, key))
+                out.append(Placed(note, span.start + note.step, midi, key, section.name, span.start - section.start + note.step))
     return out
 
 
@@ -120,9 +122,12 @@ def song_events(song: Song, timeline: Timeline, rate: int, variant: Variant | No
     """Every note as an event; with `repeat_loop`, the loop is played a second time right after the end
     (its frames shifted by exactly the loop's length), which is what the looping output is cut from."""
     events: list[NoteEvent] = []
+    steps: list[int] = []
     kit = variant.kit if variant is not None and variant.kit is not None else song.kit
     placed = placed_notes(song, timeline, variant)
     beat = timeline.step_seconds * song.steps_per_beat * song.meter[1] / 4.0  # seconds per quarter note
+    timing, spread = song.humanize
+    base = song.seed if song.seed is not None else seed_of("song", song.name)
     for p in placed:
         inst = kit.instruments.get(p.key)
         if inst is None:
@@ -133,15 +138,20 @@ def song_events(song: Song, timeline: Timeline, rate: int, variant: Variant | No
             gate = timeline.step_seconds * 0.5
         else:
             gate = timeline.seconds(p.step + p.note.length) - timeline.seconds(p.step)
-        events.append(NoteEvent(track.name, p.key, inst, start, gate, p.midi, p.note.velocity, seed_of(song.name, track.name, p.key), None, track.pan, track.gain,
+        velocity = p.note.velocity
+        if timing or spread:  # the same nudge wherever this note of this section plays (loops, flow clips, repeats)
+            nudge = seed_of(base, p.section, p.local, p.note.track, p.note.row)
+            start = max(0, start + round((2.0 * uniform(nudge, 0) - 1.0) * timing / 1000.0 * rate))
+            velocity = min(2.0, max(0.05, velocity * (1.0 + spread * (2.0 * uniform(nudge, 1) - 1.0))))
+        events.append(NoteEvent(track.name, p.key, inst, start, gate, p.midi, velocity, seed_of(song.name, track.name, p.key), None, track.pan, track.gain,
                                 beat))  # fmt: skip
+        steps.append(p.step)
     if repeat_loop and timeline.loop is not None:
         first, end = timeline.loop
         shift = timeline.frame(end, rate) - timeline.frame(first, rate)
-        start_frame = timeline.frame(first, rate)
         events += [
             NoteEvent(e.track, e.key, e.inst, e.start + shift, e.gate, e.midi, e.velocity, e.seed, None, e.pan, e.gain_db, e.beat)
-            for e in events
-            if e.start >= start_frame
+            for e, step in zip(events, steps, strict=True)
+            if step >= first  # by grid step: a humanized note may start a little before the loop
         ]
     return events

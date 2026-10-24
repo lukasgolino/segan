@@ -30,7 +30,7 @@ from segan.dsp import seed_of, uniform
 from segan.notes import Key, note_name, parse_key, parse_note
 from segan.yamlwrite import dump_mapping, flow
 
-API_VERSION = 1
+API_VERSION = 2  # 2: note velocities, Rng, invert, voicing
 
 ROMAN = {"i": 1, "ii": 2, "iii": 3, "iv": 4, "v": 5, "vi": 6, "vii": 7}
 
@@ -145,15 +145,26 @@ class Pattern:
 
     length: int
     notes: dict[str, list[tuple[int, int, int, str]]] = field(default_factory=dict)  # track -> (row, step, length, char)
+    velocity: dict[str, dict[int, str]] = field(default_factory=dict)  # track -> step -> velocity mark (written as a `velocity:` row)
 
-    def note(self, track: Track, step: int, pitch: int | str, length: int = 1, key: str = "p") -> Pattern:
+    def note(self, track: Track, step: int, pitch: int | str, length: int = 1, key: str = "p", velocity: float | None = None) -> Pattern:
+        """A roll note; `velocity` (0.2-1.8, 1 = plain; 1.5 accent, 0.35 ghost) is written as the nearest mark."""
         if track.percussion:
             raise ValueError(f"{track.name} is a drum track: use hit()")
         midi = note(pitch)
         if midi not in track.rows:
             raise ValueError(f"{note_name(midi)} isn't a row of {track.name} ({track.labels[-1]}-{track.labels[0]} in its key)")
         self._add(track, track.rows.index(midi), step, length, key)  # type: ignore[arg-type]
+        if velocity is not None and abs(velocity - 1.0) > 0.05:
+            self.velocity.setdefault(track.name, {})[step] = velocity_mark(velocity)
         return self
+
+    def velocity_row(self, track: Track, group: int = 4) -> str | None:
+        marks = self.velocity.get(track.name)
+        if not marks:
+            return None
+        text = "".join(marks.get(i, ".") for i in range(self.length))
+        return "|".join(text[i : i + group] for i in range(0, self.length, group)) if group else text
 
     def hit(self, track: Track, step: int, drum: str, mark: str = "x") -> Pattern:
         if not track.percussion or drum not in track.rows or mark not in "xXo":
@@ -196,6 +207,50 @@ class Pattern:
         return "\n".join(lines) + "\n"
 
 
+VELOCITY_MARKS = {"X": 1.5, "o": 0.35, "x": 1.0, **{str(d): round(0.2 * d, 2) for d in range(1, 10)}}
+
+
+def velocity_mark(velocity: float) -> str:
+    """The velocity-row mark closest to a velocity (X accent 1.5, o ghost 0.35, digits 1-9 = 0.2-1.8)."""
+    return min(VELOCITY_MARKS, key=lambda m: (abs(VELOCITY_MARKS[m] - velocity), m.isdigit()))
+
+
+class Rng:
+    """Seeded choices for generators: `rng = api.Rng(seed, "verse")`; `rng.random()`, `rng.choice(items)`, `rng.range(lo, hi)`.
+    The same on every machine and Python version (no `random` module), so a script with a seed rewrites the same song."""
+
+    def __new__(cls, *parts: object) -> Any:
+        from segan.suggest import Rng as _Rng
+
+        return _Rng("api", *parts)
+
+
+def invert(notes: list[int], inversion: int) -> list[int]:
+    """Chord notes in an inversion: 1 = lowest note up an octave, 2 = the two lowest, -1 = highest down an octave."""
+    out = sorted(notes)
+    for _ in range(max(0, inversion)):
+        out = out[1:] + [out[0] + 12]
+    for _ in range(max(0, -inversion)):
+        out = [out[-1] - 12] + out[:-1]
+    return sorted(out)
+
+
+def voicing(notes: list[int], inversion: int = 0, spread: str = "close", octave: int = 0, bass: bool = False) -> list[int]:
+    """A chord voiced: `inversion`, `spread` close | open (drop the 2nd voice from the top an octave: wider, warmer) |
+    wide (lowest down and highest up an octave), moved by `octave`, with the root doubled below when `bass`."""
+    out = invert(notes, inversion)
+    if spread == "open" and len(out) >= 3:
+        out = sorted([out[-2] - 12, *out[:-2], out[-1]])
+    elif spread == "wide":
+        out = sorted([out[0] - 12, *out[1:-1], out[-1] + 12]) if len(out) >= 3 else out
+    elif spread != "close":
+        raise ValueError("spread must be close, open or wide")
+    out = [m + 12 * octave for m in out]
+    if bass:
+        out = sorted([sorted(notes)[0] + 12 * octave - 12, *out])
+    return out
+
+
 def song_yaml(name: str, *, tracks: list[Track], patterns: Mapping[str, Pattern | dict[str, Any]], sections: dict[str, list[str]],
               arrangement: list[str], key: str | Key, tempo: float = 120, loop: str | bool | None = None, group: int = 4,
               comments: dict[str, str] | None = None, **fields: Any) -> str:  # fmt: skip
@@ -211,6 +266,9 @@ def song_yaml(name: str, *, tracks: list[Track], patterns: Mapping[str, Pattern 
     for pname, pattern in patterns.items():
         if isinstance(pattern, Pattern):
             out[pname] = {"length": pattern.length, **{t.name: pattern.lane(t, group) for t in tracks if t.name in pattern.notes}}
+            rows = {t.name: row for t in tracks if (row := pattern.velocity_row(t, group)) is not None}
+            if rows:
+                out[pname]["velocity"] = rows
         else:
             out[pname] = pattern
     data["patterns"] = out
@@ -228,8 +286,9 @@ def sfx_yaml(name: str, *, layers: list[dict[str, Any]], comments: dict[str, str
     return dump_mapping(data, ["name", "description", "category", "kit", "preset", "duration", "loop", "status", "style_version", "tags", "layers"], comments)
 
 
-def _signature(pattern: Pattern) -> tuple[int, tuple[tuple[str, tuple[tuple[int, int, int, str], ...]], ...]]:
-    return (pattern.length, tuple(sorted((t, tuple(sorted(n))) for t, n in pattern.notes.items() if n)))
+def _signature(pattern: Pattern) -> tuple[Any, ...]:
+    return (pattern.length, tuple(sorted((t, tuple(sorted(n))) for t, n in pattern.notes.items() if n)),
+            tuple(sorted((t, tuple(sorted(v.items()))) for t, v in pattern.velocity.items() if v)))  # fmt: skip
 
 
 def dedupe(patterns: dict[str, Pattern], sections: dict[str, list[str]]) -> tuple[dict[str, Pattern], dict[str, list[str]]]:
@@ -252,8 +311,8 @@ def derive(base_name: str, base: Pattern, pattern: Pattern, tracks: list[Track])
     """`pattern` written as a derived pattern of `base` (`{from: base_name, transpose: {...}, mute: [...], shift: N}`)
     when it is `base` with some tracks muted, scale-row transpositions per roll track and one time shift; else None.
     For `song_yaml(patterns={..., "b": api.derive("a", a, b, tracks) or b})`."""
-    if pattern.length != base.length:
-        return None
+    if pattern.length != base.length or pattern.velocity or base.velocity:
+        return None  # velocity rows are per pattern: write it out
     by_name = {t.name: t for t in tracks}
     for shift in sorted(range(-base.length + 1, base.length), key=abs):
         spec: dict[str, Any] = {"from": base_name}
@@ -290,6 +349,6 @@ def derive(base_name: str, base: Pattern, pattern: Pattern, tracks: list[Track])
 
 
 __all__ = [
-    "API_VERSION", "Pattern", "Track", "arpeggiate", "chord", "dedupe", "derive", "euclid", "flow", "humanize", "key_of", "note", "progression", "scale",
-    "sfx_yaml", "song_yaml",
+    "API_VERSION", "Pattern", "Rng", "Track", "arpeggiate", "chord", "dedupe", "derive", "euclid", "flow", "humanize", "invert", "key_of", "note",
+    "progression", "scale", "sfx_yaml", "song_yaml", "velocity_mark", "voicing",
 ]  # fmt: skip
