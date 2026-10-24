@@ -33,6 +33,8 @@ generated text files.
   - `notes.py` note names, keys, scales; `patch.py` instrument fields (shared by kits, inline instruments, SFX layers);
   - `models.py` instrument models (pluck, bowed, additive, wavetable, formant, modal, supersaw: parameters, presets,
     tables, parsing) and `modelsynth.py` their rendering; `fx.py` per-instrument effects (`fx:`, tempo-synced values);
+  - `similarity.py` song fingerprints, pairwise similarity, sameness lint (W021-W026), shipped (`fingerprints/shipped.json`,
+    `scripts/make_fingerprints.py`) and per-machine stores;
   - `kit.py` kit files; `synth.py` one note -> samples (oscillators, envelopes, filters, drum macros, oversampling);
   - `voices.py` note events -> track buffers (mono voice cuts, pan, note cache); `mix.py` shared bus (room, tone,
     crush, loudness normalisation, true-peak limiter); `analysis.py` LUFS/peaks/onsets/YIN/seam/aliasing;
@@ -203,3 +205,7 @@ generated text files.
   loops, flow clips and the note cache stay exact; a key-synced LFO is the trade-off). Delays are an FFT convolution with
   the echo train; flanger feedback and Karplus-Strong loops run in chunks shorter than their shortest delay. Saturation
   is a rational tanh approximation (exact arithmetic) at 4x. Hammond `organ` keeps its 16' bar (sounds an octave down).
+- 2026-10-24: #76 sameness. Fingerprints come from the source notes (exact, fast, machine-independent), not audio. Shipped
+  fingerprints cover the demo and reference.md's generator example; the demo sets `[similarity] shipped = false`. The
+  per-machine store is opt-in (`local_store`, decided), written on build and `segan similarity`; a shared online
+  registry is out of scope.

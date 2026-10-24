@@ -64,6 +64,11 @@ def build(project: Project) -> BuildResult:
     if lint.errors:
         result.errors = lint.errors
         return result
+    if project.config.similarity.local_store:  # other projects on this machine compare their songs with these (W026)
+        from segan import similarity
+
+        songs = [a for a in lint.assets if a.kind == "song" and not a.meta.template]
+        similarity.save_local(project.root, [similarity.fingerprint(s, str(project.root)) for s in songs])
     out = project.output_dir
     exporters = set(project.config.export)
     godot_root: Path | None = None

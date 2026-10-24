@@ -30,7 +30,7 @@ segan = "segan.cli:main"
 where = ["src"]
 
 [tool.setuptools.package-data]
-segan = ["templates/*", "skill/*", "presets/*", "libraries/*/*.json", "libraries/*/*.sfz", "libraries/*/*.txt"]
+segan = ["templates/*", "skill/*", "presets/*", "fingerprints/*.json", "libraries/*/*.json", "libraries/*/*.sfz", "libraries/*/*.txt"]
 
 [tool.mypy]
 strict = true

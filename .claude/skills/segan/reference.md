@@ -483,6 +483,12 @@ max_aliasing_db = -50.0       # W010
 max_limiting_db = 3.0         # W001: the most the limiter may take off before the target counts as out of reach
 max_dc_offset = 0.01          # W008
 loudness_tolerance = 1.0      # W001/W013, LU
+max_similarity = 0.85         # W024-W026: how alike (0-1) two songs' first 8 bars may be
+
+[similarity]
+local_store = false           # true: keep song fingerprints in ~/.cache/segan/fingerprints (on build and `segan similarity`)
+                              #   and compare with your other projects on this machine (W026)
+shipped = true                # compare with SEGAN's own examples (W025)
 ```
 
 ## Commands (all accept `--json`; non-zero exit on errors)
@@ -508,6 +514,7 @@ asset actually plays, so editing one instrument re-renders only what uses it.
 | `segan gallery` | every asset's waveform + spectrum and a loudness chart by category |
 | `segan bake sfx <name> [--in-place]` | expand a preset/template into every field |
 | `segan import midi <file.mid> [--kit K] [--key K] [--quantize 16] [--bars-per-pattern 2]` | MIDI -> song + change report |
+| `segan similarity [songs] [--shipped] [--machine] [--top 15]` | how alike songs are: pairs by `overall` with `harmony` (chroma per bar), `rhythm` (onsets), `timbre` (instruments), `register`, `tempo` (0-1 each), `same_opening`, `same_pitch_set`, `opening_score` (what W024 compares); `closest` per song. `--shipped` adds SEGAN's examples, `--machine` other projects (local_store) |
 | `segan build [--verify-godot] [-j N]` | final WAVs + manifest (+ Godot files); `--verify-godot` loads and plays everything headless |
 | `segan status [--fast]` | catalogue + what needs attention |
 | `segan mark <asset...> [--status approved\|draft] [--current] [--outdated]` | record reviews |
@@ -553,6 +560,12 @@ soundtrack cross-fade between songs in clashing keys, W017 a stem mix that can't
 trim, W018 an SFX noise layer whose filter removes more than 12 dB of its level (a narrow band-pass): raise its gain,
 W019 a looping song's file runs more than 2 bars past the song because its last notes ring that long: give those
 instruments `max_ring`, W020 a recorded layer in a project with `[sfx] source = "synth"`.
+Sameness (songs are compared with every other song of the project; `segan similarity` shows the numbers): W021 two
+songs open on the same notes (step 1, two or more notes), W022 more than half of the songs share one pitch set (D minor
+= F major) or sit within 10 bpm, W023 every song plays one kit with nearly the same instruments, W024 two songs' first 8
+bars score over `lint.max_similarity` (harmony, rhythm, instruments), W025 a song close to SEGAN's own examples (the
+demo, reference.md's generator example), W026 a song close to one from another project on this machine (`[similarity]
+local_store`). W022/W023 are reported on segan.toml.
 Turn warnings off for one asset with `lint: { disable: [...] }`, for every asset of a category with
 `[lint.<category>] disable = ["W017"]` (e.g. `[lint.battle_music]`), project-wide with `[lint] disable`.
 

@@ -80,3 +80,9 @@ max_aliasing_db = -50.0        # W010: raise [mix] oversample if instruments ali
 max_limiting_db = 3.0          # W001: limiter gain reduction above this means the source is too hot
 max_dc_offset = 0.01           # W008
 loudness_tolerance = 1.0       # W013: LU an un-normalised asset may be off its target
+max_similarity = 0.85          # W024-W026: how alike (0-1) two songs' first bars may be
+
+# Sameness checks: songs are compared with each other and with SEGAN's own examples (`segan similarity`).
+[similarity]
+# local_store = true           # also keep song fingerprints in ~/.cache/segan/fingerprints and compare with
+                               # your other projects on this machine (W026)

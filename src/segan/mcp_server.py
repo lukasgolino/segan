@@ -418,6 +418,13 @@ def create_server(root: Path, allow_godot: bool = False) -> MCPServer:
                 return _failure(exc.findings)
         return segan.cli("lint", *paths)
 
+    @server.tool(annotations=READ)
+    def similarity(songs: list[str] | None = None, shipped: bool = False) -> dict[str, Any]:
+        """How alike the project's songs are: pairs scored 0-1 overall and by harmony, rhythm, timbre, register and
+        tempo, the closest song for each, and whether two open on the same notes. `shipped` also compares with
+        SEGAN's own examples. Run it before calling a soundtrack done: no two songs should open alike."""
+        return segan.cli("similarity", *(songs or []), *(["--shipped"] if shipped else []))
+
     @server.tool(annotations=READ, structured_output=False)
     @_results
     def preview(asset: str, output: str | None = None, start: str | None = None, end: str | None = None, which: Literal["sheet", "seam"] = "sheet",

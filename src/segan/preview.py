@@ -212,6 +212,8 @@ def write_preview(asset: Any, render: Render, project: Project, start: float | N
             analysis["pitch_check"] = check
             analysis["notes_per_pattern"] = {name: {t: sum(n.track == t for n in pat.notes) for t in sorted({n.track for n in pat.notes})}
                                              for name, pat in asset.patterns.items()}  # fmt: skip
+            if not output.id:
+                analysis["closest_song"] = closest_song(asset, project)
         if render.kind == "sfx":
             from segan.sfxrender import layer_levels
 
@@ -246,6 +248,24 @@ def write_preview(asset: Any, render: Render, project: Project, start: float | N
 
 
 REEL_GAP = 0.4  # seconds of silence between the takes of a reel
+
+
+def closest_song(song: Any, project: Project) -> dict[str, Any] | None:
+    """The most similar other song: in the project, among SEGAN's examples, and (local_store) other projects here."""
+    from segan import similarity as sim
+    from segan.lint import _project_assets
+
+    mine = sim.fingerprint(song, str(project.root))
+    pools = {"project": [sim.fingerprint(s, str(project.root)) for n, s in _project_assets(project, [], "song").items() if n != song.name and not s.meta.template],
+             "segan": sim.shipped() if project.config.similarity.shipped else []}  # fmt: skip
+    if project.config.similarity.local_store:
+        pools["machine"] = sim.other_projects(project.root)
+    out: dict[str, Any] = {}
+    for where, pool in pools.items():
+        best = sim.closest(mine, pool)
+        if best is not None:
+            out[where] = {"song": best.b, "overall": round(best.overall, 3), "opening": round(sim.opening_score(best), 3), "same_opening": best.same_opening}
+    return out or None
 
 
 def reel_output(sfx: Sfx, render: Render) -> Output:
