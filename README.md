@@ -28,9 +28,18 @@ patterns:
   copied into the repo), and an SFX layer plays them (`sample: freesound:<id>` or a file) trimmed, reversed,
   faded, pitch-shifted and time-stretched independently, layered with synth sounds. `segan sounds credits`
   writes the attribution CC BY requires. See [examples/demo/sfx/boss_gong.sfx.yaml](examples/demo/sfx/boss_gong.sfx.yaml).
-- **Sampled instruments**: `sample:` plays WAVs, SFZ maps and SoundFonts (`.sf2`), and the `vsco2` library
-  (VSCO 2 Community Edition, CC0: string sections, brass, woodwinds, harp, timpani, percussion, piano) downloads
-  on demand with `segan samples fetch`. See [examples/orchestra](examples/orchestra).
+- **A wide palette**: band-limited oscillators, instrument models (plucked and bowed strings, sung vowels and choirs,
+  struck mallets, bells and metal, additive organs, wavetables, supersaws, 3-4 operator FM), hard sync, sub
+  oscillators, brass mutes, 13 drum macros and per-instrument effects (chorus, ensemble, phaser, flanger,
+  tempo-synced delay, reverb, drive, comb, ring, autopan...).
+- **Sampled instruments** in any kit: `sample:` plays WAVs, SFZ maps and SoundFonts (`.sf2`), and four CC0
+  libraries download on demand with `segan samples fetch`: `vsco2` (orchestra), `vcsl` (grand piano, electric
+  piano, organs, mallets, winds, world and hand percussion), `karoryfer` (guitars, basses, erhu, a drum kit with a
+  brush), `neosound` (voice, steel guitar, bamboo flute). See [examples/orchestra](examples/orchestra).
+- **Variety by design**: a random project seed, `segan kit roll` (a kit from style words, with a shared `identity`
+  group), `segan suggest song` (key, mode, tempo, meter, texture and opening away from the project's songs), and
+  sameness checks: lint warns when songs open alike or share their first bars, and `segan similarity` scores every
+  pair.
 - **One shared mix** (`[mix]`: room, tone, crush, oversampling, loudness targets, true-peak limiter) for every
   asset, so a game's sounds belong together; change it once and everything re-renders.
 - **Deterministic**: same sources, byte-identical WAVs (band-limited oscillators, table-based maths, no RNG
@@ -64,11 +73,12 @@ mypy && pytest
 ## Quick start
 
 ```sh
-segan init audio --style chiptune   # segan.toml, BRIEF.md, SOUND.md, kits/chip.kit.yaml
+segan init audio --style "cold ship, warm crew"   # segan.toml (with a project seed), BRIEF.md, SOUND.md, kits/core.kit.yaml
 cd audio
-segan kit show                      # every instrument playing a test phrase: previews/kits/chip.listen.png + WAVs
+segan kit show                      # every instrument playing a test phrase: previews/kits/core.listen.png + WAVs
 segan new sfx coin --preset coin --description "bright two-note pickup"
-segan new song theme --key "A minor" --tempo 120 --description "exploration loop"
+segan suggest song theme --mood "exploration"   # key, tempo, meter, texture, opening, progression, instruments
+segan new song theme --description "exploration loop"   # takes the suggestion (or --key/--tempo/--meter)
 segan lint                          # format errors + warnings from the source and the rendered audio
 segan preview coin theme            # WAV + listen sheet (+ loop seam view) per output; numbers with --json
 segan gallery                       # every asset side by side + loudness by category

@@ -24,7 +24,7 @@ instruments:                  # key = ONE letter or digit (any Unicode letter wo
   p: { name: pulse_lead, osc: pulse, duty: 0.25, env: [0.004, 0.08, 0.65, 0.09], gain: -7, range: [C4, C7] }
   q: { name: pulse_soft, osc: pulse, duty: 0.5, env: [0.02, 0.2, 0.5, 0.2], gain: -10, vibrato: [5.5, 0.12, 0.15] }
   b: { name: tri_bass, osc: triangle, env: [0.002, 0.05, 0.95, 0.04], gain: -2, range: [E1, C4] }
-  w: { name: pad, osc: saw, unison: 3, detune: 9, filter: { type: lp, cutoff: 1400 }, env: [0.4, 0.5, 0.8, 0.9], voices: 4 }
+  w: { name: strings, osc: bowed, unison: 5, detune: 6, env: [0.3, 0, 1, 0.6], voices: 4, fx: [ensemble] }
   k: { name: kick, drum: kick, tune: 50, decay: 0.22 }
   s: { name: snare, drum: snare, noise: 0.7, decay: 0.14, gain: -5 }
   h: { name: hat, drum: hat, decay: 0.035, gain: -13 }
@@ -115,9 +115,11 @@ make the note stereo. A shorthand `fx: [chorus]` uses the defaults.
 
 Echoes and reverb lengthen a song's loop file like a long release does (W019 if it runs more than 2 bars past the song).
 
-### Samples (orchestral and other recorded instruments)
+### Samples (recorded instruments: any kit can mix them with synths)
 
-`sample:` replaces `osc`/`drum`; envelope, filter, vibrato, pitch keyframes, gain, voices and crush still apply.
+`sample:` replaces `osc`/`drum`; envelope, filter, vibrato, pitch keyframes, gain, voices, crush, `mute` and `fx` still
+apply. A sampled instrument is an ordinary kit instrument: a synth kit can have a real piano, an erhu or a brush kit
+next to its pulse lead.
 
 ```yaml
 instruments:
@@ -130,14 +132,30 @@ instruments:
   z: { sample: { wav: samples/zap.wav, root: A4, loop: true } }                           # one WAV, pitched from root
 ```
 
-- **Library** `vsco2` = VSCO 2 Community Edition (CC0, Versilian Studios): strings (sections: `violins_`, `violas_`,
+- **Libraries** (all CC0; `segan samples list` shows every instrument with its size and range):
+  - `vcsl` = Versilian Community Sample Library: keys (`grand_piano`, `fm_piano` electric piano, `clavisynth`,
+    `harpsichord`, `pipe_organ`, `pipe_organ_loud`), plucked (`folk_harp`, `dan_tranh` zither/koto-like, `strumstick`),
+    mallets and bells (`vibraphone`, `vibraphone_hard`, `tubular_bells`, `hand_chimes`, `balafon`, `kalimba`, `mbira`),
+    winds (`harmonica`, `tenor_sax`, `recorder`, `ocarina`, `bowed_psaltery`), hand and world percussion (`conga`,
+    `conga_mute`, `quinto`, `tumba`, `bongo_high`/`_low`, `cajon_1`-`_3`, `darbuka_1`/`_3`/`_5`, `frame_drum`,
+    `frame_drum_small`, `shaker`, `cowbell`, `woodblock`, `claves`, `agogo_high`/`_low`, `clap`, `cabasa`, `guiro`,
+    `slit_drum_high`/`_low`, `sleigh_bells`, `finger_cymbals`), kit pieces (`snare_drum`, `snare_off`, `hihat`,
+    `hihat_open`, `tom_high`, `tom_low`) and found metal (`anvil`, `brake_drum`).
+  - `karoryfer` = Karoryfer Lecolds: guitars (`clean_guitar`, `gretsch`, `gretsch_mute` palm-muted, `hofner`), basses
+    (`bass_guitar`, `bass_guitar_dark`, `upright_pizz`, `upright_arco`), `erhu`, `erhu_stac`, and a drum kit (`kick`,
+    `cajon_kick`, `snare`, `snare_edge`, `brush` (a brush stirred on the snare), `hat_closed`, `hat_tight`, `hat_half`,
+    `hat_open`, `hat_foot`, `tom_floor`, `tom_low`, `tom_mid`, `tom_high`, `tom_very_high`, `crash`, `ride`, `splash`,
+    `china`, `djembe`).
+  - `neosound` = NeoSoundFonts (Simone Piervergili): `voice_oohs` (a male "ooh": stack `voices` for a small choir, or
+    use the `formant` model), `steel_guitar`, `bamboo_flute`.
+  - `vsco2` = VSCO 2 Community Edition (CC0, Versilian Studios): strings (sections: `violins_`, `violas_`,
   `cellos_` `sus|trem|pizz|spic`, `basses_sus|pizz`, `violin_solo`, `harp`), brass (`horn_`, `trumpet_`, `trombone_`,
   `tuba_` `sus|stac`), woodwinds (`flute_`, `oboe_`, `clarinet_`, `bassoon_` `sus|stac`, `piccolo`), percussion
   (`timpani`, `timpani_roll`, `glockenspiel`, `marimba`, `xylophone`, `bass_drum`, `snare`, `crash`, `sus_cymbal`,
-  `tam_tam`, `triangle`, `tambourine`), `piano`. `segan samples list` shows them with sizes and key ranges (`range` in `--json`; unpitched = none); the audio isn't in
-  SEGAN: `segan samples fetch vsco2 violins_sus harp ...` downloads only those (pinned commit, checked) into a
-  user cache shared by every project. Lint says what to fetch if a kit needs more. Every library instrument is
-  levelled to the same loudness, so kit `gain` is pure balance.
+  `tam_tam`, `triangle`, `tambourine`), `piano` (upright).
+  The audio isn't in SEGAN: `segan samples fetch <library> <instrument...>` downloads only those (pinned commits, checked)
+  into a user cache shared by every project. Lint says what to fetch if a kit needs more. Every library instrument is
+  levelled to the same loudness (plain notes), so kit `gain` is pure balance. Unpitched ones (hits) play in drum lanes.
 - Paths (wav/sfz/sf2) are relative to the project folder (the one with segan.toml). WAV: PCM 8-32-bit or float,
   any rate, mono or stereo (mixed to mono; tracks pan and the room widens). `smpl` loops are used.
 - `env` defaults to the file's own (SFZ `ampeg_*`, SF2 volume envelope); `range` defaults to the mapped keys
@@ -676,21 +694,26 @@ writes `b` as `{from: a, transpose, mute, shift}` when it is one (else None). Wr
 from pathlib import Path
 from segan import api
 
-key = "F major"
-lead = api.Track.roll("lead", key, "F4", "A5")
-bass = api.Track.roll("bass", key, "F2", "F3")
-drums = api.Track.drums("drums", ["k", "s", "h"])
+key = "E dorian"
+rng = api.Rng(11, "market")                 # seeded choices: the same file every run, another seed = another take
+lead = api.Track.roll("lead", key, "C4", "C6")
+keys = api.Track.roll("keys", key, "C3", "A5")
+bass = api.Track.roll("bass", key, "C2", "C4")
+perc = api.Track.drums("perc", ["k", "s", "h"])
 patterns = {}
-for name, numeral in (("a", "I"), ("b", "vi"), ("c", "IV"), ("d", "V")):
-    p = api.Pattern(16)
-    chord = api.progression(numeral, key, octave=4)[0]
-    for step, midi, length in api.arpeggiate(chord, 16, rate=4):
-        p.note(lead, step, midi, length, "f")
-    p.note(bass, 0, chord[0] - 24, 8, "a").note(bass, 8, chord[0] - 24, 8, "a")
-    p.row(drums, "k", "x.......x.......").row(drums, "s", "....x.......x...").row(drums, "h", api.humanize("x.x.x.x.x.x.x.x.", name))
+for name, numeral in zip("abcd", ["i", "IV", "VII", "IV"]):
+    p = api.Pattern(12)                     # 3/4: 12 sixteenths per bar
+    triad = api.progression(numeral, key, octave=3)[0]
+    for m in api.voicing(triad, inversion=rng.choice([0, 1, 2])):
+        p.note(keys, 0, m, 12, "e", velocity=0.8)
+    for step, midi, length in api.arpeggiate([m + 12 for m in triad], 12, rate=2, order=rng.choice(["up", "down", "updown"])):
+        p.note(lead, step, midi, length, "f", velocity=1.5 if step == 0 else 1.0)
+    low = api.progression(numeral, key, octave=2)[0]
+    p.note(bass, 0, low[0], 6, "a").note(bass, 6, low[2], 6, "a")
+    p.row(perc, "k", "x.....x.....").row(perc, "h", api.humanize("..x...x...x.", name))
     patterns[name] = p
-text = api.song_yaml("shop", kit="fm_soft", key=key, tempo=100, tracks=[lead, bass, drums], patterns=patterns,
+text = api.song_yaml("market", kit="fm_soft", key=key, tempo=96, meter=[3, 4], tracks=[lead, keys, bass, perc], patterns=patterns,
                      sections={"main": ["a", "b", "c", "d"]}, arrangement=["main"], loop="main",
-                     description="cosy shop loop")
-Path("music/shop.song.yaml").write_text(text)
+                     humanize={"timing": 6, "velocity": 0.1}, description="busy market at dusk, 3/4")
+Path("music/market.song.yaml").write_text(text)
 ```

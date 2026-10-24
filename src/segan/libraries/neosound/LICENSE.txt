@@ -1,0 +1,3 @@
+The samples are Simone Piervergili's (https://github.com/NeoSoundFonts: SimonePiervergili-VoiceOohs, SimonePiervergili-OldSteelGuitar,
+SP-Bamboo-Flute), each released under CC0 1.0 Universal. SEGAN doesn't ship them: `segan samples fetch neosound` downloads them.
+The .sfz maps in this folder are part of SEGAN (MIT).

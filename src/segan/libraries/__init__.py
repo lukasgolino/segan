@@ -2,7 +2,8 @@
 
 Each library folder (`libraries/<name>/`) has `library.json` (source repository, pinned commit, licence, every
 instrument's files and every file's size and git blob id) and one `<instrument>.sfz` per instrument whose
-`sample=` paths are relative to the repository root. `segan samples fetch <library> [instruments]` downloads
+`sample=` paths are relative to the repository root. A library gathered from several repositories names them in
+`sources` ({alias: {repo, commit}}); its file paths then start with the alias (`emily/notes/a2_f_rr1.wav`). `segan samples fetch <library> [instruments]` downloads
 only the files those instruments use, from the pinned commit, checks each against its blob id and keeps them
 in the user cache (`$SEGAN_SAMPLES`, else `$XDG_CACHE_HOME/segan/samples`, else `~/.cache/segan/samples`),
 shared by every project. Nothing is bundled: the audio is the library author's, under their licence.
@@ -43,6 +44,26 @@ class Library:
     credit: str
     instruments: dict[str, dict[str, Any]]
     files: dict[str, tuple[int, str]]  # path -> (size, git blob sha1)
+    sources: tuple[tuple[str, str, str], ...] = ()  # (alias, repo, commit) when gathered from several repositories
+
+    @property
+    def pin(self) -> str:
+        """What the cache folder is named after: the commit, or every source's commit together."""
+        if not self.sources:
+            return self.commit[:12]
+        import hashlib
+
+        return hashlib.sha1("\n".join(f"{a} {r} {c}" for a, r, c in sorted(self.sources)).encode()).hexdigest()[:12]
+
+    def origin(self, path: str) -> tuple[str, str, str]:
+        """(repo, commit, path in that repo) of a library file."""
+        if not self.sources:
+            return self.repo, self.commit, path
+        alias, _, rest = path.partition("/")
+        for name, repo, commit in self.sources:
+            if name == alias:
+                return repo, commit, rest
+        raise LibraryError(f"{self.name}: {path} names no source")
 
     @property
     def folder(self) -> Path:
@@ -50,7 +71,7 @@ class Library:
 
     @property
     def cache(self) -> Path:
-        return cache_root() / self.name / self.commit[:12]
+        return cache_root() / self.name / self.pin
 
     def sfz(self, instrument: str) -> Path:
         return self.folder / f"{instrument}.sfz"
@@ -90,7 +111,8 @@ def library(name: str) -> Library:
         raise LibraryError(f"unknown sample library {name!r} (libraries: {', '.join(names()) or 'none'})")
     data = json.loads(path.read_text(encoding="utf-8"))
     files = {k: (int(v[0]), str(v[1])) for k, v in data["files"].items()}
-    return Library(name, data["title"], data["repo"], data["commit"], data["license"], data["url"], data["credit"], data["instruments"], files)
+    sources = tuple((str(a), str(v["repo"]), str(v["commit"])) for a, v in sorted(data.get("sources", {}).items()))
+    return Library(name, data["title"], data["repo"], data["commit"], data["license"], data["url"], data["credit"], data["instruments"], files, sources)
 
 
 def library_spec(lib_name: str, instrument: str) -> SampleSpec:
@@ -103,11 +125,12 @@ def library_spec(lib_name: str, instrument: str) -> SampleSpec:
         total = len(lib.instruments[instrument]["files"])
         raise LibraryError(f"{lib_name}/{instrument}: {len(missing)} of {total} samples aren't downloaded; run `segan samples fetch {lib_name} {instrument}` "
                            f"({lib.size(instrument) / 1e6:.0f} MB, {lib.license}, into {lib.cache})")  # fmt: skip
-    return SampleSpec("library", str(lib.sfz(instrument)), base=str(lib.cache), stamp=((f"{lib_name}@{lib.commit}", 0, 0),))
+    return SampleSpec("library", str(lib.sfz(instrument)), base=str(lib.cache), stamp=((f"{lib_name}@{lib.pin}", 0, 0),))
 
 
 def raw_url(lib: Library, path: str) -> str:
-    return f"https://raw.githubusercontent.com/{lib.repo}/{lib.commit}/{urllib.parse.quote(path)}"
+    repo, commit, inner = lib.origin(path)
+    return f"https://raw.githubusercontent.com/{repo}/{commit}/{urllib.parse.quote(inner)}"
 
 
 def fetch(lib: Library, instruments: list[str], progress: Callable[[str], None] | None = None, workers: int = 8) -> tuple[int, int]:

@@ -1,0 +1,3 @@
+The Versilian Community Sample Library samples are by Versilian Studios, released under CC0 1.0 Universal
+(https://github.com/sgossner/VCSL). SEGAN doesn't ship them: `segan samples fetch vcsl` downloads them.
+The .sfz maps in this folder are part of SEGAN (MIT).

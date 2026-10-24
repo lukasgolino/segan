@@ -200,10 +200,10 @@ def cmd_init(args: argparse.Namespace, out: Output) -> int:
     if clash is not None:
         out.say(f"  warning: {display_path(clash)} writes to the same output_dir, or one inside the other; both tools write manifest.json "
                 "and clean up files they don't know. Give each its own folder (e.g. assets/art and assets/audio).")  # fmt: skip
-    from segan.kitshow import library_needs
+    from segan.kitshow import all_library_needs
 
-    if needs := library_needs(kit_path):
-        out.say(f"The kit plays sampled instruments: `segan samples fetch vsco2 {' '.join(needs)}` downloads them first.")
+    for library_name, needs in all_library_needs(kit_path).items():
+        out.say(f"The kit plays sampled instruments: `segan samples fetch {library_name} {' '.join(needs)}` downloads them first.")
     out.say(f"Next: `segan kit show {kit_name}` and look at previews/kits/{kit_name}.listen.png; fill in BRIEF.md and SOUND.md.")
     out.result(
         {
@@ -318,7 +318,7 @@ def cmd_samples_fetch(args: argparse.Namespace, out: Output) -> int:
         if not args.all and not args.instruments:
             raise usage_error(f"name the instruments to fetch, or --all ({sum(lib.size(i) for i in wanted) / 1e6:.0f} MB): {', '.join(wanted)}")
         size = sum(lib.files[f][0] for f in {f for i in wanted if i in lib.instruments for f in lib.missing(i)})
-        out.say(f"fetching {', '.join(wanted)} from {lib.repo}@{lib.commit[:12]} ({size / 1e6:.0f} MB to download, {lib.license}) into {display_path(lib.cache)}")
+        out.say(f"fetching {', '.join(wanted)} from {lib.repo}@{lib.pin} ({size / 1e6:.0f} MB to download, {lib.license}) into {display_path(lib.cache)}")
         count, fetched = libraries.fetch(lib, wanted, progress=lambda p: progress.note(f"got {p}"))
     except libraries.LibraryError as exc:
         raise usage_error(str(exc)) from None
@@ -1002,9 +1002,9 @@ def cmd_kit_roll(args: argparse.Namespace, out: Output) -> int:
         out.say(f"wrote {display_path(path)}")
     if not out.as_json:
         print(text, end="")
-    if rolled.libraries:
-        out.say(f"it plays sampled instruments: `segan samples fetch {' '.join(sorted({l.split('/')[0] for l in rolled.libraries}))} "
-                f"{' '.join(l.split('/')[1] for l in rolled.libraries)}` first")  # fmt: skip
+    for library_name in sorted({entry.split("/")[0] for entry in rolled.libraries}):
+        wanted = [entry.split("/")[1] for entry in rolled.libraries if entry.startswith(library_name + "/")]
+        out.say(f"it plays sampled instruments: `segan samples fetch {library_name} {' '.join(wanted)}` first")
     out.say(f"next: `segan kit show {args.name}`; another take: --take {args.take + 1}")
     out.result({"kit": args.name, "path": None if args.dry_run else display_path(path), "text": text, "identity": rolled.identity,
                 "libraries": rolled.libraries, "seed": rolled.seed})  # fmt: skip
