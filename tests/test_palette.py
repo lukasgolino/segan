@@ -36,7 +36,7 @@ def pitch(x: np.ndarray, rate: int = 22050) -> float:
     return float(np.median(found.hz[found.hz > 0]))
 
 
-PITCHED = {
+PITCHED: dict[str, dict[str, Any]] = {
     "pluck": {"osc": "pluck"},
     "pluck_preset": {"osc": "pluck", "pluck": "nylon"},
     "bowed": {"osc": "bowed", "unison": 4, "detune": 5, "env": [0.1, 0, 1, 0.2]},
