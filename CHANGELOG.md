@@ -61,8 +61,23 @@ check before upgrading. Patch bumps never change existing behaviour. Every relea
   progression and instruments for a new song, away from the project's songs. MCP tools `suggest_song`, `kit_roll`.
 - `segan.api`: `Pattern.note(..., velocity=)`, `invert`, `voicing`, `Rng` (API_VERSION 2).
 
+- Three more sample libraries, fetched on request into the user cache like `vsco2` (#76): `vcsl` (Versilian Community
+  Sample Library: grand piano, FM electric piano, harpsichord, pipe organ, folk harp, zither, vibraphone, tubular
+  bells, kalimba, mbira, harmonica, tenor sax, recorder, ocarina, bowed psaltery and 30 hand, world and kit
+  percussion hits), `karoryfer` (Karoryfer Lecolds: clean and hollowbody electric guitars, electric and upright
+  basses, erhu, and a drum kit with a brush) and `neosound` (NeoSoundFonts: a male "ooh" voice, a steel-string
+  guitar, a bamboo flute). All CC0. A library can now gather several repositories (`sources` in library.json).
+  `scripts/make_vcsl_library.py`, `make_karoryfer_library.py`, `make_neosound_library.py` regenerate the maps
+  (shared code in `scripts/library_maps.py`: measured octaves and tuning, lead-ins, levels).
+
 ### Changed
 
+- The skill and SOUND.md template now split a game's sound into an identity (2-3 signature instruments, motifs) and
+  per-song variation (extras from the wider palette, key, mode, tempo, meter, register, texture), set up projects from
+  words instead of a chiptune/synth/orchestral choice, and ask for `segan similarity` before a soundtrack is done.
+  reference.md's generator example is an E dorian 3/4 song with seeded voicings and dynamics (not F major
+  I-vi-IV-V), and its kit example has bowed strings instead of a detuned-saw pad.
+- `segan kit roll` can pick sampled instruments from every library; `segan init` prints a fetch command per library.
 - `segan new song` without `--key`/`--tempo` uses the seeded suggestion instead of A minor at 120 bpm (`--meter`
   added); the MCP `scaffold` tool does the same.
 - `segan.api.song_yaml` takes any mapping of patterns (a `dict[str, Pattern]` type-checks); `dedupe` and `derive`

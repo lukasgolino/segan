@@ -1,0 +1,3 @@
+The samples are Karoryfer Lecolds' (https://github.com/sfzinstruments: black-and-green-guitars, emilyguitar, black-and-blue-basses,
+dsmolken.double-bass, aliexpress-erhu, swirly-drums), each released under CC0 1.0 Universal. SEGAN doesn't ship them:
+`segan samples fetch karoryfer` downloads them. The .sfz maps in this folder are part of SEGAN (MIT).

@@ -71,35 +71,54 @@ asset name, files and loop points from `manifest.json`, the listen sheet path, t
 
 Ask once, in one message, with defaults:
 1. **The game**: genre, mood, setting (for BRIEF.md).
-2. **Sound style**: chiptune (default: pulse/triangle/noise, NES/Game Boy era), 80s synth (filtered saws,
-   square bass, punchy drums) or orchestral (sampled strings, brass, woodwinds, harp, timpani: the `vsco2`
-   library, ~1 GB to download; or the game's own SoundFont/SFZ).
-3. **References**: games or soundtracks it should evoke.
-4. **Engine**: Godot 4 (default; path to the project) or plain WAVs + manifest.
-5. **Mix**: dry or roomy (`[mix] room`, default 0.15), lo-fi crush or clean (default clean).
+2. **The sound, in words**: what it should feel like ("cold ship, warm crew", "dusty lo-fi jazz", "bright 8-bit",
+   "eerie folk horror"). Not a menu: synths, the instrument models (plucked and bowed strings, choirs, mallets,
+   organs, FM, wavetables), effects and real recorded instruments (pianos, guitars, strings, brass, winds, world
+   percussion, drum kits: sample libraries fetched on request) can all sit in one kit.
+3. **The identity**: 2-3 signature instruments or sounds every song should share (default: the rolled kit's
+   `identity` group), and any motif the game has.
+4. **References**: games or soundtracks it should evoke.
+5. **Engine**: Godot 4 (default; path to the project) or plain WAVs + manifest.
+6. **Mix**: dry or roomy (`[mix] room`, default 0.15), lo-fi crush or clean (default clean).
 
-Then: `segan init audio --style chiptune|synth [--godot <godot project>]` (writes `segan.toml`, BRIEF.md,
-SOUND.md and a starter kit). `segan kit show` and **look at the kit sheet**; adjust the kit (section 3) until
-every instrument is distinct and in a sensible range, then ask the owner to listen to `previews/kits/<kit>.wav`.
-Fill in BRIEF.md (game, key sounds, music list) and SOUND.md (which instrument does what, keys and tempos per
-mood, loudness). Log the owner's answers in BRIEF.md's feedback log.
+Then: `segan init audio --style "<the words>" [--godot <godot project>]` (writes `segan.toml` with a random project
+`seed`, BRIEF.md, SOUND.md and a kit `core` rolled from the seed and the words; `--style chiptune|synth|orchestral`
+gives a fixed starter kit instead). Two projects with the same brief get different kits, by design: don't copy
+another project's kit. `segan kit show core` and **look at the kit sheet**; adjust the kit (section 3) until every
+instrument is distinct and in a sensible range (`segan kit roll core --style ... --take 1 --force` rolls again), then
+ask the owner to listen to `previews/kits/<kit>.wav`. Fill in BRIEF.md (game, key sounds, music list) and SOUND.md
+(the identity, which instrument does what, how songs vary, loudness). Log the owner's answers in BRIEF.md's
+feedback log.
 
 ## 3. Kits (the palette)
 
-Pick the kit per song from SOUND.md (e.g. a soft kit for shops, a punchy one for combat); `segan new song`
-uses `default_kit` unless you pass `--kit`.
+A kit maps one-character keys to instruments; songs write those keys in their grids. Think of a game's sound as
+two layers:
+- **Identity** (fixed for the game, in SOUND.md and the kit's `identity` group): 2-3 signature instruments and the
+  game's motifs. This is what makes every song sound like the same game.
+- **Variation** (per song): 1-2 extra instruments drawn from the wider palette, its own key, mode, tempo, meter,
+  register and texture. This is what keeps 20 songs from sounding like one.
 
-A kit maps one-character keys to instruments; songs write those keys in their grids, so every song made with
-a kit sounds like the same game. Keep kits small (6-10 instruments) and give each a job: one or two leads, a
-bass, maybe a pad or arpeggio, 3-5 drums.
+So a game has a core kit and more around it: `segan kit roll <name> --style "<words for this part of the game>"
+--around core` keeps the identity instruments and rolls the rest (a combat kit, a town kit); or put more
+instruments in one kit than any song uses. A song uses its kit's identity instruments plus its own extras: songs
+that all play the same 6 instruments blur together (lint W023). Give each instrument a job: one or two leads, a
+bass, harmony (pad, strings, choir, organ, keys), colour (pluck, mallet, bell, arpeggio, texture), 3-5 drums.
+- **The palette** (reference.md, Kit): basic oscillators, models (`pluck` guitar/harp/koto, `bowed` strings with
+  real bodies, `formant` voices and choirs, `modal` marimba/vibes/glass/bells/metal, `additive` organs and bells,
+  `wavetable`, `supersaw`, 3-4 operator `fm`), `sync`, `sub`, filter LFOs, brass `mute`s, and per-instrument `fx`
+  (chorus, ensemble, phaser, flanger, tempo-synced delay, reverb, drive, crush, comb, ring, tremolo, autopan).
+  "Strings" are `bowed` or samples, not a detuned saw; a choir is `formant` (or `neosound/voice_oohs`).
 - `range` on melodic instruments keeps notes where they sound good (bass: E1-C4; leads: C4-C7); lint E007
   enforces it.
 - `voices: 1` (default) is a chip channel: a new note cuts the old. Chords need `voices: 3` or more (E014).
 - Arpeggio instruments (`arp:`) use fixed semitone offsets, so make them mode-neutral (`[0, 7, 12]`) unless
   every song is in a major key.
-- **Sampled instruments** (`sample: vsco2/violins_sus`, `.sfz`, `.sf2`, `.wav`; reference "Samples"): `segan
-  samples list` shows the library, `segan samples fetch vsco2 <instruments>` downloads what the kit uses (lint
-  names any that are missing). Sections need `voices` for chords; `_sus` instruments hold while the note does
+- **Sampled instruments** (`sample: vsco2/violins_sus`, `vcsl/grand_piano`, `karoryfer/brush`, `.sfz`, `.sf2`,
+  `.wav`; reference "Samples"): any kit may mix them with synths. `segan samples list` shows the libraries (vsco2
+  orchestra; vcsl keys, mallets, winds, world percussion; karoryfer guitars, basses, erhu, a drum kit; neosound
+  voice, steel guitar, flute), `segan samples fetch <library> <instruments>` downloads only what the kit uses into
+  the user cache (lint names any that are missing). Sections need `voices` for chords; `_sus` instruments hold while the note does
   (W014 if a note outlasts its sample: re-strike long notes), `pizz`/`stac`/harp/percussion ring by themselves.
   Mix them like an orchestra: strings hold chords, one lead line (horn, flute, solo violin), harp or pizz for
   motion, timpani and crash only on downbeats; a bigger room (`[mix] room = 0.3`, `room_decay = 1.6`).
@@ -190,11 +209,17 @@ makes it ("a lion roar"), realistic or stylised, length ("~2 s"), distance and c
 
 ## 5. Making a song
 
-1. Decide **key, tempo and form** from SOUND.md: e.g. exploration 100-125 bpm in a minor/dorian key; combat
-   140-170 bpm; shops/menus 90-110 in major; dungeons phrygian or harmonic minor. Moods: major bright, minor
-   sad/tense, dorian adventurous, mixolydian heroic, phrygian menacing, lydian dreamy.
-2. `segan new song <name> --key "A minor" --tempo 120 --bars 2 --description "..."` gives tracks with labelled
-   empty rows. Rows are the scale's notes, highest first, so **you can't write a wrong note**: pick rows, not
+1. **Start somewhere new**: `segan suggest song <name> --mood "<words>"` proposes key and mode, tempo, meter,
+   an opening texture (pad, ostinato, arpeggio, pulse, drone and melody, drums first, solo line, chorale, bass riff,
+   call and response), the opening voicing (chord, inversion, spread, register), a progression and the instruments
+   (the identity plus extras), steered away from the project's songs and seeded by the project seed (`--take 1`
+   for another). Use it, or decide yourself from SOUND.md, but **vary key, mode, tempo, meter, register, texture and
+   instrumentation between songs**: if the last three songs were D minor / F major at 60-72 bpm on a pad, this one
+   isn't. Moods: major bright, minor sad/tense, dorian adventurous, mixolydian heroic, phrygian menacing, lydian
+   dreamy, harmonic minor exotic; slow isn't always minor, and 3/4, 6/8 or 5/4 change the feel more than tempo.
+   **No two songs open the same way**: different first chord, inversion, register or texture (W021).
+2. `segan new song <name> [--key "E dorian"] [--tempo 96] [--meter 6/8] --bars 2 --description "..."` gives tracks
+   with labelled empty rows (without `--key`/`--tempo` it takes the suggestion). Rows are the scale's notes, highest first, so **you can't write a wrong note**: pick rows, not
    pitches. Keep the trailing labels on every row (E011 catches a missing or extra row).
 3. Write **short patterns** (1-2 bars = 16-32 steps) and reuse them: derived patterns (`from: a` with
    `transpose`, `mute`, `swap`, `shift`, `reverse`, or one lane replaced) and sections (`main: [a, b, a, c]`).
@@ -207,13 +232,19 @@ makes it ("a lion roar"), realistic or stylised, length ("~2 s"), distance and c
      phrase for the answer); rests between phrases. End the loop on a note that leads back to the start.
    - **Harmony/arpeggio**: chord tones in eighths, quieter (track `gain: -3`).
    - **Drums**: kick on 1 and 3 (or every beat for driving music), snare on 2 and 4 (steps 5 and 13), hats in
-     eighths; `X` accents and `o` ghosts give groove; a fill in the last bar of a section.
+     eighths; `X` accents and `o` ghosts give groove; a fill in the last bar of a section. Not every song needs a
+     kit: hand percussion, a brush, a shaker or no drums at all are textures too.
+   - **Dynamics**: roll notes get `velocity:` rows (`X` accent, `o` ghost, `1`-`9`) and `dynamics:` ramps
+     (crescendos, swells): a phrase without dynamics sounds mechanical. `humanize: { timing: 8, velocity: 0.1 }` on
+     the song loosens the grid (seeded: the same every render; change `seed` for another take).
    - W009 flags minor-second/tritone clashes between tracks on a beat (the meter's beat: a dotted quarter in 6/8;
      notes held from earlier count while still above -30 dB): fix them
      unless you want the tension. A dominant seventh (V7, e.g. C7 going to F) contains a tritone on purpose:
      there it's a judgement call between shortening a note and `lint: { disable: [W009] }`.
    - Many similar patterns, or tired of counting dots: generate lanes with `segan.api` (reference.md has a worked
-     example) instead of an ad-hoc script.
+     example) instead of an ad-hoc script. A generator that writes several songs must vary them: `api.Rng(seed,
+     song_name)` for seeded choices, `api.voicing(chord, inversion, spread, octave)` for voicings, different
+     progressions, textures and instruments per song. One template with the chords swapped is one song 20 times.
 5. **Loops**: `loop: main` (from the start of that section to the end). The file is the whole song **plus the
    first bar(s) of the loop again**, and the loop points sit that many whole bars later (`loop.offset` in the
    manifest; usually one bar: enough bars to cover the longest release + the room tail). So the loop's own end
@@ -238,9 +269,14 @@ makes it ("a lion roar"), realistic or stylised, length ("~2 s"), distance and c
    Vorbis (~10x smaller); a simple chip song can set `sample_rate: 22050` and `channels: mono` for itself.
 7. `segan lint`, then `segan preview <song>`: look at the piano roll (is it what you meant?), the spectrogram
    (busy where you expect, bass at the bottom, no smear of clashing notes), the LUFS curve (no holes or spikes),
-   `pitch_check` (every note within 50 cents), the seam. Long songs: `--from 9 --to 16` (bars) shows a window.
-   Then a human listens to the WAV.
-8. Existing music as MIDI: `segan import midi file.mid --kit <kit>` (quantized, snapped to the key, mapped to
+   `pitch_check` (every note within 50 cents), the seam, and `closest_song` (the most similar song in the project
+   and among SEGAN's examples). Long songs: `--from 9 --to 16` (bars) shows a window. Then a human listens to the WAV.
+8. **Before you call a soundtrack done**: `segan similarity` (or the MCP `similarity` tool). No pair should share
+   an opening (W021) or score over `lint.max_similarity` in its first bars (W024); most songs shouldn't share a
+   pitch set or tempo band (W022), and the songs shouldn't all play the same instruments (W023). A song close to
+   SEGAN's own examples (W025) means you started from a default: move away from it. Report the similarity numbers
+   with the soundtrack.
+9. Existing music as MIDI: `segan import midi file.mid --kit <kit>` (quantized, snapped to the key, mapped to
    the kit, with a report of every change); then lint, preview and tidy the patterns.
 
 ## 6. After approval: build and report
@@ -281,6 +317,8 @@ log the change in BRIEF.md. When existing sources must be rewritten (a new kit, 
 
 - Kits are the palette: don't invent instruments inside songs (strict mode makes it an error, E009).
 - Short patterns, many references; labelled rows; one job per track.
+- Same game, different songs: the identity instruments in every song, everything else varies. Defaults and examples
+  (A minor at 120, F major I-vi-IV-V, a detuned-saw pad) are starting points every project shares: move away from them.
 - Look at every listen sheet you make; report numbers, not opinions; humans approve.
 - Previews are for checking; `segan build` output is what the game uses. Don't hand-edit build output.
 - Don't commit or push unless asked. If SEGAN itself seems wrong (a crash, a misleading message), say so and offer

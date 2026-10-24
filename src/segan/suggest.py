@@ -441,6 +441,52 @@ def _(r: Rng) -> dict[str, Any]:
     return {"sample": "vsco2/timpani", "voices": 2, "max_ring": 1.5}
 
 
+# sampled instruments from the other libraries (fetched on request, like vsco2)
+def _sampled(name: str, role: str, tags: str, sample: str, **extra: Any) -> None:
+    def build(rng: Rng) -> dict[str, Any]:
+        return {"sample": sample, **extra}
+
+    R.append(Recipe(name, role, tuple(tags.split()), build, "sample", sample))
+
+
+for _name, _role, _tags, _sample, _extra in (
+    ("grand_piano", "harmony", "acoustic warm soft jazzy orchestral", "vcsl/grand_piano", {"voices": 8, "max_ring": 2.0}),
+    ("fm_epiano", "harmony", "electronic retro soft jazzy warm", "vcsl/fm_piano", {"voices": 6}),
+    ("pipe_organ", "harmony", "eerie orchestral dark epic", "vcsl/pipe_organ", {"voices": 5}),
+    ("harpsichord_real", "colour", "orchestral bright playful", "vcsl/harpsichord", {"voices": 4}),
+    ("vibraphone_real", "colour", "jazzy soft dreamy warm", "vcsl/vibraphone", {"voices": 4}),
+    ("tubular_bells", "colour", "orchestral glassy epic eerie", "vcsl/tubular_bells", {"voices": 3, "max_ring": 2.5}),
+    ("kalimba_real", "colour", "world playful soft acoustic", "vcsl/kalimba", {"voices": 4}),
+    ("dan_tranh", "colour", "world eastern acoustic", "vcsl/dan_tranh", {"voices": 4}),
+    ("folk_harp", "colour", "fantasy acoustic soft folk", "vcsl/folk_harp", {"voices": 6}),
+    ("bowed_psaltery", "harmony", "eerie ambient glassy", "vcsl/bowed_psaltery", {"voices": 3}),
+    ("harmonica", "lead", "folk acoustic warm world", "vcsl/harmonica", {}),
+    ("tenor_sax", "lead", "jazzy warm acoustic", "vcsl/tenor_sax", {"env": [0.02, 0.0, 1.0, 0.2]}),
+    ("recorder", "lead", "folk acoustic soft fantasy", "vcsl/recorder", {}),
+    ("ocarina", "lead", "fantasy playful soft", "vcsl/ocarina", {}),
+    ("erhu", "lead", "world eastern acoustic", "karoryfer/erhu", {"env": [0.05, 0.0, 1.0, 0.3]}),
+    ("bamboo_flute", "lead", "world eastern soft acoustic", "neosound/bamboo_flute", {}),
+    ("voice_oohs", "harmony", "ambient eerie warm soft", "neosound/voice_oohs", {"voices": 4}),
+    ("clean_guitar", "colour", "jazzy warm acoustic soft", "karoryfer/clean_guitar", {"voices": 6}),
+    ("hollowbody", "colour", "jazzy warm retro", "karoryfer/gretsch", {"voices": 6}),
+    ("steel_guitar", "colour", "folk acoustic warm", "neosound/steel_guitar", {"voices": 6}),
+    ("bass_guitar", "bass", "funky warm jazzy acoustic", "karoryfer/bass_guitar", {"voices": 1}),
+    ("upright_pizz", "bass", "jazzy acoustic warm soft", "karoryfer/upright_pizz", {"voices": 2}),
+    ("kit_kick", "kick", "acoustic warm jazzy funky", "karoryfer/kick", {}),
+    ("kit_snare", "snare", "acoustic funky hard", "karoryfer/snare", {}),
+    ("brush_stir", "snare", "jazzy soft acoustic", "karoryfer/brush", {}),
+    ("kit_hat", "hat", "acoustic funky jazzy", "karoryfer/hat_closed", {}),
+    ("ride", "crash", "jazzy acoustic", "karoryfer/ride", {}),
+    ("conga_real", "perc", "world funky acoustic", "vcsl/conga", {}),
+    ("djembe", "perc", "world acoustic", "karoryfer/djembe", {}),
+    ("frame_drum_real", "kick", "world acoustic folk eerie", "vcsl/frame_drum", {}),
+    ("cajon", "kick", "acoustic world folk soft", "vcsl/cajon_3", {}),
+    ("shaker_real", "hat", "acoustic world soft", "vcsl/shaker", {}),
+    ("brake_drum", "perc", "gritty eerie industrial cold", "vcsl/brake_drum", {}),
+):
+    _sampled(_name, _role, _tags, _sample, **_extra)
+
+DRUM_ROLES = ("kick", "snare", "hat", "perc", "crash")
 KEYS = {"bass": "bmn", "lead": "lqr", "harmony": "pwvo", "colour": "gaeyz", "kick": "k", "snare": "sc", "hat": "ht", "perc": "ij", "crash": "x"}
 ROLE_GAINS = {"bass": (-6, -2), "lead": (-11, -7), "harmony": (-15, -11), "colour": (-13, -9), "kick": (-4, -1), "snare": (-8, -5), "hat": (-16, -12),
               "perc": (-12, -8), "crash": (-15, -12)}  # fmt: skip
@@ -454,17 +500,16 @@ class RolledKit:
     instruments: dict[str, tuple[str, dict[str, Any]]]  # key -> (name, patch)
     identity: list[str]
     libraries: list[str] = field(default_factory=list)
-    kept: dict[str, Any] = field(default_factory=dict)  # identity instruments carried over (raw mappings)
+    drums: list[str] = field(default_factory=list)
 
     def yaml(self) -> str:
         lines = [f"name: {self.name}", f"description: {scalar(f'Rolled from {self.style!r} (seed {self.seed}); edit freely')}",
                  "# identity = the game's signature instruments (keep them in every kit: `segan kit roll --around " + self.name + "`)", "instruments:"]  # fmt: skip
         for key, (name, data) in self.instruments.items():
             lines.append(f"  {key}: {flow({'name': name, **data})}")
-        drums = [k for k, (_, d) in self.instruments.items() if "drum" in d or d.get("sample") in ("vsco2/timpani",)]
         lines += ["groups:", f"  identity: {flow(self.identity)}"]
-        if drums:
-            lines.append(f"  drums: {flow(drums)}")
+        if self.drums:
+            lines.append(f"  drums: {flow(self.drums)}")
         return "\n".join(lines) + "\n"
 
 
@@ -477,6 +522,7 @@ def roll_kit(name: str, style: str, project_seed: int, around: dict[str, Any] | 
     allow_samples = samples if samples is not None else bool(tags & {"orchestral", "acoustic"})
     instruments: dict[str, tuple[str, dict[str, Any]]] = {}
     identity: list[str] = []
+    drums: list[str] = []
     families: set[str] = set()
     names: set[str] = set()
     if around:
@@ -499,7 +545,7 @@ def roll_kit(name: str, style: str, project_seed: int, around: dict[str, Any] | 
         pool = [rc for rc in R if rc.role == role and (allow_samples or not rc.library) and rc.name not in names]
         if not pool:
             continue
-        drum = role in ("kick", "snare", "hat", "perc", "crash")
+        drum = role in DRUM_ROLES
         scored = [(rc, max(0.2, 1.0 + (1.0 if drum else 2.0) * len(tags & set(rc.tags)) - (1.5 if rc.family in families and not drum else 0.0))) for rc in pool]
         pick: Recipe = rng.weighted([(rc, score**2) for rc, score in scored])
         data = pick.build(rng)
@@ -507,12 +553,14 @@ def roll_kit(name: str, style: str, project_seed: int, around: dict[str, Any] | 
         data["gain"] = data.get("gain", rng.range(lo, hi, 0))
         key = next((k for k in KEYS[role] if k not in instruments), next(k for k in "abcdefghijklmnopqrstuvwxyz" if k not in instruments))
         instruments[key] = (pick.name, data)
+        if role in DRUM_ROLES:
+            drums.append(key)
         names.add(pick.name)
         families.add(pick.family)
         if not around and role in ("lead", "harmony", "colour") and len(identity) < 3:
             identity.append(key)
     libraries = sorted({d["sample"] for _, d in instruments.values() if isinstance(d.get("sample"), str) and "/" in d["sample"]})
-    return RolledKit(name, style, project_seed, instruments, identity, libraries)
+    return RolledKit(name, style, project_seed, instruments, identity, libraries, drums)
 
 
 def _role_of(data: dict[str, Any]) -> str:

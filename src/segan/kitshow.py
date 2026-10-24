@@ -147,8 +147,8 @@ def write_kit_show(show: KitShow, folder: Path, threshold: float) -> tuple[Path,
     return sheet, wavs
 
 
-def library_needs(path: Path) -> list[str]:
-    """Library instruments (`vsco2/<name>`) a kit file names, in order (what `segan samples fetch` needs).
+def library_needs(path: Path, library: str = "vsco2") -> list[str]:
+    """Instruments of one library (`vsco2/<name>`) a kit file names, in order (what `segan samples fetch` needs).
 
     `path` may also be a project folder: then every YAML under it (kits, songs and sfx; hidden folders
     skipped) is scanned, so samples named directly by sfx layers or songs are included too.
@@ -159,5 +159,12 @@ def library_needs(path: Path) -> list[str]:
         files = sorted(f for f in path.rglob("*.yaml") if not any(part.startswith(".") for part in f.relative_to(path).parts))
     else:
         files = [path]
-    found = [m for f in files for m in re.findall(r"sample:\s*vsco2/(\w+)", f.read_text(encoding="utf-8"))]
+    found = [m for f in files for m in re.findall(rf"sample:\s*{re.escape(library)}/(\w+)", f.read_text(encoding="utf-8"))]
     return list(dict.fromkeys(found))
+
+
+def all_library_needs(path: Path) -> dict[str, list[str]]:
+    """Every sample library a kit (or a project folder) uses -> its instruments in use."""
+    from segan import libraries
+
+    return {name: needs for name in libraries.names() if (needs := library_needs(path, name))}

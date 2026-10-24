@@ -51,7 +51,8 @@ generated text files.
   - `lint.py` lint (errors from parsing, warnings from source and rendered audio); `yamlwrite.py` YAML writer;
   - `manage.py` long-term management: catalogue (`segan status`), `mark`, `style bump`, `mix adjust` (text edits keep comments);
   - `samples.py` sampled instruments: WAV/SFZ/SF2 readers, zones, variable-rate Hermite playback;
-    `libraries/` sample libraries (`vsco2/`: SEGAN's SFZ maps + library.json; audio fetched on demand into the per-user cache);
+    `libraries/` sample libraries (`vsco2/`, `vcsl/`, `karoryfer/`, `neosound/`: SEGAN's SFZ maps + library.json; audio
+    fetched on demand into the per-user cache; a library may gather several repositories via `sources`);
   - `recorded.py` recorded sounds for SFX layers (decode, trim/reverse/fades, peak-normalise); `stretch.py` phase
     vocoder time-stretch + pitch-shift; `licences.py` the CC0/CC BY rule; `sounds.py` Freesound API, user cache,
     `sounds.lock`, credits, vendoring (`segan sounds`);
@@ -69,7 +70,9 @@ generated text files.
   renders. After an intended rendering change, look at the output, then `SEGAN_UPDATE_GOLDEN=1 pytest tests/test_golden.py`.
 - `examples/demo/` — the demo project (kits: nes, fm_soft, arcade_synth).
 - `examples/orchestra/` — sampled-orchestra example (needs `segan samples fetch`; CI job `orchestra` fetches and builds it).
-- `scripts/make_vsco2_library.py` — regenerates `src/segan/libraries/vsco2/` (downloads ~1.3 GB once).
+- `scripts/make_vsco2_library.py` — regenerates `src/segan/libraries/vsco2/` (downloads ~1.3 GB once);
+  `make_vcsl_library.py` (~1.4 GB), `make_karoryfer_library.py` (~1.9 GB), `make_neosound_library.py` the others,
+  through `library_maps.py`.
 
 ## Conventions
 
@@ -213,3 +216,9 @@ generated text files.
 - 2026-10-24: #76 variation lives at authoring time (decided): the project seed, `kit roll`, `suggest song` and api helpers
   propose sources; renders stay exactly what the source says. The one render-time randomness is the song's `humanize`
   (seeded per section and position, so loops and flow clips stay exact). Proposals use `dsp.uniform`, not `random`.
+- 2026-10-24: #76 libraries (CC0 + CC BY allowed, decided; everything picked is CC0). VCSL, Karoryfer (several sfzinstruments
+  repos) and NeoSoundFonts, WAV only (FLAC-only sets such as Salamander, the Greg Sullivan e-pianos and FreePats need a
+  decoder: not done). SEGAN maps the WAVs itself (their own SFZ programs use keyswitches/includes): octave per folder
+  and tuning per sample measured with YIN (guitars are written an octave up: measured -12), levels from the plain-
+  velocity samples (-20 LUFS, peak at most 0.7). No CC0/CC BY ensemble choir exists on a git host: choirs come from the
+  `formant` model or stacked `neosound/voice_oohs`.

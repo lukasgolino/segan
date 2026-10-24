@@ -1,0 +1,244 @@
+{
+ "commit": "several",
+ "credit": "Simone Piervergili, NeoSoundFonts (Voice Oohs, Old Steel Guitar, Bamboo Flute), CC0 1.0",
+ "files": {
+  "flute/samples/BambooFlute 072L.wav": [
+   224332,
+   "8fe31939c90da89c7e0ef33c33bdb91899ab6bc7"
+  ],
+  "flute/samples/BambooFlute 074L.wav": [
+   257342,
+   "b2ca4794a4ba13111525e7a87687300e9e6a0486"
+  ],
+  "flute/samples/BambooFlute 076L.wav": [
+   274424,
+   "bee81db161021bec3a93dfea14dcc1cfc9c8ead1"
+  ],
+  "flute/samples/BambooFlute 077L.wav": [
+   261602,
+   "0d0d8d72a57d14e19fe685bbb28f63e238c17c3c"
+  ],
+  "flute/samples/BambooFlute 079L.wav": [
+   234294,
+   "b8070e191bd92450e1a429f344270af9250284ff"
+  ],
+  "flute/samples/BambooFlute 081L.wav": [
+   221404,
+   "cdd1a27a8530055f623c5cc1e8d6a4f75c23a9f2"
+  ],
+  "flute/samples/BambooFlute 082L.wav": [
+   224604,
+   "3373a6f03274cf5f6776ac1cb7e1355516f55b14"
+  ],
+  "flute/samples/BambooFlute 084L.wav": [
+   216036,
+   "f4dd89f36f0263fa8a18c281d787bd99c60bf862"
+  ],
+  "flute/samples/BambooFlute 086L.wav": [
+   249954,
+   "2e638e61fdb6939057d4f760ed212a2de432cf6d"
+  ],
+  "flute/samples/BambooFlute 087L.wav": [
+   280120,
+   "67e5f67b78a26da7064a62f50c3a9dcdc136fab1"
+  ],
+  "flute/samples/BambooFlute 089L.wav": [
+   178378,
+   "9d44c17fbbae5200225c519d30fa2692f6a7d356"
+  ],
+  "flute/samples/BambooFlute 090L.wav": [
+   173888,
+   "cc5db31cd0893129c72d891c8827af29ef681777"
+  ],
+  "oohs/samples/Voice Oohs a4 rr1.wav": [
+   545070,
+   "2fade6a213711a3944b36ee253039a4d79dc409c"
+  ],
+  "oohs/samples/Voice Oohs a4 rr2.wav": [
+   647770,
+   "85b30248541868497501794226178adecc68f6ea"
+  ],
+  "oohs/samples/Voice Oohs a4 rr3.wav": [
+   640378,
+   "d559b6bb4c78b65c43ed57604656fd4cc22d0ffa"
+  ],
+  "oohs/samples/Voice Oohs b2 rr1.wav": [
+   495266,
+   "0a43c6609e6474ec5c75b1dc5061c6d3e99bac2e"
+  ],
+  "oohs/samples/Voice Oohs b2 rr2.wav": [
+   546766,
+   "ffa77cce1e57653098a672676f63fe7d9678ea09"
+  ],
+  "oohs/samples/Voice Oohs b2 rr3.wav": [
+   555262,
+   "f6f356422f42bf053fd62b2a2786a3ff2eda5075"
+  ],
+  "oohs/samples/Voice Oohs d4 rr1.wav": [
+   585214,
+   "8a83f55f255bf7ad9b37341171a47b64f82dd17a"
+  ],
+  "oohs/samples/Voice Oohs d4 rr2.wav": [
+   747090,
+   "0d5dcf5f0ce6a2dcd34a60f9e3a6b7074b062936"
+  ],
+  "oohs/samples/Voice Oohs d4 rr3.wav": [
+   709730,
+   "0f37151bfa51df251804f06ceb06a9b746940e68"
+  ],
+  "oohs/samples/Voice Oohs g3 rr1.wav": [
+   653510,
+   "f5547e4f295a9b3c451ba0f2e371a722ac55b1ce"
+  ],
+  "oohs/samples/Voice Oohs g3 rr2.wav": [
+   718062,
+   "8799984960981bfb9bfba28ff48736d65a11d025"
+  ],
+  "oohs/samples/Voice Oohs g3 rr3.wav": [
+   642462,
+   "042498876db02e45e70b36bd0ba0a107886a8067"
+  ],
+  "steel/samples/SteelGuitar 040.wav": [
+   844204,
+   "fec0cc9816cc2d552b8c768fe7eb9bbab19dc956"
+  ],
+  "steel/samples/SteelGuitar 041.wav": [
+   764970,
+   "caeef1463c76d63e88738b71b769bdc44a047d2d"
+  ],
+  "steel/samples/SteelGuitar 042.wav": [
+   830726,
+   "79cc87738c2bb541b096442a31d4307d11b19720"
+  ],
+  "steel/samples/SteelGuitar 043.wav": [
+   852936,
+   "3a23c86e0aacbaefaae184582a72e93536d999a9"
+  ],
+  "steel/samples/SteelGuitar 044.wav": [
+   848286,
+   "1210bc0a7ef68290043f92b888c571fe597c8f60"
+  ],
+  "steel/samples/SteelGuitar 045.wav": [
+   924306,
+   "52bd06ca48eba1832ca5764bc7e49efceac89e6b"
+  ],
+  "steel/samples/SteelGuitar 046.wav": [
+   952530,
+   "dec4c3491758d38ce19ac11529126f56980017ac"
+  ],
+  "steel/samples/SteelGuitar 047.wav": [
+   752054,
+   "765f553711bd7f7939bd7912d2e2983a2eb54a89"
+  ],
+  "steel/samples/SteelGuitar 050.wav": [
+   835058,
+   "ea2d68d8ca4315cb984a0eb8a8e1340569169dd4"
+  ],
+  "steel/samples/SteelGuitar 053.wav": [
+   795986,
+   "ae54a6a5872e497303ff994475c2d3e320ba5bd4"
+  ],
+  "steel/samples/SteelGuitar 055.wav": [
+   833704,
+   "07d733f1e9a37c4d3bb760851525a606c804c6f5"
+  ],
+  "steel/samples/SteelGuitar 057.wav": [
+   756030,
+   "917dca297845223194f424e4e8c25b0cf9db9ab6"
+  ],
+  "steel/samples/SteelGuitar 058.wav": [
+   746518,
+   "f83c0e05955425eb49d21a0cb6cc25d19eaedf9d"
+  ],
+  "steel/samples/SteelGuitar 059.wav": [
+   805116,
+   "ac1c04da2ed5b3a0dbcba9a78afe50c886c2aa22"
+  ],
+  "steel/samples/SteelGuitar 064.wav": [
+   874706,
+   "416d399c98d3fcc4b4f448d85754d5d9f730a3e0"
+  ],
+  "steel/samples/SteelGuitar 066.wav": [
+   584616,
+   "aa651557e87a9fbe8d23f18b0806458956cf155c"
+  ]
+ },
+ "instruments": {
+  "bamboo_flute": {
+   "description": "bamboo flute (dizi-like)",
+   "files": [
+    "flute/samples/BambooFlute 072L.wav",
+    "flute/samples/BambooFlute 074L.wav",
+    "flute/samples/BambooFlute 076L.wav",
+    "flute/samples/BambooFlute 077L.wav",
+    "flute/samples/BambooFlute 079L.wav",
+    "flute/samples/BambooFlute 081L.wav",
+    "flute/samples/BambooFlute 082L.wav",
+    "flute/samples/BambooFlute 084L.wav",
+    "flute/samples/BambooFlute 086L.wav",
+    "flute/samples/BambooFlute 087L.wav",
+    "flute/samples/BambooFlute 089L.wav",
+    "flute/samples/BambooFlute 090L.wav"
+   ],
+   "kind": "sus"
+  },
+  "steel_guitar": {
+   "description": "old steel-string acoustic guitar",
+   "files": [
+    "steel/samples/SteelGuitar 040.wav",
+    "steel/samples/SteelGuitar 041.wav",
+    "steel/samples/SteelGuitar 042.wav",
+    "steel/samples/SteelGuitar 043.wav",
+    "steel/samples/SteelGuitar 044.wav",
+    "steel/samples/SteelGuitar 045.wav",
+    "steel/samples/SteelGuitar 046.wav",
+    "steel/samples/SteelGuitar 047.wav",
+    "steel/samples/SteelGuitar 050.wav",
+    "steel/samples/SteelGuitar 053.wav",
+    "steel/samples/SteelGuitar 055.wav",
+    "steel/samples/SteelGuitar 057.wav",
+    "steel/samples/SteelGuitar 058.wav",
+    "steel/samples/SteelGuitar 059.wav",
+    "steel/samples/SteelGuitar 064.wav",
+    "steel/samples/SteelGuitar 066.wav"
+   ],
+   "kind": "shot"
+  },
+  "voice_oohs": {
+   "description": "a male voice singing \"ooh\" (stack it for a small choir)",
+   "files": [
+    "oohs/samples/Voice Oohs a4 rr1.wav",
+    "oohs/samples/Voice Oohs a4 rr2.wav",
+    "oohs/samples/Voice Oohs a4 rr3.wav",
+    "oohs/samples/Voice Oohs b2 rr1.wav",
+    "oohs/samples/Voice Oohs b2 rr2.wav",
+    "oohs/samples/Voice Oohs b2 rr3.wav",
+    "oohs/samples/Voice Oohs d4 rr1.wav",
+    "oohs/samples/Voice Oohs d4 rr2.wav",
+    "oohs/samples/Voice Oohs d4 rr3.wav",
+    "oohs/samples/Voice Oohs g3 rr1.wav",
+    "oohs/samples/Voice Oohs g3 rr2.wav",
+    "oohs/samples/Voice Oohs g3 rr3.wav"
+   ],
+   "kind": "sus"
+  }
+ },
+ "license": "CC0-1.0",
+ "repo": "several",
+ "sources": {
+  "flute": {
+   "commit": "bffe30a67a29c8b2dc691e1a45af78b801d57ce6",
+   "repo": "NeoSoundFonts/SP-Bamboo-Flute"
+  },
+  "oohs": {
+   "commit": "19f6734cd4b10a767d3cd463d9517eb797dcabff",
+   "repo": "NeoSoundFonts/SimonePiervergili-VoiceOohs"
+  },
+  "steel": {
+   "commit": "c30bc2151d501d09de5281452fe7e61b9770ce15",
+   "repo": "NeoSoundFonts/SimonePiervergili-OldSteelGuitar"
+  }
+ },
+ "title": "NeoSoundFonts sets",
+ "url": "https://github.com/NeoSoundFonts"
+}

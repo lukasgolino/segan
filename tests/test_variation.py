@@ -181,3 +181,19 @@ def test_commands(in_tmp: Path, capsys: pytest.CaptureFixture[str], monkeypatch:
     assert code == 0 and "meter: [4, 4]" in (in_tmp / "game" / "music" / "plain.song.yaml").read_text()
     code, data = run_json(["lint", "--no-render"], capsys)
     assert data["errors"] == 0, data
+
+
+def test_every_recipe_is_a_valid_instrument() -> None:
+    """Every kit-roll recipe builds an instrument that parses (sampled ones: a known library instrument)."""
+    from segan import libraries
+    from segan.patch import Report, parse_patch
+    from segan.suggest import R, Rng
+
+    for recipe in R:
+        data = recipe.build(Rng("test", recipe.name))
+        if recipe.library:
+            lib, _, inst = recipe.library.partition("/")
+            assert inst in libraries.library(lib).instruments, recipe.name
+            continue
+        report = Report(None)
+        assert parse_patch(data, report, "E005", recipe.name) is not None, (recipe.name, [f.message for f in report.findings])

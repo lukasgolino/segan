@@ -273,8 +273,34 @@ def test_ranges_in_samples_list_and_kit_show(project: Project, monkeypatch: pyte
     assert 40 <= low < 60 < high <= 108
     monkeypatch.chdir(project.root)
     code, data = run_json(["samples", "list"], capsys)
-    rows = {r["instrument"]: r for r in data["libraries"][0]["instruments"]}
+    rows = {r["instrument"]: r for r in next(lib for lib in data["libraries"] if lib["library"] == "vsco2")["instruments"]}
     assert code == 0 and rows["bass_drum"]["range"] is None and rows["violins_sus"]["range"][0].endswith(("2", "3"))
     code, data = run_json(["kit", "show", "t"], capsys)
     instruments = data["outputs"][0]["instruments"]
     assert code == 0 and instruments["p"]["range"] == ["C4", "C6"] and instruments["q"]["range"] is None
+
+
+def test_libraries_from_several_repositories() -> None:
+    """#76: a library gathered from several repositories: file paths start with the source alias, each fetched from its own pin."""
+    lib = libraries.library("karoryfer")
+    assert len(lib.sources) > 1 and lib.pin and lib.cache.name == lib.pin
+    path = lib.instruments["erhu"]["files"][0]
+    repo, commit, inner = lib.origin(path)
+    assert path.startswith("erhu/") and repo == "sfzinstruments/aliexpress-erhu" and not inner.startswith("erhu/Samples/erhu/")
+    assert libraries.raw_url(lib, path) == f"https://raw.githubusercontent.com/{repo}/{commit}/" + inner.replace(" ", "%20")
+    single = libraries.library("vsco2")
+    assert single.sources == () and single.pin == single.commit[:12]
+
+
+def test_every_library_map_is_consistent() -> None:
+    """Each shipped SFZ names only files its library.json pins, and every instrument has a map and a description."""
+    import re as _re
+
+    for name in libraries.names():
+        lib = libraries.library(name)
+        assert lib.license in ("CC0-1.0", "CC-BY-3.0", "CC-BY-4.0"), name
+        for inst, info in lib.instruments.items():
+            text = lib.sfz(inst).read_text(encoding="utf-8")
+            named = set(_re.findall(r"sample=(.+)$", text, _re.M))
+            assert named and named <= set(info["files"]) and set(info["files"]) <= set(lib.files), (name, inst)
+            assert info["description"] and info["kind"] in ("sus", "shot", "hit"), (name, inst)

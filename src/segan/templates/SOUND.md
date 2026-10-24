@@ -6,16 +6,24 @@ How this game sounds. Agents check every new sound and song against it; SEGAN en
 ## 1. Palette (kits)
 
 - Default kit: `$kit` (`segan kit show $kit` plays every instrument).
+- **Identity**: the 2-3 signature instruments every song shares (the kit's `identity` group) and the game's motifs:
+  TODO. This is what makes every song sound like the same game.
+- **Variation**: every song adds 1-2 instruments of its own from the wider palette (models, effects, samples; more
+  kits with `segan kit roll <name> --style "..." --around $kit`).
 - What each instrument is for, e.g. `p` lead melodies, `b` bass lines only, `k s h` the only drums.
 - Instruments not in a kit don't exist: add them to the kit (and get them approved) before using them.
 
 ## 2. Music
 
-- Keys and modes: TODO (e.g. minor keys for dungeons, major/mixolydian for towns).
-- Tempo range: TODO (e.g. 90-140 bpm); meter 4/4 unless stated.
+- Songs differ: key and mode, tempo, meter, register, opening texture and instruments vary from song to song
+  (`segan suggest song` proposes them; `segan similarity` checks; no two songs open on the same notes).
+- Keys and modes by mood: TODO (e.g. phrygian or harmonic minor for dungeons, lydian for dreams, mixolydian for towns).
+- Tempo range: TODO (e.g. 60-170 bpm across the game); meters TODO (4/4, 3/4, 6/8...).
+- Songs so far (keep this list current): TODO (name, key, tempo, meter, texture, extras).
 - Loops: every in-game track loops seamlessly (W007 clean); intros are separate sections.
 - Length: 8-32 bars per loop; reuse patterns with derived patterns instead of writing new ones.
-- Arrangement: at most 4-5 tracks (lead, harmony/arp, bass, drums); bass stays below C4.
+- Arrangement: 4-6 tracks (identity instruments + the song's extras); dynamics (`velocity:` rows, `dynamics:`
+  ramps) and `humanize` so nothing sounds mechanical.
 
 ## 3. Sound effects
 
@@ -26,7 +34,7 @@ How this game sounds. Agents check every new sound and song against it; SEGAN en
 
 ## 4. Mix
 
-- One room for everything ([mix] room); no per-asset reverb.
+- One room for everything ([mix] room); instrument `fx` (delay, chorus, a reverb send) shape single instruments.
 - Loudness: music -16 LUFS, SFX -14, UI -20 (segan.toml [loudness]); the build normalises.
 - Lo-fi: crush settings in [mix] only, so every asset matches.
 
