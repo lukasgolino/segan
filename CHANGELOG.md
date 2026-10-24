@@ -19,6 +19,25 @@ check before upgrading. Patch bumps never change existing behaviour. Every relea
 
 ## [Unreleased]
 
+### Added
+
+- A much bigger synth palette (#76). Instrument models, each with a same-named block or a preset name:
+  `pluck` (Karplus-Strong plucked string: guitar, nylon, steel, harp, koto, pizz, bass, muted, harpsichord),
+  `bowed` (bowed strings: per-player drift and onsets, bow noise, violin/viola/cello/bass body resonances;
+  `unison` = a section), `additive` (harmonic or inharmonic partials with decays, Hammond drawbars, presets from
+  organ to bell and glass), `wavetable` (eight bundled mip-mapped tables morphed by position, envelope or LFO),
+  `formant` (sung vowels for soprano/alto/tenor/bass with vowel keyframes; `unison` = a choir; closes #22),
+  `modal` (struck resonators: marimba, vibraphone, xylophone, glass, bell, tubular, kalimba, steel drum, wood,
+  metal, membrane) and `supersaw`.
+- 3-4 operator FM (`fm: { algorithm, ops: [...] }`), hard `sync` with an envelope sweep (saw, pulse), a `sub`
+  oscillator, 24 dB filters, a filter `lfo`, `notch` filters, and brass `mute: straight | cup | harmon` (#23).
+- Seven new drum macros: `rim`, `shaker`, `cowbell`, `block`, `conga`, `brush`, `metal`.
+- Per-instrument effects, `fx: [...]`, on any kit instrument or SFX layer: chorus, ensemble, flanger, phaser,
+  delay (ping-pong, damped repeats), reverb, drive (oversampled), crush, comb, ring, tremolo, autopan and an
+  LFO filter. Rates and times can be note values that follow the song's tempo (`"1/8."`, `"1/4t"`). Effects run
+  per note, after mono voice cuts, with LFOs starting at the note, so loops, flow clips and the render cache stay
+  exact; their tails count towards ring-outs and loop offsets.
+
 ## [0.11.0] - 2026-10-22
 
 ### Added

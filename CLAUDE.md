@@ -31,6 +31,8 @@ generated text files.
   - `buildinfo.py`, `progress.py` — copied from PAGAN; `settings.py` registry + TOML text edits — adapted from PAGAN;
   - `dsp.py` deterministic primitives (sin/exp2 tables, splitmix64 noise, PolyBLEP/BLAMP, biquads, decimator);
   - `notes.py` note names, keys, scales; `patch.py` instrument fields (shared by kits, inline instruments, SFX layers);
+  - `models.py` instrument models (pluck, bowed, additive, wavetable, formant, modal, supersaw: parameters, presets,
+    tables, parsing) and `modelsynth.py` their rendering; `fx.py` per-instrument effects (`fx:`, tempo-synced values);
   - `kit.py` kit files; `synth.py` one note -> samples (oscillators, envelopes, filters, drum macros, oversampling);
   - `voices.py` note events -> track buffers (mono voice cuts, pan, note cache); `mix.py` shared bus (room, tone,
     crush, loudness normalisation, true-peak limiter); `analysis.py` LUFS/peaks/onsets/YIN/seam/aliasing;
@@ -197,3 +199,7 @@ generated text files.
   previews only (originals need OAuth2: not done). Licence filter `license:("Creative Commons 0" OR "Attribution")`
   plus a local check of every result. Fetched files in `$SEGAN_SOUNDS`/`~/.cache/segan/sounds`, pinned by sha256
   in the project's `sounds.lock` (TOML).
+- 2026-10-24: #76 palette. Effects (`fx:`) run per note after the voice cut, LFOs starting at the note (shift-invariant:
+  loops, flow clips and the note cache stay exact; a key-synced LFO is the trade-off). Delays are an FFT convolution with
+  the echo train; flanger feedback and Karplus-Strong loops run in chunks shorter than their shortest delay. Saturation
+  is a rational tanh approximation (exact arithmetic) at 4x. Hammond `organ` keeps its 16' bar (sounds an octave down).

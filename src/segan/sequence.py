@@ -122,6 +122,7 @@ def song_events(song: Song, timeline: Timeline, rate: int, variant: Variant | No
     events: list[NoteEvent] = []
     kit = variant.kit if variant is not None and variant.kit is not None else song.kit
     placed = placed_notes(song, timeline, variant)
+    beat = timeline.step_seconds * song.steps_per_beat * song.meter[1] / 4.0  # seconds per quarter note
     for p in placed:
         inst = kit.instruments.get(p.key)
         if inst is None:
@@ -132,13 +133,14 @@ def song_events(song: Song, timeline: Timeline, rate: int, variant: Variant | No
             gate = timeline.step_seconds * 0.5
         else:
             gate = timeline.seconds(p.step + p.note.length) - timeline.seconds(p.step)
-        events.append(NoteEvent(track.name, p.key, inst, start, gate, p.midi, p.note.velocity, seed_of(song.name, track.name, p.key), None, track.pan, track.gain))
+        events.append(NoteEvent(track.name, p.key, inst, start, gate, p.midi, p.note.velocity, seed_of(song.name, track.name, p.key), None, track.pan, track.gain,
+                                beat))  # fmt: skip
     if repeat_loop and timeline.loop is not None:
         first, end = timeline.loop
         shift = timeline.frame(end, rate) - timeline.frame(first, rate)
         start_frame = timeline.frame(first, rate)
         events += [
-            NoteEvent(e.track, e.key, e.inst, e.start + shift, e.gate, e.midi, e.velocity, e.seed, None, e.pan, e.gain_db)
+            NoteEvent(e.track, e.key, e.inst, e.start + shift, e.gate, e.midi, e.velocity, e.seed, None, e.pan, e.gain_db, e.beat)
             for e in events
             if e.start >= start_frame
         ]

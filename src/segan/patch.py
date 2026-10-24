@@ -11,16 +11,23 @@ import math
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field, replace
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from segan.findings import Finding
 from segan.notes import note_name, parse_note
 from segan.samples import SampleSpec
 from segan.yamlio import LineMap
 
-OSCILLATORS = ("sine", "triangle", "saw", "pulse", "noise", "bitnoise", "fm")
-DRUMS = ("kick", "snare", "hat", "clap", "tom", "cymbal")
-FILTER_TYPES = ("lp", "hp", "bp")
+if TYPE_CHECKING:
+    from segan.fx import Effect
+    from segan.models import Model, Sub, Sync
+
+BASIC_OSCILLATORS = ("sine", "triangle", "saw", "pulse", "noise", "bitnoise", "fm")
+MODEL_OSCILLATORS = ("pluck", "bowed", "additive", "wavetable", "formant", "modal", "supersaw")  # models.py: each takes a same-named block
+OSCILLATORS = (*BASIC_OSCILLATORS, *MODEL_OSCILLATORS)
+DRUMS = ("kick", "snare", "hat", "clap", "tom", "cymbal", "rim", "shaker", "cowbell", "block", "conga", "brush", "metal")
+FILTER_TYPES = ("lp", "hp", "bp", "notch")
+MUTES = ("straight", "cup", "harmon")
 RESERVED_KEYS = (".", "-", "|")  # rest, hold, bar line
 
 # Drum defaults: tune (Hz), decay (s), tone (Hz), noise (mix 0-1), click (0-1), punch (semitones of pitch drop)
@@ -31,12 +38,20 @@ DRUM_DEFAULTS: dict[str, dict[str, float]] = {
     "clap": {"tune": 200.0, "decay": 0.22, "tone": 1300.0, "noise": 1.0, "click": 0.0, "punch": 0.0},
     "tom": {"tune": 110.0, "decay": 0.32, "tone": 2500.0, "noise": 0.08, "click": 0.2, "punch": 9.0},
     "cymbal": {"tune": 400.0, "decay": 1.1, "tone": 6500.0, "noise": 0.5, "click": 0.0, "punch": 0.0},
+    "rim": {"tune": 1700.0, "decay": 0.03, "tone": 2500.0, "noise": 0.3, "click": 0.6, "punch": 0.0},
+    "shaker": {"tune": 400.0, "decay": 0.09, "tone": 7000.0, "noise": 1.0, "click": 0.0, "punch": 0.0},
+    "cowbell": {"tune": 560.0, "decay": 0.25, "tone": 2600.0, "noise": 0.0, "click": 0.2, "punch": 0.0},
+    "block": {"tune": 1200.0, "decay": 0.06, "tone": 3000.0, "noise": 0.05, "click": 0.4, "punch": 1.0},
+    "conga": {"tune": 220.0, "decay": 0.35, "tone": 2000.0, "noise": 0.1, "click": 0.3, "punch": 3.0},
+    "brush": {"tune": 200.0, "decay": 0.28, "tone": 4500.0, "noise": 1.0, "click": 0.0, "punch": 0.0},
+    "metal": {"tune": 330.0, "decay": 0.9, "tone": 1800.0, "noise": 0.1, "click": 0.5, "punch": 0.0},
 }
 DRUM_PARAMS = ("tune", "decay", "tone", "noise", "click", "punch")
 
 PATCH_FIELDS = (
     "name", "osc", "drum", "sample", "duty", "pwm", "fm", "detune", "unison", "env", "pitch_env", "vibrato", "tremolo",
     "arp", "arp_rate", "filter", "gain", "pan", "range", "voices", "crush", "note", "max_ring", *DRUM_PARAMS,
+    *MODEL_OSCILLATORS, "sub", "sync", "mute", "fx",
 )  # fmt: skip
 
 
@@ -60,6 +75,8 @@ class Filter:
     env_amount: float = 0.0  # octaves the envelope moves the cutoff at its peak
     env: Env | None = None  # defaults to the amplitude envelope
     keytrack: float = 0.0  # 0 = fixed cutoff, 1 = follows the note pitch
+    lfo: tuple[float, float] | None = None  # rate Hz, octaves (the cutoff sweeps up and back, from each note's start)
+    slope: int = 12  # dB/octave: 12 (one biquad) or 24 (two)
 
 
 @dataclass(frozen=True)
@@ -69,10 +86,24 @@ class Crush:
 
 
 @dataclass(frozen=True)
+class FMOp:
+    """One operator of a 3-4 operator FM patch: modulators (index > 0) feed the operators that list them in `mod`;
+    carriers (out > 0) are heard."""
+
+    ratio: float = 1.0
+    index: float = 0.0  # modulation index (radians) when it modulates another operator
+    out: float = 0.0  # output level 0-1 when it is a carrier
+    mod: tuple[int, ...] = ()  # operators (0-based) modulating this one
+    env: Env | None = None  # level envelope (index or output); None = constant
+    detune: float = 0.0  # cents
+
+
+@dataclass(frozen=True)
 class FM:
     ratio: float = 2.0
     index: float = 1.0  # modulation index (radians)
     env: Env | None = None  # index envelope (0..index); None = constant
+    ops: tuple[FMOp, ...] = ()  # 3-4 operators (then ratio/index/env are unused)
 
 
 @dataclass(frozen=True)
@@ -103,6 +134,12 @@ class Instrument:
     sample: SampleSpec | None = None  # source "sample"
     max_ring: float | None = None  # seconds a note may ring after its gate (then a short fade); None = to its natural end
     sample_text: Any = field(default=None, compare=False)  # the `sample:` value as written (for `segan bake sfx`)
+    model: Model | None = None  # the model of a model oscillator (pluck, bowed, additive...)
+    sub: Sub | None = None  # sub-oscillator an octave or two down
+    sync: Sync | None = None  # hard sync (saw, pulse)
+    mute: str | None = None  # brass mute EQ: straight | cup | harmon
+    fx: tuple[Effect, ...] = ()  # effects on each note (fx.py)
+    raw: tuple[tuple[str, Any], ...] = field(default=(), compare=False, repr=False)  # new-style fields as written (for `segan bake sfx`)
     line: int | None = None
 
     @property
@@ -122,10 +159,18 @@ class Instrument:
             from segan.samples import load_set
 
             sset = load_set(self.sample)
-            return max(self.env.release, sset.longest() if sset.one_shot else 0.0)
+            return max(self.env.release, sset.longest() if sset.one_shot else 0.0) + self.fx_tail()
         if self.is_drum:
-            return self.drum_param("decay") * (1.6 if self.wave in ("snare", "clap") else 1.0)
-        return self.env.release
+            return self.drum_param("decay") * (1.6 if self.wave in ("snare", "clap", "brush") else 1.0) + self.fx_tail()
+        return self.env.release + self.fx_tail()
+
+    def fx_tail(self, beat: float = 0.5) -> float:
+        """Seconds the instrument's effects ring on after a note (echoes, reverb)."""
+        if not self.fx:
+            return 0.0
+        from segan.fx import fx_tail
+
+        return fx_tail(self.fx, beat, float(self.note))
 
     def describe(self) -> str:
         if self.is_drum:
@@ -134,7 +179,14 @@ class Instrument:
             if self.sample.kind == "rec":
                 return f"recording {Path(self.sample.path).name}"
             return f"sample {self.sample.kind} {Path(self.sample.path).stem}"
-        return f"{self.wave}" + (f" duty {self.duty:g}" if self.wave == "pulse" else "")
+        text = f"{self.wave}" + (f" duty {self.duty:g}" if self.wave == "pulse" else "")
+        if self.model is not None:
+            from segan.models import describe_model
+
+            text += f" ({describe_model(self.model)})"
+        if self.fx:
+            text += " + " + " + ".join(fx.kind for fx in self.fx)
+        return text
 
     def to_yaml_fields(self) -> dict[str, Any]:
         """The patch as plain YAML-able fields (for `segan bake sfx`)."""
@@ -172,7 +224,8 @@ class Instrument:
         if self.filter:
             f = self.filter
             out["filter"] = {"type": f.type, "cutoff": f.cutoff, "resonance": f.resonance, "env_amount": f.env_amount,
-                             "keytrack": f.keytrack, **({"env": f.env.as_list()} if f.env else {})}  # fmt: skip
+                             "keytrack": f.keytrack, **({"env": f.env.as_list()} if f.env else {}), **({"lfo": list(f.lfo)} if f.lfo else {}),
+                             **({"slope": f.slope} if f.slope != 12 else {})}  # fmt: skip
         if self.gain:
             out["gain"] = self.gain
         if self.pan:
@@ -185,6 +238,7 @@ class Instrument:
             out["crush"] = {"bits": self.crush.bits, "rate": self.crush.rate}
         if self.max_ring is not None:
             out["max_ring"] = self.max_ring
+        out.update(dict(self.raw))
         return out
 
 
@@ -333,15 +387,31 @@ def parse_patch(
         if data["osc"] not in OSCILLATORS:
             report.error(rule, f"osc must be one of {', '.join(OSCILLATORS)}", line_of(data, "osc", line), f"{where}.osc")
         else:
-            changes.update(source="osc", wave=data["osc"], drum={})
+            changes.update(source="osc", wave=data["osc"], drum={}, model=None)
     elif has_drum:
         if data["drum"] not in DRUMS:
             report.error(rule, f"drum must be one of {', '.join(DRUMS)}", line_of(data, "drum", line), f"{where}.drum")
         else:
             changes.update(source="drum", wave=data["drum"], drum={} if inst.wave != data["drum"] else dict(inst.drum))
     elif base is None:
-        report.error(rule, "an instrument needs a sound source: osc (sine, triangle, saw, pulse, noise, bitnoise, fm), drum (kick, snare, hat, clap, tom, cymbal) "
+        report.error(rule, f"an instrument needs a sound source: osc ({', '.join(OSCILLATORS)}), drum ({', '.join(DRUMS)}) "
                      "or sample (a .wav/.sfz/.sf2 file or a library instrument like vsco2/violins_sus)", line, where)
+    raw: dict[str, Any] = dict(inst.raw)
+    wave = changes.get("wave", inst.wave) if changes.get("source", inst.source) == "osc" else None
+    for model_name in MODEL_OSCILLATORS:
+        if model_name in data and wave != model_name:
+            report.error(rule, f"{model_name}: settings for the {model_name} model need osc: {model_name}", line_of(data, model_name, line), f"{where}.{model_name}")
+    if wave in MODEL_OSCILLATORS and (wave in data or "osc" in data or inst.model is None):
+        from segan.models import parse_model
+
+        mline = line_of(data, wave, line)
+        model = parse_model(wave, data.get(wave), report, rule, f"{where}.{wave}", mline)
+        if model is not None:
+            changes["model"] = model
+            if wave in data:
+                raw[wave] = data[wave]
+            if "env" not in data and base is None and wave in ("pluck", "modal"):  # the model decays by itself: hold, then damp
+                changes["env"] = Env(0.001, 0.0, 1.0, 0.3 if wave == "pluck" else 1.0)
 
     if "name" in data:
         if not isinstance(data["name"], str) or not data["name"]:
@@ -358,8 +428,13 @@ def parse_patch(
             report.error(rule, "pwm must be [rate_hz, depth] (rate 0-50, depth 0-0.49 of duty)", line_of(data, "pwm", line), f"{where}.pwm")
     if "fm" in data:
         fm = data["fm"]
-        if not isinstance(fm, dict) or any(k not in ("ratio", "index", "env") for k in fm):
-            report.error(rule, "fm must be { ratio, index, env }", line_of(data, "fm", line), f"{where}.fm")
+        if isinstance(fm, dict) and ("ops" in fm or "algorithm" in fm):
+            ops = _parse_fm_ops(fm, report, rule, f"{where}.fm", line_of(data, "fm", line))
+            if ops is not None:
+                changes["fm"] = FM(ops=ops)
+                raw["fm"] = fm
+        elif not isinstance(fm, dict) or any(k not in ("ratio", "index", "env") for k in fm):
+            report.error(rule, "fm must be { ratio, index, env } (2 operators) or { algorithm, ops: [...] } (3-4 operators)", line_of(data, "fm", line), f"{where}.fm")
         else:
             ratio = fm.get("ratio", 2.0)
             index = fm.get("index", 1.0)
@@ -436,6 +511,34 @@ def parse_patch(
         crush = parse_crush(data["crush"], report, rule, f"{where}.crush", line_of(data, "crush", line))
         if crush is not None:
             changes["crush"] = crush
+    if "sub" in data:
+        from segan.models import parse_sub
+
+        if (sub := parse_sub(data["sub"], report, rule, f"{where}.sub", line_of(data, "sub", line))) is not None:
+            changes["sub"] = sub
+            raw["sub"] = data["sub"]
+    if "sync" in data:
+        from segan.models import parse_sync
+
+        if changes.get("wave", inst.wave) not in ("saw", "pulse"):
+            report.error(rule, "sync works on osc: saw or pulse (a hard-synced slave oscillator)", line_of(data, "sync", line), f"{where}.sync")
+        elif (sync := parse_sync(data["sync"], report, rule, f"{where}.sync", line_of(data, "sync", line))) is not None:
+            changes["sync"] = sync
+            raw["sync"] = data["sync"]
+    if "mute" in data:
+        if data["mute"] not in MUTES:
+            report.error(rule, f"mute must be {', '.join(MUTES)} (a brass mute's tone: straight = thin and bright, cup = soft and dark, harmon = buzzy and nasal)",
+                         line_of(data, "mute", line), f"{where}.mute")  # fmt: skip
+        else:
+            changes["mute"] = data["mute"]
+            raw["mute"] = data["mute"]
+    if "fx" in data:
+        from segan.fx import parse_fx
+
+        if (effects := parse_fx(data["fx"], report, rule, f"{where}.fx", line_of(data, "fx", line))) is not None:
+            changes["fx"] = effects
+            raw["fx"] = data["fx"]
+    changes["raw"] = tuple(raw.items())
     if "note" in data:
         note = parse_note_value(data["note"])
         if note is None:
@@ -552,10 +655,63 @@ def parse_crush(value: Any, report: Report, rule: str, where: str, line: int | N
     return Crush(bits, float(rate))
 
 
+FM_ALGORITHMS: dict[str, tuple[tuple[tuple[int, ...], float], ...]] = {
+    # per operator (0-based): (modulated by, output level); op 1 is always heard
+    "stack": (((1,), 1.0), ((2,), 0.0), ((3,), 0.0), ((), 0.0)),  # 4 -> 3 -> 2 -> 1: one bright, complex voice
+    "pairs": (((1,), 1.0), ((), 0.0), ((3,), 1.0), ((), 0.0)),  # 2 -> 1 and 4 -> 3: two 2-op voices layered
+    "branch": (((1, 2), 1.0), ((), 0.0), ((3,), 0.0), ((), 0.0)),  # 2 -> 1 <- 3 <- 4
+    "stack3": (((1,), 1.0), ((2,), 0.0), ((), 0.0), ((), 1.0)),  # 3 -> 2 -> 1, plus 4 as a pure carrier (a sub or body)
+    "parallel": (((), 1.0), ((), 1.0), ((), 1.0), ((), 1.0)),  # every operator heard: additive organ
+}
+
+
+def _parse_fm_ops(fm: dict[str, Any], report: Report, rule: str, where: str, line: int | None) -> tuple[FMOp, ...] | None:
+    """`{ algorithm: stack|pairs|branch|stack3|parallel, ops: [{ ratio, index, out, env, detune, mod }, ...] }` (3-4 ops)."""
+    if any(k not in ("algorithm", "ops") for k in fm):
+        report.error(rule, "fm with operators is { algorithm, ops: [{ ratio, index, out, env, detune, mod }, ...] }", line, where)
+        return None
+    algorithm = fm.get("algorithm", "stack")
+    ops = fm.get("ops")
+    if algorithm not in FM_ALGORITHMS:
+        report.error(rule, f"fm.algorithm must be one of {', '.join(FM_ALGORITHMS)}", line, f"{where}.algorithm")
+        return None
+    if not isinstance(ops, list) or not 2 <= len(ops) <= 4:
+        report.error(rule, "fm.ops must list 2-4 operators, e.g. [{ ratio: 1 }, { ratio: 2, index: 1.5 }, { ratio: 7, index: 0.4 }]", line, f"{where}.ops")
+        return None
+    out: list[FMOp] = []
+    routing = FM_ALGORITHMS[algorithm]
+    for i, op in enumerate(ops):
+        owhere = f"{where}.ops.{i + 1}"
+        if not isinstance(op, dict) or any(k not in ("ratio", "index", "out", "env", "detune", "mod") for k in op):
+            report.error(rule, "an operator is { ratio, index (as a modulator), out (as a carrier, 0-1), env, detune (cents), mod: [operators] }", line, owhere)
+            return None
+        mods, level = routing[i]
+        mods = tuple(m for m in mods if m < len(ops))
+        if "mod" in op:
+            raw_mod = op["mod"]
+            if not (isinstance(raw_mod, list) and all(isinstance(m, int) and not isinstance(m, bool) and i + 1 < m <= len(ops) for m in raw_mod)):
+                report.error(rule, f"operator {i + 1}: mod must list operators after it (numbers {i + 2}-{len(ops)}): modulation flows from later operators to earlier ones", line, f"{owhere}.mod")
+                return None
+            mods = tuple(m - 1 for m in raw_mod)
+        ratio, index, level_out, detune = op.get("ratio", 1.0), op.get("index", 1.0 if i else 0.0), op.get("out", level), op.get("detune", 0.0)
+        if not (is_number(ratio) and 0.01 <= ratio <= 32 and is_number(index) and 0 <= index <= 50 and is_number(level_out) and 0 <= level_out <= 1
+                and is_number(detune) and -100 <= detune <= 100):  # fmt: skip
+            report.error(rule, f"operator {i + 1}: ratio 0.01-32, index 0-50, out 0-1, detune -100..100 cents", line, owhere)
+            return None
+        env = parse_env(op["env"], report, rule, f"{owhere}.env", line) if "env" in op else None
+        if "env" in op and env is None:
+            return None
+        out.append(FMOp(float(ratio), float(index), float(level_out), mods, env, float(detune)))
+    if not any(op.out > 0 for op in out):
+        report.error(rule, "fm: no operator is heard (give one out > 0)", line, f"{where}.ops")
+        return None
+    return tuple(out)
+
+
 def _parse_filter(value: Any, report: Report, rule: str, where: str, line: int | None) -> Filter | None:
-    allowed = ("type", "cutoff", "resonance", "env_amount", "env", "keytrack")
+    allowed = ("type", "cutoff", "resonance", "env_amount", "env", "keytrack", "lfo", "slope")
     if not isinstance(value, dict):
-        report.error(rule, "filter must be { type: lp|hp|bp, cutoff: Hz, resonance: 0-1, env_amount: octaves, env, keytrack }", line, where)
+        report.error(rule, "filter must be { type: lp|hp|bp|notch, cutoff: Hz, resonance: 0-1, env_amount: octaves, env, keytrack, lfo: [rate, octaves], slope: 12|24 }", line, where)
         return None
     for k in value:
         if k not in allowed:
@@ -563,7 +719,7 @@ def _parse_filter(value: Any, report: Report, rule: str, where: str, line: int |
             return None
     ftype = value.get("type", "lp")
     if ftype not in FILTER_TYPES:
-        report.error(rule, "filter.type must be lp (low-pass), hp (high-pass) or bp (band-pass)", line, f"{where}.type")
+        report.error(rule, "filter.type must be lp (low-pass), hp (high-pass), bp (band-pass) or notch", line, f"{where}.type")
         return None
     cutoff = value.get("cutoff", 2000)
     resonance = value.get("resonance", 0.0)
@@ -581,7 +737,15 @@ def _parse_filter(value: Any, report: Report, rule: str, where: str, line: int |
     if not (is_number(keytrack) and 0 <= keytrack <= 1):
         report.error(rule, "filter.keytrack must be 0-1", line, f"{where}.keytrack")
         return None
+    lfo = value.get("lfo")
+    if lfo is not None and not (isinstance(lfo, list) and len(lfo) == 2 and all(is_number(v) for v in lfo) and 0 < lfo[0] <= 50 and 0 <= lfo[1] <= 8):
+        report.error(rule, "filter.lfo must be [rate_hz, octaves 0-8] (the cutoff sweeps up that far and back, from each note's start)", line, f"{where}.lfo")
+        return None
+    slope = value.get("slope", 12)
+    if slope not in (12, 24) or isinstance(slope, bool):
+        report.error(rule, "filter.slope must be 12 or 24 (dB per octave)", line, f"{where}.slope")
+        return None
     env = parse_env(value["env"], report, rule, f"{where}.env", line) if "env" in value else None
     if "env" in value and env is None:
         return None
-    return Filter(ftype, float(cutoff), float(resonance), float(amount), env, float(keytrack))
+    return Filter(ftype, float(cutoff), float(resonance), float(amount), env, float(keytrack), (float(lfo[0]), float(lfo[1])) if lfo else None, int(slope))

@@ -136,8 +136,13 @@ def render_layer(layer: Layer, ctx: Context, available: float, seed: int, pitch_
     if room <= 0:
         return np.zeros(0), False
     sounding = full > room + 1e-3
-    length = min(full, room) if layer.delay is None else room
+    length = min(full, room) if layer.delay is None and not inst.fx else room
     signal = render_note(inst, ctx, base, gate, 1.0, seed, pitch_curve, gain_curve, cutoff_curve, length=min(full, room))
+    if inst.fx:  # SFX have no tempo: note values count at 120 bpm
+        from segan.fx import apply_fx
+
+        signal = apply_fx(signal, inst.fx, ctx.rate, 0.5, 1, base, ctx.tuning)[: round(room * ctx.rate)]
+        sounding = sounding or full + inst.fx_tail() > room + 1e-3
     signal = _effects(signal, layer, ctx.rate, round(length * ctx.rate), post_gain)
     if sounding and ctx.declick:
         fade = min(len(signal), round(0.003 * ctx.rate))

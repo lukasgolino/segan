@@ -116,6 +116,21 @@ def noise_at(counter: NDArray[np.uint64], seed: int) -> Signal:
     return (z >> np.uint64(11)).astype(np.float64) * (2.0 / 9007199254740992.0) - 1.0
 
 
+def smooth_noise(n: int, seed: int, rate: float, points_per_second: float) -> Signal:
+    """Slowly wandering noise in [-1, 1): random control points `points_per_second` apart, joined by a cosine
+    ease (smooth, no corners), e.g. a player's pitch drift or a bow's pressure."""
+    if n <= 0:
+        return np.zeros(0)
+    spacing = rate / points_per_second
+    count = int(n / spacing) + 3
+    points = noise(count, seed)
+    position = np.arange(n, dtype=np.float64) / spacing
+    index = np.floor(position).astype(np.int64)
+    frac = position - index
+    ease = 0.5 - 0.5 * sin_turns(frac * 0.5 + 0.25)
+    return points[index] + (points[index + 1] - points[index]) * ease
+
+
 def uniform(seed: int, index: int) -> float:
     """One deterministic number in [0, 1) (for variations: pick a value per parameter)."""
     return float(noise_at(np.array([index + 1], dtype=np.uint64), seed)[0]) * 0.5 + 0.5
@@ -152,7 +167,7 @@ def poly_blamp(t: Signal, dt: Signal) -> Signal:
 
 
 def biquad(kind: str, cutoff: float, q: float, rate: float, gain_db: float = 0.0) -> NDArray[np.float64]:
-    """RBJ cookbook biquad as one scipy `sos` row: lp, hp, bp, lowshelf, highshelf, peak."""
+    """RBJ cookbook biquad as one scipy `sos` row: lp, hp, bp, notch, lowshelf, highshelf, peak."""
     cutoff = min(max(cutoff, 10.0), 0.45 * rate)
     w0 = 2 * math.pi * cutoff / rate
     cw, sw = math.cos(w0), math.sin(w0)
@@ -166,6 +181,9 @@ def biquad(kind: str, cutoff: float, q: float, rate: float, gain_db: float = 0.0
         den = [1 + alpha, -2 * cw, 1 - alpha]
     elif kind == "bp":
         b = [alpha, 0.0, -alpha]
+        den = [1 + alpha, -2 * cw, 1 - alpha]
+    elif kind == "notch":
+        b = [1.0, -2 * cw, 1.0]
         den = [1 + alpha, -2 * cw, 1 - alpha]
     elif kind == "peak":
         b = [1 + alpha * a, -2 * cw, 1 - alpha * a]
