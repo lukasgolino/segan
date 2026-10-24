@@ -19,6 +19,8 @@ check before upgrading. Patch bumps never change existing behaviour. Every relea
 
 ## [Unreleased]
 
+## [0.12.0] - 2026-10-25
+
 ### Added
 
 - A much bigger synth palette (#76). Instrument models, each with a same-named block or a preset name:
