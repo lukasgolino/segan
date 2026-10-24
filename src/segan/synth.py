@@ -19,6 +19,7 @@ import numpy as np
 from segan.dsp import (
     Signal,
     biquad,
+    cos_turns,
     db_to_gain,
     decimate,
     exp2,
@@ -276,9 +277,17 @@ def render_note(
         if f.env_amount:
             fenv = adsr(f.env or inst.env, n_gate, n, rate, False)
             cutoff = cutoff * exp2(f.env_amount * fenv)
+        if f.lfo is not None:
+            cutoff = cutoff * exp2(f.lfo[1] * 0.5 * (1.0 - cos_turns(t * f.lfo[0])))
         if cutoff_curve is not None:
             cutoff = cutoff * cutoff_curve(t)
-        signal = apply_filter(signal, f.type, cutoff, resonance_to_q(f.resonance), rate)
+        q = resonance_to_q(f.resonance)
+        if f.slope == 24:  # two stages with Butterworth Qs (0.54, 1.31); resonance raises the second
+            signal = apply_filter(signal, f.type, cutoff, 0.541, rate)
+            q = round(1.307 * q / 0.7071, 12)
+        signal = apply_filter(signal, f.type, cutoff, q, rate)
+    if inst.mute is not None:
+        signal = _mute(signal, inst.mute, rate)
     if gain_curve is not None:
         signal = signal * gain_curve(t)
     signal = signal * (velocity * db_to_gain(inst.gain))
@@ -289,8 +298,90 @@ def render_note(
     return crush(out, inst.crush, ctx.rate)
 
 
-def _tone(inst: Instrument, ctx: Context, n: int, n_gate: int, t: Signal, semis: Signal, seed: int) -> Signal:
+MUTE_EQ: dict[str, tuple[tuple[str, float, float, float], ...]] = {
+    # brass mutes as EQ (kind, Hz, Q, dB) + a level change: straight = thin and bright, cup = soft and covered,
+    # harmon = the buzzy, nasal jazz trumpet sound
+    "straight": (("hp", 900.0, 0.7, 0.0), ("peak", 1800.0, 1.0, 6.0), ("highshelf", 6000.0, 0.7, -6.0)),
+    "cup": (("hp", 200.0, 0.7, 0.0), ("peak", 800.0, 1.0, 3.0), ("lp", 1500.0, 0.7, 0.0)),
+    "harmon": (("hp", 1200.0, 0.8, 0.0), ("peak", 2200.0, 2.5, 9.0), ("lp", 4500.0, 0.7, 0.0)),
+}
+MUTE_GAIN = {"straight": -3.0, "cup": -4.0, "harmon": -6.0}
+
+
+def _mute(x: Signal, mute: str, rate: float) -> Signal:
+    from scipy.signal import sosfilt
+
+    sos = np.vstack([biquad(kind, hz, q, rate, db) for kind, hz, q, db in MUTE_EQ[mute]])
+    return np.asarray(sosfilt(sos, x), dtype=np.float64) * db_to_gain(MUTE_GAIN[mute])
+
+
+def _synced(wave: str, inc: Signal, ratio: Signal, duty: Signal | float, start: float) -> Signal:
+    """A hard-synced slave saw or pulse: its phase restarts with every cycle of the note (the master) and runs at
+    `ratio` x the note's frequency. Band-limited with PolyBLEP at the slave's own edges and at every restart."""
+    phase = _phase(inc, start)
+    m = phase - np.floor(phase)
+    dt = np.minimum(inc, 0.5)
+    s = m * ratio
+    sf = s - np.floor(s)
+    ds = np.minimum(inc * ratio, 0.5)
+    near = (m < dt) | (m > 1.0 - dt)  # around a restart the master's correction applies
+    before = ratio - np.floor(ratio)  # where the slave is when the master restarts
+    if wave == "saw":
+        out = 2.0 * sf - 1.0 - np.where(near, 0.0, poly_blep(sf, ds))
+        jump = -2.0 * before
+    else:
+        d = np.broadcast_to(np.asarray(duty, dtype=np.float64), sf.shape)
+        out = np.where(sf < d, 1.0, -1.0)
+        shifted = sf - d
+        shifted -= np.floor(shifted)
+        out = out + np.where(near, 0.0, poly_blep(sf, ds)) - poly_blep(shifted, ds)
+        jump = 1.0 - np.where(before < d, 1.0, -1.0)
+        out = out - (2.0 * d - 1.0)
+    return out + 0.5 * jump * poly_blep(m, dt)
+
+
+def _fm_ops(inst: Instrument, ctx: Context, n: int, n_gate: int, inc: Signal) -> Signal:
+    """3-4 operator FM: operators render from the last to the first, each modulated (phase) by the ones listed
+    in its `mod`; carriers are summed."""
+    assert inst.fm is not None
+    ops = inst.fm.ops
     rate = ctx.os_rate
+    outs: list[Signal] = [np.zeros(0)] * len(ops)
+    heard = np.zeros(n)
+    for i in range(len(ops) - 1, -1, -1):
+        op = ops[i]
+        level: Signal | float = adsr(op.env, n_gate, n, rate, False) if op.env is not None else 1.0
+        mod = np.zeros(n)
+        for j in op.mod:
+            mod = mod + ops[j].index * outs[j]
+        detune = exp2(op.detune / 1200.0) if op.detune else 1.0
+        outs[i] = sin_turns(_phase(inc * op.ratio * detune) + mod / (2.0 * np.pi)) * level
+        if op.out > 0:
+            heard += op.out * outs[i]
+    return heard
+
+
+def _sub(inst: Instrument, ctx: Context, semis: Signal, n: int) -> Signal:
+    assert inst.sub is not None
+    sub = inst.sub
+    freq = ctx.tuning * exp2((semis + 12.0 * sub.octave - 69.0) / 12.0)
+    wave = {"square": "pulse", "triangle": "triangle", "sine": "sine"}[sub.wave]
+    return oscillator(wave, freq / ctx.os_rate, 0.5, 0) * db_to_gain(sub.level)
+
+
+def _tone(inst: Instrument, ctx: Context, n: int, n_gate: int, t: Signal, semis: Signal, seed: int) -> Signal:
+    out = _tone_main(inst, ctx, n, n_gate, t, semis, seed)
+    if inst.sub is not None:
+        out = out + _sub(inst, ctx, semis, n)
+    return out
+
+
+def _tone_main(inst: Instrument, ctx: Context, n: int, n_gate: int, t: Signal, semis: Signal, seed: int) -> Signal:
+    rate = ctx.os_rate
+    if inst.model is not None:
+        from segan.modelsynth import render_model
+
+        return render_model(inst.model, inst, rate, ctx.tuning, ctx.measure, n, n_gate, t, semis, seed)
     if inst.wave == "noise":
         return np.zeros(n) if ctx.measure else noise(n, seed_of(seed, "noise"))
     duty: Signal | float = inst.duty
@@ -304,7 +395,15 @@ def _tone(inst: Instrument, ctx: Context, n: int, n_gate: int, t: Signal, semis:
         freq = ctx.tuning * exp2((semis + cents / 100.0 - 69.0) / 12.0)
         inc = freq / rate
         start = 0.25 * k / voices  # spread under a quarter turn: k / voices cancels the fundamental (2 voices)
-        if inst.wave == "fm":
+        if inst.wave == "fm" and inst.fm is not None and inst.fm.ops:
+            out += _fm_ops(inst, ctx, n, n_gate, inc)
+        elif inst.sync is not None:
+            sync = inst.sync
+            slave: Signal = np.full(n, sync.ratio)
+            if sync.env_amount:
+                slave = np.minimum(sync.ratio * exp2(sync.env_amount * adsr(sync.env or inst.env, n_gate, n, rate, False)), 64.0)
+            out += _synced(inst.wave, inc, slave, duty, start)
+        elif inst.wave == "fm":
             fm = inst.fm
             ratio, index = (fm.ratio, fm.index) if fm else (2.0, 1.0)
             index_curve: Signal | float = index
@@ -394,6 +493,32 @@ def _drum(inst: Instrument, ctx: Context, n: int, t: Signal, semis: Signal, seed
         metal = sum((oscillator("pulse", np.full(n, tune / 400.0 * r / rate), 0.5, seed) for r in ratios), np.zeros(n))
         source = (1.0 - mix) * metal / 3.0 + mix * hiss
         out = apply_filter(source, "hp", tone, 0.8, rate) * _decay(t, decay, 3)
+    elif kind == "rim":  # a stick on the rim: a high, woody knock and a click
+        body = pitched(tune_curve, punch, 0.01, "triangle") * _decay(t, decay, 3)
+        crack = apply_filter(hiss, "bp", tone, 2.0, rate) * _decay(t, decay * 0.6, 3)
+        out = body * 0.8 + mix * crack + click * hiss * _decay(t, 0.002, 2)
+    elif kind == "shaker":  # beads: a short swell of high noise
+        swell = np.clip(t / 0.012, 0.0, 1.0) * _decay(t, decay, 2)
+        out = apply_filter(apply_filter(hiss, "hp", tone, 0.7, rate), "lp", min(tone * 2.2, 0.45 * rate), 0.7, rate) * swell * 1.4
+    elif kind == "cowbell":  # two detuned square tones through a band-pass (the drum machine bell)
+        tones = oscillator("pulse", np.broadcast_to(tune_curve / rate, (n,)).copy(), 0.5, seed) + oscillator(
+            "pulse", np.broadcast_to(tune_curve * 1.48 / rate, (n,)).copy(), 0.5, seed)
+        env = 0.6 * _decay(t, 0.04, 2) + 0.4 * _decay(t, decay, 2)
+        out = apply_filter(tones, "bp", tone, 1.2, rate) * env * 0.8 + click * hiss * _decay(t, 0.002, 2) * 0.3
+    elif kind == "block":  # a wood block: two short woody modes
+        modes = pitched(tune_curve, punch, 0.005) * _decay(t, decay, 3) + 0.4 * pitched(tune_curve * 2.57, 0.0, 0.005) * _decay(t, decay * 0.5, 3)
+        out = modes + click * apply_filter(hiss, "hp", tone, 0.7, rate) * _decay(t, 0.002, 2) * 0.5
+    elif kind == "conga":  # a hand drum: a round body with a slight upward bend from the slap, plus the slap
+        body = pitched(tune_curve, punch, 0.02) * _decay(t, decay, 2) + 0.3 * pitched(tune_curve * 1.59, 0.0, 0.02) * _decay(t, decay * 0.4, 2)
+        slap = apply_filter(hiss, "bp", tone, 1.0, rate) * _decay(t, 0.02, 2)
+        out = body + mix * slap * 2.0 + click * hiss * _decay(t, 0.003, 2) * 0.3
+    elif kind == "brush":  # a brush on a snare: a soft swish with a slow attack
+        swish = np.clip(t / 0.02, 0.0, 1.0) * _decay(t, decay, 2)
+        out = apply_filter(apply_filter(hiss, "hp", 700.0, 0.7, rate), "lp", tone, 0.7, rate) * swish
+    elif kind == "metal":  # struck scrap metal / anvil: inharmonic modes ringing at different rates
+        partials = ((1.0, 1.0, 1.0), (1.41, 0.8, 0.8), (1.71, 0.7, 0.7), (2.25, 0.6, 0.55), (2.83, 0.5, 0.45), (3.86, 0.35, 0.3))
+        modes = sum((amp * pitched(tune_curve * r, 0.0, 0.01) * _decay(t, decay * d, 2) for r, amp, d in partials), np.zeros(n))
+        out = modes * 0.45 + mix * apply_filter(hiss, "hp", tone, 0.7, rate) * _decay(t, decay * 0.3, 3) + click * hiss * _decay(t, 0.002, 2)
     else:
         raise ValueError(f"unknown drum {kind!r}")
     if ctx.declick:

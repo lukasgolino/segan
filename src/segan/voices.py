@@ -1,5 +1,6 @@
 """Note events -> track buffers: render each note once (identical notes are cached within a render),
-cut mono voices when the next note starts (with a short fade when declick is on), pan, and sum.
+cut mono voices when the next note starts (with a short fade when declick is on), run the instrument's effects,
+pan, and sum.
 """
 
 from __future__ import annotations
@@ -27,6 +28,7 @@ class NoteEvent:
     cut: int | None = None  # frames after start where a mono voice is cut by the next note
     pan: float = 0.0  # track pan (added to the instrument's)
     gain_db: float = 0.0  # track gain
+    beat: float = 0.5  # seconds per quarter note (tempo-synced effects)
 
 
 def pan_gains(pan: float) -> tuple[float, float]:
@@ -40,6 +42,8 @@ def event_end(event: NoteEvent, ctx: Context) -> int:
     length = round(note_length(event.inst, event.gate, ctx, event.midi) * ctx.rate)
     if event.cut is not None:
         length = min(length, event.cut + round(DECLICK_RELEASE * ctx.rate))
+    if event.inst.fx:
+        length += round(event.inst.fx_tail(event.beat) * ctx.rate) + 1
     return event.start + length
 
 
@@ -71,7 +75,7 @@ def render_events(events: list[NoteEvent], ctx: Context, channels: int, frames: 
         if event.track not in tracks:
             tracks[event.track] = np.zeros((length, channels))
         buffer = tracks[event.track]
-        key = (repr(event.inst), event.midi, event.gate, event.velocity, event.seed, event.cut)
+        key = (repr(event.inst), event.midi, event.gate, event.velocity, event.seed, event.cut, event.beat if event.inst.fx else None)
         voice = cache.get(key)
         if voice is None:
             voice = render_note(event.inst, ctx, event.midi, event.gate, event.velocity, event.seed)
@@ -82,12 +86,20 @@ def render_events(events: list[NoteEvent], ctx: Context, channels: int, frames: 
                 if fade:
                     span = end - event.cut
                     voice[event.cut :] *= np.linspace(1.0, 0.0, span, endpoint=False) ** 2
+            if event.inst.fx:
+                from segan.fx import apply_fx
+
+                voice = apply_fx(voice, event.inst.fx, ctx.rate, event.beat, channels, event.midi, ctx.tuning)
             cache[key] = voice
         start = event.start
         if start >= length:
             continue
         piece = voice[: length - start] * db_to_gain(event.gain_db)
-        if channels == 1:
+        if piece.ndim == 2:  # a stereo effect ran: the pan balances the sides
+            left, right = pan_gains(event.pan + event.inst.pan)
+            buffer[start : start + len(piece), 0] += piece[:, 0] * left
+            buffer[start : start + len(piece), 1] += piece[:, 1] * right
+        elif channels == 1:
             buffer[start : start + len(piece), 0] += piece
         else:
             left, right = pan_gains(event.pan + event.inst.pan)
