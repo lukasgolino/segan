@@ -58,6 +58,7 @@ class LintConfig:
     max_limiting_db: float = 3.0  # W001
     max_dc_offset: float = 0.01  # W008
     loudness_tolerance: float = 1.0  # W013
+    max_similarity: float = 0.85  # W024-W026: how alike two songs' first bars may be
     category_disable: dict[str, tuple[str, ...]] = field(default_factory=dict)  # [lint.<category>] disable: warnings off for that category
 
     def disabled_for(self, category: str | None) -> frozenset[str]:
@@ -79,6 +80,12 @@ class SfxConfig:
 
 
 @dataclass(frozen=True)
+class SimilarityConfig:
+    local_store: bool = False  # keep song fingerprints in the user cache and compare with other projects (W026)
+    shipped: bool = True  # compare songs with SEGAN's own examples (W025); off only in those examples themselves
+
+
+@dataclass(frozen=True)
 class OggConfig:
     quality: float = 0.4  # Vorbis quality 0-1 (q0-q10 / 10); 0.4 is about 128 kbit/s stereo
 
@@ -97,6 +104,8 @@ class Config:
     godot: GodotConfig = field(default_factory=GodotConfig)
     ogg: OggConfig = field(default_factory=OggConfig)
     sfx: SfxConfig = field(default_factory=SfxConfig)
+    similarity: SimilarityConfig = field(default_factory=SimilarityConfig)
+    seed: int | None = None  # the project seed: suggestions and rolled kits branch from it
     room: dict[str, float] = field(default_factory=dict)  # category -> room send (0-1, x mix.room)
 
     def target(self, category: str) -> float:
@@ -212,7 +221,8 @@ def parse_config(data: dict[str, Any], path: Path) -> Config:
         findings.append(Finding("E001", message, path, None, where))
 
     defaults = Config()
-    allowed = ("mode", "default_kit", "output_dir", "preview_dir", "export", "style_version", "mix", "loudness", "room", "lint", "godot", "ogg", "sfx")
+    allowed = ("mode", "default_kit", "output_dir", "preview_dir", "export", "style_version", "seed", "mix", "loudness", "room", "lint", "godot", "ogg", "sfx",
+               "similarity")  # fmt: skip
     for key in data:
         if key not in allowed:
             error(f"unknown setting {key!r}; allowed: {', '.join(allowed)}", key)
@@ -245,6 +255,10 @@ def parse_config(data: dict[str, Any], path: Path) -> Config:
         error("style_version must be a positive integer", "style_version")
         style_version = defaults.style_version
 
+    seed = data.get("seed")
+    if seed is not None and not (_int(seed) and 0 <= seed < 2**63):
+        error("seed must be a whole number 0..2^63 (the project seed; `segan init` picks one)", "seed")
+        seed = None
     mix = _parse_mix(data.get("mix", {}), error)
     loudness = _parse_loudness(data.get("loudness", {}), error)
     room = _parse_room(data.get("room", {}), error)
@@ -252,6 +266,7 @@ def parse_config(data: dict[str, Any], path: Path) -> Config:
     godot = _parse_godot(data.get("godot", {}), error)
     ogg = _parse_ogg(data.get("ogg", {}), error)
     sfx = _parse_sfx(data.get("sfx", {}), error)
+    similarity = _parse_similarity(data.get("similarity", {}), error)
     if findings:
         raise SeganError(findings)
     return Config(
@@ -267,6 +282,8 @@ def parse_config(data: dict[str, Any], path: Path) -> Config:
         godot=godot,
         ogg=ogg,
         sfx=sfx,
+        similarity=similarity,
+        seed=seed,
         room=room,
     )
 
@@ -359,6 +376,7 @@ def _parse_lint(data: Any, error: Callable[[str, str], None]) -> LintConfig:
         "max_limiting_db": (lambda v: _number(v) and 0 <= v <= 40, "must be 0-40 dB"),
         "max_dc_offset": (lambda v: _number(v) and 0 < v <= 1, "must be 0-1"),
         "loudness_tolerance": (lambda v: _number(v) and 0 < v <= 20, "must be 0-20 LU"),
+        "max_similarity": (lambda v: _number(v) and 0.5 <= v <= 1, "must be 0.5-1 (1 = only identical openings warn)"),
     }
     categories: dict[str, tuple[str, ...]] = {}
     if isinstance(data, dict):
@@ -377,7 +395,7 @@ def _parse_lint(data: Any, error: Callable[[str, str], None]) -> LintConfig:
         disable=tuple(v["disable"]), max_seam_click=float(v["max_seam_click"]),
         max_leading_silence_ms=float(v["max_leading_silence_ms"]), max_instruments=int(v["max_instruments"]),
         max_aliasing_db=float(v["max_aliasing_db"]), max_limiting_db=float(v["max_limiting_db"]),
-        max_dc_offset=float(v["max_dc_offset"]), loudness_tolerance=float(v["loudness_tolerance"]),
+        max_dc_offset=float(v["max_dc_offset"]), loudness_tolerance=float(v["loudness_tolerance"]), max_similarity=float(v["max_similarity"]),
     )  # fmt: skip
 
 
@@ -397,3 +415,10 @@ def _parse_sfx(data: Any, error: Callable[[str, str], None]) -> SfxConfig:
     rules: dict[str, tuple[Check, str]] = {"source": (lambda v: v in SFX_SOURCES, f"must be one of {', '.join(SFX_SOURCES)}")}
     v = _table(data, "sfx", SfxConfig(), rules, error)
     return SfxConfig(source=v["source"])
+
+
+def _parse_similarity(data: Any, error: Callable[[str, str], None]) -> SimilarityConfig:
+    rules: dict[str, tuple[Check, str]] = {"local_store": (lambda v: isinstance(v, bool), "must be true or false"),
+                                           "shipped": (lambda v: isinstance(v, bool), "must be true or false")}  # fmt: skip
+    v = _table(data, "similarity", SimilarityConfig(), rules, error)
+    return SimilarityConfig(local_store=v["local_store"], shipped=v["shipped"])

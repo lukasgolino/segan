@@ -64,3 +64,6 @@ max_aliasing_db = -50.0        # W010: raise [mix] oversample if instruments ali
 max_limiting_db = 3.0          # W001: limiter gain reduction above this means the source is too hot
 max_dc_offset = 0.01           # W008
 loudness_tolerance = 1.0       # W013: LU an un-normalised asset may be off its target
+
+[similarity]
+shipped = false               # this demo is one of the examples SEGAN compares every song with (W025)

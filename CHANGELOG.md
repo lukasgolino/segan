@@ -37,6 +37,18 @@ check before upgrading. Patch bumps never change existing behaviour. Every relea
   LFO filter. Rates and times can be note values that follow the song's tempo (`"1/8."`, `"1/4t"`). Effects run
   per note, after mono voice cuts, with LFOs starting at the note, so loops, flow clips and the render cache stay
   exact; their tails count towards ring-outs and loop offsets.
+- Sameness checks (#76). Songs are fingerprinted from their notes (opening notes, chroma and onsets per bar for the
+  first 8 bars, register, instruments, key, tempo) and compared: W021 songs that open on the same notes, W022 most
+  songs in one pitch set or tempo band, W023 every song on one kit with the same instruments, W024 two songs whose
+  first bars score over `lint.max_similarity` (0.85), W025 a song close to SEGAN's own examples (fingerprints
+  shipped in the package; `[similarity] shipped`), W026 a song close to one from another project on this machine
+  (`[similarity] local_store = true`: fingerprints kept in `~/.cache/segan/fingerprints` on build).
+- `segan similarity [songs] [--shipped] [--machine]` (and an MCP `similarity` tool): pairwise harmony, rhythm,
+  timbre, register and tempo scores, the closest song for each. `segan preview` reports a song's `closest_song`.
+
+### Changed
+
+- `segan.api.song_yaml` takes any mapping of patterns (a `dict[str, Pattern]` type-checks).
 
 ## [0.11.0] - 2026-10-22
 

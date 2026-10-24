@@ -847,6 +847,57 @@ def cmd_lint(args: argparse.Namespace, out: Output) -> int:
     return 1 if failed else 0
 
 
+# --- segan similarity -------------------------------------------------------------------------
+
+
+def project_songs(project: Project) -> dict[str, Any]:
+    """Every song of the project that parses, by name."""
+    from segan.lint import _project_assets
+
+    return {name: song for name, song in _project_assets(project, [], "song").items() if not song.meta.template}
+
+
+def cmd_similarity(args: argparse.Namespace, out: Output) -> int:
+    from segan import similarity as sim
+
+    project = project_for(args.songs)
+    songs = project_songs(project)
+    wanted = [Path(s).name.removesuffix(SONG_SUFFIX) if s.endswith(SONG_SUFFIX) else s for s in args.songs]
+    if missing := [w for w in wanted if w not in songs]:
+        raise usage_error(f"no song {', '.join(map(repr, missing))} in this project (songs: {', '.join(songs) or 'none'})")
+    prints = {name: sim.fingerprint(song, str(project.root)) for name, song in songs.items()}
+    if project.config.similarity.local_store and project.config_path is not None:
+        sim.save_local(project.root, list(prints.values()))
+    focus = wanted or list(prints)
+    pairs = [sim.compare(prints[a], prints[b]) for a in focus for b in prints if b != a and (b not in focus or a < b)]
+    if args.shipped:
+        pairs += [sim.compare(prints[a], other) for a in focus for other in sim.shipped()]
+    if args.machine:
+        pairs += [sim.compare(prints[a], other) for a in focus for other in sim.other_projects(project.root)]
+    pairs.sort(key=lambda s: (-s.overall, s.a, s.b))
+    limit = project.config.lint.max_similarity
+    closest: dict[str, dict[str, Any]] = {}
+    for pair in pairs:
+        for me, other in ((pair.a, pair.b), (pair.b, pair.a)):
+            if me in focus and me not in closest:
+                closest[me] = {"song": other, "overall": round(pair.overall, 3), "opening": round(sim.opening_score(pair), 3)}
+    shown = pairs[: args.top]
+    if not pairs:
+        out.say("fewer than two songs: nothing to compare")
+    else:
+        out.say(f"{'pair':<40} {'overall':>7} {'harmony':>7} {'rhythm':>6} {'timbre':>6} {'register':>8} {'tempo':>5}  notes")
+        for p in shown:
+            notes = ", ".join(n for n, flag in (("same opening", p.same_opening), ("same pitch set", p.same_pitch_set),
+                                                (f"first bars over {limit:g}", sim.opening_score(p) >= limit)) if flag)  # fmt: skip
+            parts = p.parts
+            out.say(f"{p.a + ' ~ ' + p.b:<40} {p.overall:7.2f} {parts['harmony']:7.2f} {parts['rhythm']:6.2f} {parts['timbre']:6.2f} "
+                    f"{parts['register']:8.2f} {parts['tempo']:5.2f}  {notes}")  # fmt: skip
+        out.say("1 = the same; lint warns (W024) when two songs' first bars score over lint.max_similarity")
+    out.result({"songs": list(prints), "pairs": [p.to_dict() | {"opening_score": round(sim.opening_score(p), 3)} for p in shown],
+                "closest": closest, "max_similarity": limit})  # fmt: skip
+    return 0
+
+
 # --- segan build ------------------------------------------------------------------------------
 
 
@@ -1328,6 +1379,13 @@ def build_parser() -> argparse.ArgumentParser:
     snd_vendor = snd_cmds.add_parser("vendor", parents=[common], help="copy the Freesound sounds in use into <project>/sounds/ (offline builds)")
     snd_vendor.add_argument("--all", action="store_true", help="every sound in sounds.lock, used or not")
     snd_vendor.set_defaults(handler=cmd_sounds_vendor)
+
+    similar = commands.add_parser("similarity", parents=[common], help="how alike the project's songs are (harmony, rhythm, timbre, register, tempo)")
+    similar.add_argument("songs", nargs="*", help="songs to compare with the rest (default: every pair)")
+    similar.add_argument("--shipped", action="store_true", help="also compare with SEGAN's own examples and templates")
+    similar.add_argument("--machine", action="store_true", help="also compare with songs from other projects on this machine ([similarity] local_store)")
+    similar.add_argument("--top", type=int, default=15, help="pairs to show (default 15)")
+    similar.set_defaults(handler=cmd_similarity)
 
     kit = commands.add_parser("kit", help="kit tools")
     kit_cmds = kit.add_subparsers(title="kit commands", metavar="<command>")

@@ -42,6 +42,12 @@ WARNING_RULES = {
     "W018": "a filter removes most of an SFX noise layer's level",
     "W019": "a looping song's file is over 2 bars longer than the song (long ring-out)",
     "W020": "a recorded layer in a project set to synthesised SFX only ([sfx] source = \"synth\")",
+    "W021": "songs open on the same notes",
+    "W022": "most songs share one pitch set or tempo band",
+    "W023": "every song plays one kit with the same instruments",
+    "W024": "two songs' first bars are nearly the same",
+    "W025": "a song close to a SEGAN example or template",
+    "W026": "a song close to one from another project on this machine",
 }
 
 
@@ -140,6 +146,14 @@ def lint_paths(project: Project, paths: list[Path] | None = None, render: bool =
         sfx = set(_project_assets(project, assets, "sfx"))
         for soundtrack in soundtracks:
             findings.extend(check_soundtrack(soundtrack, songs, sfx))
+    linted_songs = {a.name: a for a in assets if a.kind == "song"}
+    if linted_songs:
+        from segan.similarity import sameness_findings
+
+        for finding in sameness_findings(project, _project_assets(project, assets, "song"), set(linted_songs)):
+            owner = next((a for a in linted_songs.values() if a.path == finding.path), None)
+            if owner is None or finding.rule not in owner.meta.lint_disable | project.config.lint.disabled_for(owner.category):
+                findings.append(finding)
     disabled = set(project.config.lint.disable)
     findings = [f for f in dict.fromkeys(findings) if f.rule not in disabled]
     return LintResult(files, findings, assets, kits, soundtracks)

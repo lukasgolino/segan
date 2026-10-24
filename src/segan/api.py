@@ -22,6 +22,7 @@ Versioned like the notation: `API_VERSION` changes when a function's behaviour c
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -195,7 +196,7 @@ class Pattern:
         return "\n".join(lines) + "\n"
 
 
-def song_yaml(name: str, *, tracks: list[Track], patterns: dict[str, Pattern | dict[str, Any]], sections: dict[str, list[str]],
+def song_yaml(name: str, *, tracks: list[Track], patterns: Mapping[str, Pattern | dict[str, Any]], sections: dict[str, list[str]],
               arrangement: list[str], key: str | Key, tempo: float = 120, loop: str | bool | None = None, group: int = 4,
               comments: dict[str, str] | None = None, **fields: Any) -> str:  # fmt: skip
     """A complete song file. `patterns` values are Pattern builders or raw mappings (derived patterns); fields
