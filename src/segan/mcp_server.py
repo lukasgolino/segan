@@ -316,7 +316,7 @@ def create_server(root: Path, allow_godot: bool = False) -> MCPServer:
     @server.tool(annotations=WRITE)
     @_results
     def scaffold(kind: Kind, name: str, description: str | None = None, kit: str | None = None, preset: str | None = None,
-                 key: str = "A minor", tempo: int = 120, bars: int = 2) -> dict[str, Any]:  # fmt: skip
+                 key: str | None = None, tempo: int | None = None, meter: str | None = None, bars: int = 2) -> dict[str, Any]:  # fmt: skip
         """Create a starter file and return its text: a song (tracks with labelled empty rows, a loop) or an SFX
         (from a `preset`: coin, jump, laser, explosion, hit, hurt, powerup, blip, select, door, step).
         Always give a `description` (what it is, when it plays, how it should sound)."""
@@ -326,8 +326,8 @@ def create_server(root: Path, allow_godot: bool = False) -> MCPServer:
             argv.append(f"--description={description}")
         if kit:
             argv.append(f"--kit={kit}")
-        if kind == "song":
-            argv += [f"--key={key}", f"--tempo={tempo}", f"--bars={bars}"]
+        if kind == "song":  # key/tempo/meter left out: suggested away from the project's songs
+            argv += [*([f"--key={key}"] if key else []), *([f"--tempo={tempo}"] if tempo else []), *([f"--meter={meter}"] if meter else []), f"--bars={bars}"]
         elif preset:
             argv.append(f"--preset={preset}")
         result = segan.cli(*argv)
@@ -417,6 +417,25 @@ def create_server(root: Path, allow_godot: bool = False) -> MCPServer:
             except SeganError as exc:
                 return _failure(exc.findings)
         return segan.cli("lint", *paths)
+
+    @server.tool(annotations=READ)
+    def suggest_song(name: str, mood: str | None = None, take: int = 0) -> dict[str, Any]:
+        """A seeded plan for a new song, away from the project's songs: key and mode, tempo, meter, opening texture,
+        voicing and register, progression, instruments (the kit's identity plus extras) and the `segan new song`
+        command. `take` gives another plan for the same request."""
+        _check_name(name)
+        return segan.cli("suggest", "song", name, *([f"--mood={mood}"] if mood else []), f"--take={take}")
+
+    @server.tool(annotations=WRITE)
+    def kit_roll(name: str, style: str, around: str | None = None, samples: bool | None = None, take: int = 0, dry_run: bool = False) -> dict[str, Any]:
+        """Roll a kit from style words and the project seed: an `identity` group (the game's signature instruments),
+        bass, harmony, colour and drums from a wide palette. `around` keeps another kit's identity instruments (a
+        song's extras around the same identity); `samples` allows sampled library instruments."""
+        _check_name(name)
+        argv = ["kit", "roll", name, f"--style={style}", f"--take={take}"]
+        argv += [f"--around={around}"] if around else []
+        argv += ["--samples" if samples else "--no-samples"] if samples is not None else []
+        return segan.cli(*argv, *(["--dry-run"] if dry_run else []))
 
     @server.tool(annotations=READ)
     def similarity(songs: list[str] | None = None, shipped: bool = False) -> dict[str, Any]:

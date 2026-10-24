@@ -56,7 +56,8 @@ def aliasing_of(inst: Instrument, midi: int, ctx: Context) -> float | None:
     steady = replace(inst, env=Env(0.0, 0.0, 1.0, 0.0), pitch_env=(), vibrato=None, tremolo=None, arp=(), pwm=None,
                      unison=1, detune=0.0, filter=None, crush=None, fm=replace(inst.fm, env=None) if inst.fm else None)  # fmt: skip
     tone = render_note(steady, replace(ctx, measure=True), midi, 0.5, length=0.5)
-    return harmonic_aliasing_db(tone[2048:], ctx.rate, midi_to_hz_scalar(midi, ctx.tuning))
+    f0 = midi_to_hz_scalar(midi + (12 * inst.sub.octave if inst.sub is not None else 0), ctx.tuning)  # a sub-oscillator's harmonics include the note's
+    return harmonic_aliasing_db(tone[2048:], ctx.rate, f0)
 
 
 @dataclass

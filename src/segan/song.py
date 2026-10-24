@@ -29,7 +29,9 @@ if TYPE_CHECKING:
 
 SONG_FIELDS = (*META_FIELDS, "kit", "instruments", "groups", "tempo", "meter", "steps_per_beat", "swing", "key", "tracks",
                "patterns", "sections", "arrangement", "loop", "variants", "variant_axes", "markers", "normalize", "category", "stems",
-               "flow", "sample_rate", "channels")  # fmt: skip
+               "flow", "sample_rate", "channels", "seed", "humanize")  # fmt: skip
+DYNAMICS_FIELDS = ("velocity", "dynamics")  # per-pattern: velocity marks per step, dB ramps per track
+VELOCITY_MARKS = {"X": 1.5, "x": 1.0, "o": 0.35, ".": None, "-": None, **{str(d): round(0.2 * d, 2) for d in range(1, 10)}}
 STEM_FIELDS = ("groups", "mixes", "main_mix")
 TRACK_FIELDS = ("roll", "drums", "chromatic", "gain", "pan")
 DERIVE_FIELDS = ("from", "transpose", "semitones", "shift", "reverse", "mute", "swap")
@@ -173,6 +175,8 @@ class Song:
     section_sources: dict[str, str] = field(default_factory=dict)  # section -> the section it derives from
     sample_rate: int | None = None  # the song's own output rate / channels ([mix] sample_rate / music_channels otherwise)
     channels: str | None = None
+    seed: int | None = None  # the song's own seed (humanize); default: from its name
+    humanize: tuple[float, float] = (0.0, 0.0)  # timing (ms, +/-), velocity (fraction, +/-)
 
     @property
     def name(self) -> str:
@@ -385,7 +389,7 @@ def _resolve_pattern(name: str, ctx: _Context, chain: tuple[str, ...] = ()) -> P
         _bad(report, "E001", f"pattern {name!r} must be a mapping: {{ length, <track>: lane }} or {{ from: <pattern>, ... }}", pline, where)
         ctx.failed.add(name)
         return None
-    allowed = ("length", *DERIVE_FIELDS, *ctx.tracks)
+    allowed = ("length", *DERIVE_FIELDS, *DYNAMICS_FIELDS, *ctx.tracks)
     for k in raw:
         if k not in allowed:
             hint = f"; tracks: {', '.join(ctx.tracks)}" if k not in DERIVE_FIELDS else ""
@@ -406,11 +410,56 @@ def _resolve_pattern(name: str, ctx: _Context, chain: tuple[str, ...] = ()) -> P
                 lanes.add(track.name)
                 notes += parse_lane(raw[track.name], track, length, ctx.kit, ctx.key, report, f"{where}.{track.name}", line_of(raw, track.name, pline))
         pattern = Pattern(name, length, notes, lanes, pline)
+    if pattern is not None and any(k in raw for k in DYNAMICS_FIELDS):
+        pattern.notes = _dynamics(name, raw, pattern, ctx, pline, where)
     if pattern is None or any(f.severity == "error" for f in report.findings[before:]):
         ctx.failed.add(name)
         return None
     ctx.done[name] = pattern
     return pattern
+
+
+def _dynamics(name: str, raw: dict[str, Any], pattern: Pattern, ctx: _Context, pline: int | None, where: str) -> list[Note]:
+    """`velocity: { track: "X..o|x.3." }` sets the velocity of the notes starting at each step (X accent, x plain,
+    o ghost, 1-9 = 0.2-1.8, . or - keep); `dynamics: { track: [[step, dB], ...] }` then scales them by a ramp
+    (steps from 1, linear in dB between points, held before the first and after the last): crescendos, swells."""
+    report = ctx.report
+    notes = list(pattern.notes)
+    marks = raw.get("velocity", {})
+    if not isinstance(marks, dict) or any(t not in ctx.tracks or not isinstance(v, str) for t, v in marks.items()):
+        _bad(report, "E003", f"pattern {name!r}: velocity must map track names to a row of marks, e.g. {{ lead: \"X...o...x...3...\" }} (tracks: {', '.join(ctx.tracks)})",
+             line_of(raw, "velocity", pline), f"{where}.velocity")  # fmt: skip
+        return notes
+    for track, row in marks.items():
+        cells = row.replace("|", "").replace(" ", "")
+        if len(cells) != pattern.length or any(c not in VELOCITY_MARKS for c in cells):
+            _bad(report, "E003", f"pattern {name!r}: velocity row for {track!r} must be {pattern.length} marks of X (accent), x, o (ghost), 1-9 "
+                 f"(0.2-1.8), . or - (unchanged); it has {len(cells)}", line_of(raw, "velocity", pline), f"{where}.velocity.{track}")  # fmt: skip
+            continue
+        notes = [replace(n, velocity=VELOCITY_MARKS[cells[n.step]] or n.velocity) if n.track == track and VELOCITY_MARKS[cells[n.step]] else n for n in notes]
+    ramps = raw.get("dynamics", {})
+    if not isinstance(ramps, dict):
+        ramps = {"?": None}
+    for track, points in ramps.items():
+        ok = track in ctx.tracks and isinstance(points, list) and points and all(
+            isinstance(p, list) and len(p) == 2 and isinstance(p[0], int) and not isinstance(p[0], bool) and 1 <= p[0] <= pattern.length
+            and is_number(p[1]) and -40 <= p[1] <= 12 for p in points) and [p[0] for p in points] == sorted(p[0] for p in points)  # fmt: skip
+        if not ok:
+            _bad(report, "E003", f"pattern {name!r}: dynamics must map tracks to [[step, dB], ...] (steps 1-{pattern.length} in order, dB -40..12), "
+                 "e.g. { strings: [[1, -12], [16, 0]] } (a crescendo)", line_of(raw, "dynamics", pline), f"{where}.dynamics")  # fmt: skip
+            continue
+        steps, dbs = [p[0] - 1 for p in points], [float(p[1]) for p in points]
+
+        def level(step: int) -> float:
+            if step <= steps[0]:
+                return dbs[0]
+            for (a, da), (b, db) in zip(zip(steps, dbs), zip(steps[1:], dbs[1:])):
+                if step <= b:
+                    return da + (db - da) * (step - a) / (b - a) if b > a else db
+            return dbs[-1]
+
+        notes = [replace(n, velocity=round(n.velocity * 10.0 ** (level(n.step) / 20.0), 6)) if n.track == track else n for n in notes]
+    return [replace(n, velocity=min(2.0, max(0.05, n.velocity))) for n in notes]
 
 
 def _per_track(value: Any, tracks: dict[str, Track], what: str, report: Report, line: int | None, where: str) -> dict[str, int] | None:
@@ -855,6 +904,18 @@ def parse_song(data: dict[str, Any], path: Path | None, project: Project, report
     if channels is not None and channels not in CHANNELS:
         _bad(report, "E001", "channels must be mono or stereo (default: [mix] music_channels)", line_of(data, "channels", line), "channels")
         channels = None
+    seed = data.get("seed")
+    if seed is not None and not (isinstance(seed, int) and not isinstance(seed, bool) and 0 <= seed < 2**63):
+        _bad(report, "E001", "seed must be a whole number (the song's own seed: humanize uses it; change it for another take)", line_of(data, "seed", line), "seed")
+        seed = None
+    humanize = data.get("humanize", {})
+    if is_number(humanize):
+        humanize = {"timing": humanize}
+    if not (isinstance(humanize, dict) and all(k in ("timing", "velocity") for k in humanize) and is_number(humanize.get("timing", 0))
+            and 0 <= humanize.get("timing", 0) <= 40 and is_number(humanize.get("velocity", 0)) and 0 <= humanize.get("velocity", 0) <= 0.5):  # fmt: skip
+        _bad(report, "E001", "humanize must be { timing: ms 0-40 (each note early/late by up to that), velocity: 0-0.5 (louder/softer by up to that "
+             "fraction) }", line_of(data, "humanize", line), "humanize")  # fmt: skip
+        humanize = {}
     if kit is None or report.failed:
         return None, report.findings
 
@@ -943,7 +1004,8 @@ def parse_song(data: dict[str, Any], path: Path | None, project: Project, report
     if report.failed or key is None:
         return None, report.findings
     song = Song(meta, kit, float(tempo), (meter[0], meter[1]), steps_per_beat, float(swing), key, tracks, patterns, sections, arrangement, loop,
-                markers, variants, axes, normalize, category, stems, changes, flow, section_sources, sample_rate, channels)  # fmt: skip
+                markers, variants, axes, normalize, category, stems, changes, flow, section_sources, sample_rate, channels, seed,
+                (float(humanize.get("timing", 0.0)), float(humanize.get("velocity", 0.0))))  # fmt: skip
     for name in flow.sections if flow is not None else []:
         steps = sum(patterns[p].length for p in sections[name])
         if steps % song.steps_per_bar:

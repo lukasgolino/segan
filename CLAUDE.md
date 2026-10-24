@@ -33,6 +33,7 @@ generated text files.
   - `notes.py` note names, keys, scales; `patch.py` instrument fields (shared by kits, inline instruments, SFX layers);
   - `models.py` instrument models (pluck, bowed, additive, wavetable, formant, modal, supersaw: parameters, presets,
     tables, parsing) and `modelsynth.py` their rendering; `fx.py` per-instrument effects (`fx:`, tempo-synced values);
+  - `suggest.py` seeded proposals: `segan kit roll` (instrument recipe catalogue, identity groups) and `segan suggest song`;
   - `similarity.py` song fingerprints, pairwise similarity, sameness lint (W021-W026), shipped (`fingerprints/shipped.json`,
     `scripts/make_fingerprints.py`) and per-machine stores;
   - `kit.py` kit files; `synth.py` one note -> samples (oscillators, envelopes, filters, drum macros, oversampling);
@@ -209,3 +210,6 @@ generated text files.
   fingerprints cover the demo and reference.md's generator example; the demo sets `[similarity] shipped = false`. The
   per-machine store is opt-in (`local_store`, decided), written on build and `segan similarity`; a shared online
   registry is out of scope.
+- 2026-10-24: #76 variation lives at authoring time (decided): the project seed, `kit roll`, `suggest song` and api helpers
+  propose sources; renders stay exactly what the source says. The one render-time randomness is the song's `humanize`
+  (seeded per section and position, so loops and flow clips stay exact). Proposals use `dsp.uniform`, not `random`.

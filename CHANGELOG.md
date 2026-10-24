@@ -46,9 +46,27 @@ check before upgrading. Patch bumps never change existing behaviour. Every relea
 - `segan similarity [songs] [--shipped] [--machine]` (and an MCP `similarity` tool): pairwise harmony, rhythm,
   timbre, register and tempo scores, the closest song for each. `segan preview` reports a song's `closest_song`.
 
+- Per-note dynamics in songs (#21): a pattern's `velocity: { track: "X..o|x.3." }` row (accent, plain, ghost,
+  1-9) and `dynamics: { track: [[step, dB], ...] }` ramps (crescendos, swells). Velocity picks sample layers and
+  scales synth notes.
+- Song `humanize: { timing: ms, velocity: 0-0.5 }` and `seed`: seeded nudges, the same each time a section plays
+  (loops and flow clips stay exact); another `seed` is another take.
+- A project seed (`seed` in segan.toml, picked at random by `segan init`) that suggestions and rolled kits branch
+  from, so two projects with the same brief start from different places (#76).
+- `segan kit roll <name> --style "words" [--around KIT]`: a kit from a catalogue of ~60 instrument recipes (synth,
+  models, effects, drums; library samples when the words ask for acoustic/orchestral) with seeded parameters and an
+  `identity` group of signature instruments; `--around` keeps another kit's identity. `segan init --style "words"`
+  rolls the starter kit this way.
+- `segan suggest song <name> [--mood words]`: key and mode, tempo, meter, opening texture, voicing, register,
+  progression and instruments for a new song, away from the project's songs. MCP tools `suggest_song`, `kit_roll`.
+- `segan.api`: `Pattern.note(..., velocity=)`, `invert`, `voicing`, `Rng` (API_VERSION 2).
+
 ### Changed
 
-- `segan.api.song_yaml` takes any mapping of patterns (a `dict[str, Pattern]` type-checks).
+- `segan new song` without `--key`/`--tempo` uses the seeded suggestion instead of A minor at 120 bpm (`--meter`
+  added); the MCP `scaffold` tool does the same.
+- `segan.api.song_yaml` takes any mapping of patterns (a `dict[str, Pattern]` type-checks); `dedupe` and `derive`
+  keep patterns with different velocities apart.
 
 ## [0.11.0] - 2026-10-22
 
