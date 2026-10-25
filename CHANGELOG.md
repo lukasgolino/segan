@@ -19,6 +19,8 @@ check before upgrading. Patch bumps never change existing behaviour. Every relea
 
 ## [Unreleased]
 
+## [0.13.0] - 2026-10-25
+
 ### Added
 
 - Songs that play once take `fade_in` / `fade_out` (seconds), applied before the room so its tail still rings (#72).
