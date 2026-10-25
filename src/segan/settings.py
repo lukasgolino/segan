@@ -72,6 +72,7 @@ SETTINGS: tuple[Setting, ...] = (
     Setting("lint.max_similarity", 0.85, "W024-W026: how alike (0-1) two songs' first bars may be before lint says so", "lint"),
     Setting("similarity.local_store", False, "keep this project's song fingerprints in the user cache (~/.cache/segan/fingerprints) and warn (W026) when a song is close to one from another project on this machine", "lint"),
     Setting("similarity.shipped", True, "warn (W025) when a song is close to one of SEGAN's own examples (off only in those examples)", "lint"),
+    Setting("sounds.extra_licences", [], 'non-CC licences this project has cleared for recorded layers (royalty-free libraries under their own terms), e.g. ["Sonniss-GDC"]; sounds under them still need licence and source', "lint"),
     Setting("godot.compress", "qoa", 'how Godot compresses imported WAVs: "qoa" (default, good), "ima" (IMA-ADPCM), "none"', "build"),
     Setting("sfx.source", "auto", 'where SFX sounds come from: "auto" (synthesise stylised sounds, record real-world ones; see the skill), "synth" (no recordings: W020 on recorded layers), "recorded" (prefer recordings)', "lint"),
     Setting("ogg.quality", 0.4, 'Vorbis quality 0-1 for export "ogg" (0.4 is about 128 kbit/s stereo, 10x smaller than WAV)', "build"),

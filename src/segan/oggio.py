@@ -59,7 +59,7 @@ def encode_ogg(pcm: np.ndarray, rate: int, quality: float, name: str) -> bytes:
     import soundfile
 
     buffer = io.BytesIO()
-    soundfile.write(buffer, pcm.astype(np.float32) / 32768.0, rate, format="OGG", subtype="VORBIS", compression_level=1.0 - quality)
+    _write_blocks(buffer, pcm, rate, format="OGG", subtype="VORBIS", compression_level=1.0 - quality)
     serial = int.from_bytes(hashlib.sha256(name.encode("utf-8")).digest()[:4], "little")
     return _fix_serial(buffer.getvalue(), serial)
 
@@ -69,8 +69,23 @@ def encode_mp3(pcm: np.ndarray, rate: int) -> bytes:
     import soundfile
 
     buffer = io.BytesIO()
-    soundfile.write(buffer, pcm.astype(np.float32) / 32768.0, rate, format="MP3", subtype="MPEG_LAYER_III")
+    _write_blocks(buffer, pcm, rate, format="MP3", subtype="MPEG_LAYER_III")
     return buffer.getvalue()
+
+
+BLOCK_SECONDS = 10
+
+
+def _write_blocks(buffer: io.BytesIO, pcm: np.ndarray, rate: int, **options: object) -> None:
+    """Encode in 10 s blocks: libsndfile's Vorbis encoder crashes on one large write (about a minute of stereo, #68)."""
+    import soundfile
+
+    data = pcm.astype(np.float32) / 32768.0
+    channels = 1 if data.ndim == 1 else data.shape[1]
+    with soundfile.SoundFile(buffer, "w", samplerate=rate, channels=channels, **options) as out:
+        step = BLOCK_SECONDS * rate
+        for at in range(0, len(data), step):
+            out.write(data[at : at + step])
 
 
 def mp3_available() -> bool:

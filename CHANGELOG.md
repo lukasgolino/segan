@@ -19,6 +19,36 @@ check before upgrading. Patch bumps never change existing behaviour. Every relea
 
 ## [Unreleased]
 
+### Added
+
+- Songs that play once take `fade_in` / `fade_out` (seconds), applied before the room so its tail still rings (#72).
+- `segan sounds remove <ref>` and `segan sounds prune`; lint W028 lists sounds.lock entries no SFX plays (#63).
+- `segan sounds add <Freesound page URL>` (or `freesound:<id>`) works without an API key: the licence, author and HQ
+  preview come from the public page, under the same CC0 / CC BY rule (#65).
+- `[sounds] extra_licences = ["..."]`: licences a project has cleared itself (royalty-free libraries) are accepted for
+  recorded layers with a source and listed under "Other licences" in the credits (#66).
+- W027: a transient inside a looping SFX's crossfade, which the seam blend fades (#75).
+- `segan render --output ...` writes chosen outputs from the render cache without analysis; its `--json` lists each
+  output's WAV, length and loop (#69).
+- `preview --json` `layers`: recorded layers' `ends_s` (where they end uncut, after trim, stretch and varispeed); W011
+  says how long the recording runs (#67).
+- `pitch_check` reports `notes_skipped` and `skipped_because`; songs under 6 s get a momentary-loudness curve on their
+  sheet (#73).
+- Stem-mix previews show the mix's trim and the level it plays at (`trim_db`, `lufs_trimmed`; the sheet judges that),
+  and every output of a stemmed song carries `stem_mixes_lufs` / `stem_mixes_trim_db` (#70).
+
+### Changed
+
+- Ogg Vorbis (and MP3 preview) encoding writes in 10 s blocks: long songs no longer crash libsndfile (#68). A crash in
+  a native library now prints where it happened instead of exiting silently.
+- `variations.timing` keeps the earliest layer at its start, so variations get no lead-in (#64).
+- W018 warns only when the filtered noise layer also ends up more than 12 dB under the loudest layer: raising its gain
+  clears it, and a filtered bed on its own never warns (#61).
+- W003 counts the instruments of each stem mix when a song has `stems.mixes` (#71).
+- `trim: [start]` is accepted (#62); `--quiet` works after the subcommand (#75).
+- The pitch check is cached per render and computed once per preview (#69).
+- `segan.api.song_yaml` documents its passthrough of any song field (`stems=`, `lint=`, `category=`...) (#74).
+
 ## [0.12.0] - 2026-10-25
 
 ### Added

@@ -64,6 +64,9 @@ def analyze(output: Output, kind: str) -> dict[str, Any]:
         result["stem_mixes_trim_db"] = output.info["mix_trims"]  # what the game adds to the stems while playing each mix
     if output.info.get("normalised_over"):
         result["normalised_over_mix"] = output.info["normalised_over"]
+    if output.id.startswith("mix:") and "trim_db" in output.info:  # what the game adds while playing this mix, and the level then
+        result["trim_db"] = output.info["trim_db"]
+        result["lufs_trimmed"] = round(result["lufs"] + float(output.info["trim_db"]), 2)
     if kind == "sfx" and not output.info.get("loop"):
         result["room_tail_s"] = round(max(0.0, output.seconds - float(output.info.get("duration", output.seconds))), 3)
     if kind == "sfx":
@@ -83,13 +86,15 @@ def analyze(output: Output, kind: str) -> dict[str, Any]:
 def level_stats(analysis: dict[str, Any], threshold_click: float | None = None) -> list[tuple[str, str, Colour]]:
     target = analysis.get("target_lufs")
     lufs = analysis["lufs"]
-    off = abs(lufs - target) if target is not None else 0.0
+    heard = analysis.get("lufs_trimmed", lufs)  # a stem mix plays at its trim
+    off = abs(heard - target) if target is not None else 0.0
     tail = analysis.get("room_tail_s")
     stats: list[tuple[str, str, Colour]] = [
         ("length", f"{analysis['seconds']:.3f}s" + (f" ({analysis['seconds'] - tail:.2f}s + {tail:.2f}s room tail)" if tail else ""), TEXT),
         ("peak", f"{analysis['peak_dbfs']:.1f} dBFS", TEXT),
         ("true peak", f"{analysis['true_peak_dbtp']:.1f} dBTP", TEXT),
-        ("LUFS", f"{lufs:.1f}" + (f" (target {target:g})" if target is not None else " (not normalised)"), GOOD if off <= 1 else WARN),
+        ("LUFS", f"{lufs:.1f}" + (f", trim {analysis['trim_db']:+g} dB -> {heard:.1f}" if "trim_db" in analysis else "")
+         + (f" (target {target:g})" if target is not None else " (not normalised)"), GOOD if off <= 1 else WARN),
         ("limiter", f"{analysis['limiter_reduction_db']:.1f} dB off", GOOD if analysis["limiter_reduction_db"] <= 3 else WARN),
     ]
     if "leading_silence_ms" in analysis:
@@ -188,6 +193,7 @@ def write_preview(asset: Any, render: Render, project: Project, start: float | N
         outputs += [walk_output(asset, render, project, int(w.split(":", 1)[1]) if ":" in w else 1) for w in walks]
     if render.kind == "sfx" and only and "reel" in only:
         outputs.append(reel_output(asset, render))
+    checked: dict[str, Any] | None = None
     for output in outputs:
         if output.id.startswith("walk"):
             result.files.append(_write_walk(asset, output, folder, click))
@@ -206,7 +212,13 @@ def write_preview(asset: Any, render: Render, project: Project, start: float | N
         if render.kind == "song" and (output.id == "" or output.id.startswith(("stem:", "mix:"))):
             from segan.songpreview import pitch_check
 
-            check = pitch_check(asset, project)
+            main = next((o for o in render.outputs if o.id == ""), None)
+            if main is not None and main.info.get("mixes"):  # the same keys on every output of a stemmed song (#70)
+                analysis.setdefault("stem_mixes_lufs", main.info["mixes"])
+                analysis.setdefault("stem_mixes_trim_db", main.info["mix_trims"])
+            if checked is None:
+                checked = pitch_check(asset, project)  # once per preview: it renders every track dry
+            check = checked
             if output.id:  # a stem or mix: only its own tracks
                 check = {t: c for t, c in check.items() if t in output.info.get("tracks", [])}
             analysis["pitch_check"] = check

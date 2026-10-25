@@ -254,8 +254,10 @@ def voicing(notes: list[int], inversion: int = 0, spread: str = "close", octave:
 def song_yaml(name: str, *, tracks: list[Track], patterns: Mapping[str, Pattern | dict[str, Any]], sections: dict[str, list[str]],
               arrangement: list[str], key: str | Key, tempo: float = 120, loop: str | bool | None = None, group: int = 4,
               comments: dict[str, str] | None = None, **fields: Any) -> str:  # fmt: skip
-    """A complete song file. `patterns` values are Pattern builders or raw mappings (derived patterns); fields
-    that are None are left out. `comments` maps a dotted path (`patterns.chorus`, `sections.verse`, `tracks.lead`)
+    """A complete song file. `patterns` values are Pattern builders or raw mappings (derived patterns). Any other song
+    field goes in as a keyword with its YAML value: `meter=[3, 4]`, `category="music_soft"`, `status="draft"`,
+    `stems={"groups": {...}, "mixes": {...}}`, `lint={"disable": ["W009"]}`, `variants={...}`, `flow={...}`,
+    `humanize={"timing": 8}`, `seed=3`; fields that are None are left out. `comments` maps a dotted path (`patterns.chorus`, `sections.verse`, `tracks.lead`)
     to text written as `#` lines above it."""
     fields = {k: v for k, v in fields.items() if v is not None}
     data: dict[str, Any] = {"name": name, **{k: v for k, v in fields.items() if k in ("description", "kit")}}

@@ -39,6 +39,7 @@ PREVIEWS = {"ogg": "preview-hq-ogg", "mp3": "preview-hq-mp3"}
 # Freesound's licence names for the search filter (each covers every version: CC BY 3.0 and 4.0 are both "Attribution").
 SEARCH_LICENCES = {"cc0": "Creative Commons 0", "cc-by": "Attribution"}
 FREESOUND_RE = re.compile(r"^freesound:(\d+)$")
+PAGE_RE = re.compile(r"^https?://(?:www\.)?freesound\.org/(?:people/[^/]+/sounds|s)/(\d+)/?(?:[?#].*)?$")
 TIMEOUT = 60
 
 _urlopen = urllib.request.urlopen  # tests replace this (no network in tests)
@@ -213,8 +214,8 @@ def api_key() -> str:
     key = os.environ.get(KEY_ENV, "").strip()
     if not key:
         raise SoundsError(f"{KEY_ENV} isn't set: Freesound search and fetching need an API key (free: https://freesound.org/apiv2/apply, "
-                          f"then export {KEY_ENV}=<key>). Without one: find a sound on freesound.org, check it's {ALLOWED_TEXT}, download "
-                          "it into the project and use it as a local file (sample: sounds/x.wav with licence, source and author)")  # fmt: skip
+                          f"then export {KEY_ENV}=<key>). Without one: find a sound on freesound.org and `segan sounds add <its page URL>` "
+                          f"(the public page is read; {ALLOWED_TEXT} only), or use a local file with licence, source and author")  # fmt: skip
     return key
 
 
@@ -309,6 +310,31 @@ def sound_info(sound_id: int) -> dict[str, Any]:
     return row
 
 
+def page_info(sound_id: int) -> dict[str, Any]:
+    """A sound's details from its public page (no API key, #65): name, author, licence and HQ preview URL. The page's
+    Open Graph tags and its one creativecommons.org link; refused when the licence isn't clear."""
+    import html
+
+    page = html.unescape(_request(f"https://freesound.org/s/{sound_id}/", None).decode("utf-8", "replace"))
+
+    def meta(prop: str) -> str | None:
+        found = re.search(rf'<meta[^>]+property="{re.escape(prop)}"[^>]+content="([^"]*)"', page)
+        return found.group(1).strip() if found else None
+
+    licences = sorted(set(re.findall(r'href="((?:https?:)?//creativecommons\.org/(?:licenses|publicdomain)/[^"]+)"', page)))
+    if len(licences) != 1:
+        raise SoundsError(f"freesound:{sound_id}: the page names {len(licences)} Creative Commons licences, so it can't be read safely; "
+                          f"set {KEY_ENV} and add it through the API, or check it by hand and add the file with --licence")  # fmt: skip
+    lic = classify("https:" + licences[0] if licences[0].startswith("//") else licences[0])
+    preview = re.search(r'data-ogg="(https://cdn\.freesound\.org/previews/[^"]+?)-lq\.ogg"', page)
+    author, name = meta("og:audio:artist"), meta("og:audio:title")
+    if preview is None or not author or not name:
+        raise SoundsError(f"freesound:{sound_id}: the page doesn't show its name, author or preview (it may be private or removed)")
+    page_url = meta("og:url") or f"https://freesound.org/s/{sound_id}/"
+    return {"id": sound_id, "name": name, "author": author, "licence_given": licences[0], "licence_id": lic.id if lic else None,
+            "url": page_url if page_url.startswith("http") else f"https://freesound.org{page_url}", "download": f"{preview.group(1)}-hq.ogg"}  # fmt: skip
+
+
 def fetch_freesound(sound_id: int, fmt: str = "ogg") -> tuple[Path, dict[str, Any], str]:
     """Fetch a sound's HQ preview into the cache (licence checked first): (path, details, download URL)."""
     row = sound_info(sound_id)
@@ -332,14 +358,41 @@ def add(ref: str, root: Path, fmt: str = "ogg", licence: str | None = None, sour
     from segan.recorded import RECORDED_SUFFIXES
 
     sounds = read_lock(root)
-    sound_id = freesound_id(ref)
+    page = PAGE_RE.match(ref.strip())
+    sound_id = int(page.group(1)) if page else freesound_id(ref)
+    if sound_id is not None and not os.environ.get(KEY_ENV, "").strip():  # no API key: the public page (HQ Ogg preview)
+        if licence or source or author:
+            raise SoundsError("--licence/--source/--author are for local files: Freesound says who made a sound and under which licence")
+        if fmt != "ogg":
+            raise SoundsError(f"without {KEY_ENV} only the Ogg preview can be added")
+        info = page_info(sound_id)
+        lic = classify(info["licence_given"])
+        if lic is None:
+            raise SoundsError(f"freesound:{sound_id} ({info['name']!r}) is under {info['licence_given']}: not allowed; only {ALLOWED_TEXT}")
+        data = fetch_bytes(info["download"])
+        path = cache_path(sound_id, info)
+        _save(path, data)
+        from segan.recorded import decode
+
+        try:
+            audio, rate = decode(str(path))
+            duration: float | None = round(len(audio) / rate, 3)
+        except Exception:  # noqa: BLE001 - the duration is informative only
+            duration = None
+        entry: dict[str, Any] = {"name": name or info["name"], "author": info["author"], "licence": lic.id, "licence_url": lic.url, "url": info["url"],
+                 "file": PREVIEWS["ogg"], "download": info["download"], **({"duration": duration} if duration else {}), "sha256": sha256_of(path)}  # fmt: skip
+        key = f"freesound:{sound_id}"
+        sounds[key] = entry
+        write_lock(root, sounds)
+        return key, entry
     if sound_id is not None:
         if licence or source or author:
             raise SoundsError("--licence/--source/--author are for local files: Freesound says who made a sound and under which licence")
+        ref = f"freesound:{sound_id}"
         path, row, url = fetch_freesound(sound_id, fmt)
         lic = classify(row["licence_given"])
         assert lic is not None
-        entry: dict[str, Any] = {"name": name or row["name"], "author": row["author"], "licence": lic.id, "licence_url": lic.url, "url": row["url"],
+        entry = {"name": name or row["name"], "author": row["author"], "licence": lic.id, "licence_url": lic.url, "url": row["url"],
                                  "file": PREVIEWS[fmt], "download": url, "duration": row["duration"], "sha256": sha256_of(path)}  # fmt: skip
         key = ref.strip()
     else:
@@ -353,9 +406,12 @@ def add(ref: str, root: Path, fmt: str = "ogg", licence: str | None = None, sour
             raise SoundsError(f"{ref} is outside the project: copy it in first (e.g. into {VENDOR_DIR}/)") from None
         if path.suffix.lower() not in RECORDED_SUFFIXES:
             raise SoundsError(f"{ref}: SEGAN plays {', '.join(RECORDED_SUFFIXES)} files")
-        lic = classify(licence)
+        from segan.licences import project_extras
+
+        lic = classify(licence, project_extras(root))
         if lic is None:
-            raise SoundsError(f"--licence {licence!r} isn't allowed: only {ALLOWED_TEXT}" if licence else f"--licence is required for a local file: {ALLOWED_TEXT}")
+            extra = " or a licence named in segan.toml [sounds] extra_licences"
+            raise SoundsError(f"--licence {licence!r} isn't allowed: only {ALLOWED_TEXT}{extra}" if licence else f"--licence is required for a local file: {ALLOWED_TEXT}{extra}")
         if not source:
             raise SoundsError('--source is required: the page the sound came from (or "own recording")')
         if lic.attribution and not author:
@@ -369,9 +425,9 @@ def add(ref: str, root: Path, fmt: str = "ogg", licence: str | None = None, sour
     return key, entry
 
 
-def credit_line(ref: str, entry: dict[str, Any], used_in: list[str]) -> str:
+def credit_line(ref: str, entry: dict[str, Any], used_in: list[str], extra: tuple[str, ...] = ()) -> str:
     """TASL attribution: title, author, source, licence, and the changes made."""
-    lic = classify(entry.get("licence")) or classify(entry.get("licence_url"))
+    lic = classify(entry.get("licence"), extra) or classify(entry.get("licence_url"))
     title = entry.get("name") or ref
     author = entry.get("author")
     source = entry.get("url") or entry.get("source")
@@ -379,7 +435,7 @@ def credit_line(ref: str, entry: dict[str, Any], used_in: list[str]) -> str:
     if source:
         parts[0] += f" ({source})" if str(source).startswith("http") else f", {source}"
     if lic is not None:
-        parts.append(f"licensed under {lic.title} ({lic.url})")
+        parts.append(f"licensed under {lic.title}" + (f" ({lic.url})" if lic.url else ""))
     line = ", ".join(parts) + "."
     if lic is not None and lic.attribution:
         line += " Modified: edited, processed and mixed into the game's sound effects."
@@ -388,12 +444,15 @@ def credit_line(ref: str, entry: dict[str, Any], used_in: list[str]) -> str:
     return f"- {line}"
 
 
-def credits_text(entries: dict[str, dict[str, Any]], used: dict[str, list[str]]) -> str:
+def credits_text(entries: dict[str, dict[str, Any]], used: dict[str, list[str]], extra: tuple[str, ...] = ()) -> str:
     by = {k: v for k, v in entries.items() if (lic := classify(v.get("licence"))) is not None and lic.attribution}
-    cc0 = {k: v for k, v in entries.items() if k not in by}
+    cleared = {k: v for k, v in entries.items() if k not in by and (lic := classify(v.get("licence"), extra)) is not None and lic.cleared}
+    cc0 = {k: v for k, v in entries.items() if k not in by and k not in cleared}
     lines = ["# Sound credits", "", "Recorded sounds in this game's sound effects (written by `segan sounds credits` from sounds.lock).", ""]
     if by:
         lines += ["## Attribution required (CC BY)", ""] + [credit_line(k, by[k], used.get(k, [])) for k in sorted(by)] + [""]
+    if cleared:
+        lines += ["## Other licences (cleared by this project)", ""] + [credit_line(k, cleared[k], used.get(k, []), extra) for k in sorted(cleared)] + [""]
     if cc0:
         lines += ["## Public domain (CC0, credit not required)", ""] + [credit_line(k, cc0[k], used.get(k, [])) for k in sorted(cc0)] + [""]
     if not entries:

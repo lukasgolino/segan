@@ -35,11 +35,20 @@ def lint_song_source(song: Song, project: Project) -> list[Finding]:
             found.append(Finding("W002", f"pattern {name!r} isn't played (no section in the arrangement uses it, and no played pattern derives from it)", path, pattern.line, f"patterns.{name}"))
         if not pattern.notes:
             found.append(Finding("W004", f"pattern {name!r} has no notes", path, pattern.line, f"patterns.{name}"))
-    keys = sorted(song.used_keys())
     limit = project.config.lint.max_instruments
-    if len(keys) > limit:
-        found.append(Finding("W003", f"the song uses {len(keys)} instruments ({' '.join(keys)}), more than lint.max_instruments ({limit}): "
-                             "a smaller set keeps the sound consistent", path, None, "patterns"))  # fmt: skip
+    if song.stems is not None and song.stems.mixes:  # what's heard together is one stem mix at a time (#71)
+        groups = song.stem_groups()
+        for mix, members in song.stems.mixes:
+            tracks = {t for g in members for t in groups.get(g, ())}
+            keys = sorted({n.key for p in song.patterns.values() for n in p.notes if n.track in tracks})
+            if len(keys) > limit:
+                found.append(Finding("W003", f"stem mix {mix!r} plays {len(keys)} instruments ({' '.join(keys)}), more than lint.max_instruments ({limit}): "
+                                     "a smaller set keeps the sound consistent", path, None, f"stems.mixes.{mix}"))  # fmt: skip
+    else:
+        keys = sorted(song.used_keys())
+        if len(keys) > limit:
+            found.append(Finding("W003", f"the song uses {len(keys)} instruments ({' '.join(keys)}), more than lint.max_instruments ({limit}): "
+                                 "a smaller set keeps the sound consistent", path, None, "patterns"))  # fmt: skip
     found += _clashes(song)
     found += _short_samples(song)
     return found

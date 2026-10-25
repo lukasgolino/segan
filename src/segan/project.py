@@ -80,6 +80,11 @@ class SfxConfig:
 
 
 @dataclass(frozen=True)
+class SoundsConfig:
+    extra_licences: tuple[str, ...] = ()  # non-CC licences this project has cleared (royalty-free libraries)
+
+
+@dataclass(frozen=True)
 class SimilarityConfig:
     local_store: bool = False  # keep song fingerprints in the user cache and compare with other projects (W026)
     shipped: bool = True  # compare songs with SEGAN's own examples (W025); off only in those examples themselves
@@ -105,6 +110,7 @@ class Config:
     ogg: OggConfig = field(default_factory=OggConfig)
     sfx: SfxConfig = field(default_factory=SfxConfig)
     similarity: SimilarityConfig = field(default_factory=SimilarityConfig)
+    sounds: SoundsConfig = field(default_factory=SoundsConfig)
     seed: int | None = None  # the project seed: suggestions and rolled kits branch from it
     room: dict[str, float] = field(default_factory=dict)  # category -> room send (0-1, x mix.room)
 
@@ -222,7 +228,7 @@ def parse_config(data: dict[str, Any], path: Path) -> Config:
 
     defaults = Config()
     allowed = ("mode", "default_kit", "output_dir", "preview_dir", "export", "style_version", "seed", "mix", "loudness", "room", "lint", "godot", "ogg", "sfx",
-               "similarity")  # fmt: skip
+               "similarity", "sounds")  # fmt: skip
     for key in data:
         if key not in allowed:
             error(f"unknown setting {key!r}; allowed: {', '.join(allowed)}", key)
@@ -267,6 +273,7 @@ def parse_config(data: dict[str, Any], path: Path) -> Config:
     ogg = _parse_ogg(data.get("ogg", {}), error)
     sfx = _parse_sfx(data.get("sfx", {}), error)
     similarity = _parse_similarity(data.get("similarity", {}), error)
+    sounds = _parse_sounds(data.get("sounds", {}), error)
     if findings:
         raise SeganError(findings)
     return Config(
@@ -283,6 +290,7 @@ def parse_config(data: dict[str, Any], path: Path) -> Config:
         ogg=ogg,
         sfx=sfx,
         similarity=similarity,
+        sounds=sounds,
         seed=seed,
         room=room,
     )
@@ -422,3 +430,14 @@ def _parse_similarity(data: Any, error: Callable[[str, str], None]) -> Similarit
                                            "shipped": (lambda v: isinstance(v, bool), "must be true or false")}  # fmt: skip
     v = _table(data, "similarity", SimilarityConfig(), rules, error)
     return SimilarityConfig(local_store=v["local_store"], shipped=v["shipped"])
+
+
+def _parse_sounds(data: Any, error: Callable[[str, str], None]) -> SoundsConfig:
+    def names(v: Any) -> bool:
+        return isinstance(v, list) and all(isinstance(n, str) and n.strip() and not n.lower().startswith(("cc-by-nc", "cc by-nc", "cc-by-sa", "cc by-sa", "cc-by-nd")) for n in v)
+
+    rules: dict[str, tuple[Check, str]] = {
+        "extra_licences": (names, 'must be a list of licence names this project has cleared, e.g. ["Sonniss-GDC"] (never NC, SA or ND Creative Commons)'),
+    }
+    v = _table(data, "sounds", SoundsConfig(), rules, error)
+    return SoundsConfig(extra_licences=tuple(v["extra_licences"]))

@@ -160,11 +160,15 @@ def test_w009_ignores_a_note_that_has_decayed(project: Project) -> None:
 
 
 def test_w018_narrow_band_pass_noise(project: Project) -> None:
-    """#7: noise through a narrow band-pass loses most of its level: say so (pitched waves through a band-pass don't count)."""
-    text = "name: w\nduration: 0.5\nlayers:\n  - { id: whistle, osc: noise, filter: { type: bp, cutoff: 2000, resonance: 0.95 }, env: [0.01, 0.1, 0.8, 0.1] }\n"
+    """#7, #61: noise through a narrow band-pass loses most of its level and ends up buried under the other layers: say
+    so. Raising its gain clears it; pitched waves through a band-pass and a filtered bed on its own don't count."""
+    body = "  - { id: body, osc: saw, pitch: D3, env: [0.01, 0.1, 0.8, 0.1] }\n"
+    text = "name: w\nduration: 0.5\nlayers:\n  - { id: whistle, osc: noise, filter: { type: bp, cutoff: 2000, resonance: 0.95 }, env: [0.01, 0.1, 0.8, 0.1] }\n" + body
     assert ("W018", "whistle") in lint_rules(project, "sfx", "w", text)
+    assert ("W018", "whistle") not in lint_rules(project, "sfx", "w", text.replace("env: [0.01, 0.1, 0.8, 0.1] }\n  - { id: body", "env: [0.01, 0.1, 0.8, 0.1], gain: 18 }\n  - { id: body"))
     assert ("W018", "whistle") not in lint_rules(project, "sfx", "w", text.replace("osc: noise", "osc: saw, pitch: D3"))
     assert ("W018", "whistle") not in lint_rules(project, "sfx", "w", text.replace("resonance: 0.95", "resonance: 0"))
+    assert ("W018", "whistle") not in lint_rules(project, "sfx", "w", text.replace(body, ""))  # a bed on its own
 
 
 def test_category_lint_disable(tmp_path: Path) -> None:

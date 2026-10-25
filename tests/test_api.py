@@ -106,3 +106,17 @@ def test_velocities_voicings_and_rng(project: Project) -> None:
     assert api.voicing([57, 60, 64], spread="open") == [48, 57, 64] and api.voicing([57, 60, 64], bass=True)[0] == 45
     a, b = api.Rng(3, "verse"), api.Rng(3, "verse")
     assert [a.random() for _ in range(5)] == [b.random() for _ in range(5)] and a.choice([1, 2, 3]) in (1, 2, 3)
+
+
+def test_song_yaml_passes_any_song_field(project: Project) -> None:
+    """#74: stems, lint, category, status... go in as keywords."""
+    lead = api.Track.roll("lead", "A minor", "A4", "A5")
+    drums = api.Track.drums("drums", ["k", "h"])
+    p = api.Pattern(8).note(lead, 0, "A4", 4, "p").row(drums, "k", "x...x...")
+    text = api.song_yaml("s", tracks=[lead, drums], patterns={"a": p}, sections={"main": ["a"]}, arrangement=["main"], key="A minor",
+                         category="music_soft", status="draft", lint={"disable": ["W009"]},
+                         stems={"groups": {"base": ["drums"], "top": ["lead"]}, "mixes": {"calm": ["base", "top"]}})  # fmt: skip
+    song, findings = load(project, "song", "s", text)
+    assert song is not None, findings
+    assert song.category == "music_soft" and song.stems is not None and dict(song.stems.mixes) == {"calm": ("base", "top")}
+    assert "W009" in song.meta.lint_disable

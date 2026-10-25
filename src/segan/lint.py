@@ -7,6 +7,7 @@ build always judge the same samples. `render=False` skips them for a fast format
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -48,6 +49,8 @@ WARNING_RULES = {
     "W024": "two songs' first bars are nearly the same",
     "W025": "a song close to a SEGAN example or template",
     "W026": "a song close to one from another project on this machine",
+    "W027": "a transient inside a loop's crossfade (blended away at the seam)",
+    "W028": "a sounds.lock entry no SFX plays",
 }
 
 
@@ -154,9 +157,31 @@ def lint_paths(project: Project, paths: list[Path] | None = None, render: bool =
             owner = next((a for a in linted_songs.values() if a.path == finding.path), None)
             if owner is None or finding.rule not in owner.meta.lint_disable | project.config.lint.disabled_for(owner.category):
                 findings.append(finding)
+    if paths is None and project.config_path is not None:
+        findings.extend(_unused_sounds(project, assets, len([f for f in findings if f.rule.startswith("E")])))
     disabled = set(project.config.lint.disable)
     findings = [f for f in dict.fromkeys(findings) if f.rule not in disabled]
     return LintResult(files, findings, assets, kits, soundtracks)
+
+
+def _unused_sounds(project: Project, assets: list[Any], errors: int) -> list[Finding]:
+    """W028: sounds.lock entries no SFX plays (only when the whole project parsed: a broken SFX's sounds are unknown)."""
+    from segan.sounds import LOCK_NAME, SoundsError, lock_key, read_lock
+
+    lock = project.root / LOCK_NAME
+    if errors or not lock.is_file():
+        return []
+    try:
+        entries = read_lock(project.root)
+    except SoundsError:
+        return []
+    used = {lock_key(sound.ref, project.root) for a in assets if a.kind == "sfx"
+            for layer in [*a.layers, *(lay for phase in a.phases.values() for lay in phase.layers)] for sound in layer.recorded}  # fmt: skip
+    unused = sorted(k for k in entries if k not in used)
+    if not unused:
+        return []
+    return [Finding("W028", f"sounds.lock lists {len(unused)} sound(s) no SFX plays ({', '.join(unused[:5])}{'...' if len(unused) > 5 else ''}): "
+                    "`segan sounds prune` drops them (or `segan sounds remove <ref>`)", lock, None, "sounds")]  # fmt: skip
 
 
 def _project_assets(project: Project, loaded: list[Any], kind: str) -> dict[str, Any]:
@@ -281,12 +306,48 @@ def lint_audio(asset: Any, project: Project) -> list[Finding]:
                 found.append(Finding("W005", f"{label} starts after {silence:.0f} ms of near-silence (> {cfg.max_leading_silence_ms:g} ms): it will feel "
                                      "late in game. Start the main layer at 0 and use a fast attack", path, None, label))  # fmt: skip
             for layer in output.info.get("sounding_at_end", []):
-                found.append(Finding("W011", f"{label}: layer {layer} is still sounding at duration {output.info.get('duration'):g}s and gets cut "
+                runs = _recorded_end(asset, layer, ctx)
+                where = f" (the recording runs to {runs:g}s after trim/stretch/varispeed: a pitch below C4 plays it slower and longer)" if runs else ""
+                found.append(Finding("W011", f"{label}: layer {layer} is still sounding at duration {output.info.get('duration'):g}s and gets cut{where} "
                                      "(a click or a truncated tail): lengthen duration, or shorten the layer's length/release", path, None, f"duration ({layer})"))  # fmt: skip
     found += _asset_aliasing(asset, ctx, cfg.max_aliasing_db)
     if asset.kind == "sfx":
         found += _filter_loss(asset, ctx)
+        found += _crossfade_onsets(asset, ctx)
     return list(dict.fromkeys(found))
+
+
+def _recorded_end(asset: Any, name: str, ctx: Context) -> float | None:
+    """Where a recorded layer named `name` ends uncut (W011's hint), None for synth layers."""
+    from segan.dsp import seed_of
+    from segan.sfxrender import layer_end
+
+    layers = {layer.id or f"layers.{layer.index}": layer for layer in asset.layers}
+    layer = layers.get(name)
+    if layer is None or not layer.choices:
+        return None
+    return layer_end(layer, ctx, seed_of(asset.name, layer.index, 0))
+
+
+def _crossfade_onsets(asset: Any, ctx: Context) -> list[Finding]:
+    """W027: a loop blends its last `crossfade` seconds into its first ones, so a hit that starts in that window comes
+    out faded (a pulse that's uneven once per loop). Found from the dry sound rendered without the blend."""
+    from segan.analysis import onsets
+    from segan.sfxrender import dry_mix
+
+    loops = [("", asset.layers, asset.duration, asset.crossfade)] if asset.loop else []
+    loops += [(f".{name}", phase.layers, phase.duration, phase.crossfade) for name, phase in asset.phases.items() if phase.loop]
+    out = []
+    for suffix, layers, duration, crossfade in loops:
+        if crossfade <= 0:
+            continue
+        dry, _ = dry_mix(layers, ctx, duration, asset.name, 0, 0.0, 0.0, False, 0.0)
+        early = [t for t in onsets(dry, ctx.rate) if 0.005 < t < crossfade]
+        if early:
+            out.append(Finding("W027", f"{asset.name}{suffix}: an onset at {early[0]:.2f}s falls inside the {crossfade:g}s loop crossfade, so it's blended "
+                               f"down at {100 * math.sin(math.pi / 2 * early[0] / crossfade):.0f}% of its level: start it after the crossfade, or "
+                               "shorten the crossfade", asset.path, None, "crossfade"))  # fmt: skip
+    return out
 
 
 FILTER_LOSS_DB = 12.0  # W018
@@ -294,8 +355,10 @@ MAX_LOOP_OFFSET_BARS = 2  # W019
 
 
 def _filter_loss(asset: Any, ctx: Context) -> list[Finding]:
-    """W018: a noise layer whose filter takes away more than 12 dB of its level (a narrow band-pass): it ends up far
-    quieter than its gain suggests. Measured dry, the layer with and without its filter (and cutoff keyframes)."""
+    """W018: a noise layer whose filter takes away more than 12 dB of its level (a narrow band-pass, a low cutoff) and
+    that ends up more than 12 dB under the loudest layer of the sound: it plays far quieter than its gain suggests.
+    Measured dry; raising the layer's gain clears it, and a filtered bed on its own (nothing to be lost under) never
+    warns."""
     from dataclasses import replace
 
     import numpy as np
@@ -304,23 +367,37 @@ def _filter_loss(asset: Any, ctx: Context) -> list[Finding]:
     from segan.sfxrender import render_layer
 
     out = []
-    layers = [*asset.layers, *(layer for phase in asset.phases.values() for layer in phase.layers)]
-    for layer in layers:
-        inst = layer.inst
-        if inst.is_drum or inst.is_sample or inst.wave not in ("noise", "bitnoise") or (inst.filter is None and not layer.cutoff):
-            continue  # pitched waves lose level through a band-pass by design (formants); noise is where it surprises
-        seed = seed_of(asset.name, layer.index, 0)
-        available = layer.start + layer.inst.tail() + (layer.length or asset.duration)
-        filtered, _ = render_layer(layer, ctx, available, seed, 0.0, 0.0)
-        plain, _ = render_layer(replace(layer, inst=replace(layer.inst, filter=None), cutoff=None), ctx, available, seed, 0.0, 0.0)
-        power, reference = float(np.mean(filtered**2)), float(np.mean(plain**2))
-        if reference <= 0:
-            continue
-        loss = 10.0 * np.log10(reference / max(power, 1e-30))
-        if loss > FILTER_LOSS_DB:
-            name = layer.id or f"layers.{layer.index}"
-            out.append(Finding("W018", f"layer {name}: its filter removes {loss:.0f} dB of the noise's level (a narrow band-pass or a low cutoff), so it plays far "
-                               "quieter than its gain says: raise its gain to put it back in balance, or widen the filter", asset.path, layer.line, name))  # fmt: skip
+    groups = [list(asset.layers), *(list(phase.layers) for phase in asset.phases.values())]
+    for layers in groups:
+        levels: dict[int, float] = {}
+        rendered: dict[int, Any] = {}
+        for layer in layers:
+            seed = seed_of(asset.name, layer.index, 0)
+            available = layer.start + layer.inst.tail() + (layer.length or asset.duration)
+            signal, _ = render_layer(layer, ctx, available, seed, 0.0, 0.0)
+            rendered[id(layer)] = (signal, seed, available)
+            levels[id(layer)] = float(np.mean(signal**2)) if len(signal) else 0.0
+        loudest = max(levels.values(), default=0.0)
+        for layer in layers:
+            inst = layer.inst
+            if inst.is_drum or inst.is_sample or inst.wave not in ("noise", "bitnoise") or (inst.filter is None and not layer.cutoff):
+                continue  # pitched waves lose level through a band-pass by design (formants); noise is where it surprises
+            power = levels[id(layer)]
+            others = [v for k, v in levels.items() if k != id(layer)]
+            if not others or power <= 0 or loudest <= 0:
+                continue
+            _, seed, available = rendered[id(layer)]
+            plain, _ = render_layer(replace(layer, inst=replace(layer.inst, filter=None), cutoff=None), ctx, available, seed, 0.0, 0.0)
+            reference = float(np.mean(plain**2))
+            if reference <= 0:
+                continue
+            loss = 10.0 * np.log10(reference / max(power, 1e-30))
+            under = 10.0 * np.log10(loudest / power)
+            if loss > FILTER_LOSS_DB and under > FILTER_LOSS_DB:
+                name = layer.id or f"layers.{layer.index}"
+                out.append(Finding("W018", f"layer {name}: its filter removes {loss:.0f} dB of the noise's level, so it sits {under:.0f} dB under the "
+                                   f"loudest layer: raise its gain by about {under - 6:.0f} dB if it should be heard in the mix, or widen the filter "
+                                   "(a quiet layer on purpose: lower its gain instead and disable W018)", asset.path, layer.line, name))  # fmt: skip
     return out
 
 

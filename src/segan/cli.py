@@ -334,6 +334,55 @@ def _sounds_error(exc: Exception) -> SeganError:
     return usage_error(str(exc))
 
 
+def cmd_sounds_remove(args: argparse.Namespace, out: Output) -> int:
+    from segan import sounds
+
+    project = require_project()
+    try:
+        entries = dict(sounds.read_lock(project.root))
+    except sounds.SoundsError as exc:
+        raise _sounds_error(exc) from None
+    keys = [sounds.lock_key(ref, project.root) for ref in args.refs]
+    if missing := [ref for ref, key in zip(args.refs, keys, strict=True) if key not in entries]:
+        raise usage_error(f"not in sounds.lock: {', '.join(missing)} (entries: {', '.join(sorted(entries)) or 'none'})")
+    used, _ = used_sounds(project)
+    if (busy := {k: used[k] for k in keys if k in used}) and not args.force:
+        raise usage_error("still played by " + "; ".join(f"{k}: {', '.join(v)}" for k, v in busy.items()) + " (change those SFX first, or --force)")
+    for key in keys:
+        entries.pop(key)
+    sounds.write_lock(project.root, entries)
+    out.say(f"removed {len(keys)} sounds from sounds.lock ({len(entries)} left); cached files stay in {display_path(sounds.cache_root())}")
+    out.result({"removed": keys, "left": len(entries)})
+    return 0
+
+
+def cmd_sounds_prune(args: argparse.Namespace, out: Output) -> int:
+    from segan import sounds
+
+    project = require_project()
+    try:
+        entries = dict(sounds.read_lock(project.root))
+    except sounds.SoundsError as exc:
+        raise _sounds_error(exc) from None
+    if broken := broken_sfx(project):
+        raise usage_error(f"{len(broken)} SFX don't parse ({', '.join(broken[:5])}): fix them first, or prune could drop sounds they play")
+    used, _ = used_sounds(project)
+    unused = sorted(k for k in entries if k not in used)
+    if not args.dry_run and unused:
+        sounds.write_lock(project.root, {k: v for k, v in entries.items() if k not in unused})
+    out.say(("would drop " if args.dry_run else "dropped ") + (", ".join(unused) if unused else "nothing: every sound in sounds.lock is played"))
+    out.result({"unused": unused, "dry_run": args.dry_run})
+    return 0
+
+
+def broken_sfx(project: Project) -> list[str]:
+    """SFX files that don't parse (their recorded layers are unknown)."""
+    from segan.asset import load_asset
+    from segan.lint import source_files
+
+    return [path.name for path in source_files(project, [project.sfx_dir]) if path.name.endswith(SFX_SUFFIX) and load_asset(path, project)[0] is None]
+
+
 def used_sounds(project: Project) -> tuple[dict[str, list[str]], dict[str, dict[str, Any]]]:
     """Recorded sounds the project's SFX play: {lock key: [sfx names]}, and what their layers say about the ones
     not in sounds.lock (licence, source, author)."""
@@ -446,7 +495,9 @@ def cmd_sounds_credits(args: argparse.Namespace, out: Output) -> int:
     for key, meta in declared.items():
         entries.setdefault(key, meta)
     target = Path(args.out) if args.out else project.root / "SOUND_CREDITS.md"
-    text = sounds.credits_text(entries, used)
+    from segan.licences import project_extras
+
+    text = sounds.credits_text(entries, used, project_extras(project.root))
     target.write_text(text, encoding="utf-8")
     need = sorted(k for k, v in entries.items() if str(v.get("licence", "")).startswith("CC-BY"))
     out.say(f"wrote {display_path(target)}: {len(entries)} sounds, {len(need)} need attribution (CC BY): ship it with the game's credits")
@@ -750,13 +801,18 @@ def cmd_render(args: argparse.Namespace, out: Output) -> int:
         render = render_asset(asset, project)
         folder = project.preview_dir / asset.name
         written = []
+        ids = []
         for output in render.outputs:
+            if args.output and not {output.id or "main", output.stem} & set(args.output):
+                continue
             path = folder / f"{output.stem.replace('/', '.')}.wav"
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_bytes(output.wav())
             written.append(display_path(path))
+            ids.append({"output": output.id or "main", "wav": display_path(path), "seconds": round(output.seconds, 4),
+                        **({"loop": {"start": output.loop[0], "end": output.loop[1]}} if output.loop else {})})  # fmt: skip
         out.say(f"{asset.name}: wrote {len(written)} WAVs to {display_path(folder)}")
-        outputs.append({"asset": asset.name, "files": written})
+        outputs.append({"asset": asset.name, "files": written, "outputs": ids})
     if findings:
         out.failure(findings, {"outputs": outputs})
         return 1
@@ -1323,6 +1379,7 @@ def build_parser() -> argparse.ArgumentParser:
     common = argparse.ArgumentParser(add_help=False)
     # SUPPRESS: a subcommand's --json doesn't reset a --json given before the subcommand.
     common.add_argument("--json", action="store_true", default=argparse.SUPPRESS, help="machine-readable JSON output")
+    common.add_argument("--quiet", action="store_true", default=argparse.SUPPRESS, help="no progress lines on stderr")
 
     parser = argparse.ArgumentParser(
         prog="segan", description="SEGAN (Sound Effect Grammar And Notation): game sound effects and music as text."
@@ -1363,6 +1420,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     render = commands.add_parser("render", parents=[common], help="render songs/SFX to WAVs in the previews folder")
     render.add_argument("assets", nargs="+", help="asset files or names")
+    render.add_argument("--output", action="append", help="only these outputs (main, stem:T, mix:M, variant:X...); renders are cached, no analysis")
     render.set_defaults(handler=cmd_render)
 
     preview = commands.add_parser("preview", parents=[common], help="WAVs + listen sheets (+ seam views for loops) and the numbers to check")
@@ -1491,6 +1549,13 @@ def build_parser() -> argparse.ArgumentParser:
     snd_credits = snd_cmds.add_parser("credits", parents=[common], help="write the attribution file (CC BY needs it) from sounds.lock")
     snd_credits.add_argument("--out", help="output file (default: SOUND_CREDITS.md in the project)")
     snd_credits.set_defaults(handler=cmd_sounds_credits)
+    snd_remove = snd_cmds.add_parser("remove", parents=[common], help="drop sounds from sounds.lock (refused while an SFX still plays them)")
+    snd_remove.add_argument("refs", nargs="+", help="freesound:<id> or the local file, as in sounds.lock")
+    snd_remove.add_argument("--force", action="store_true", help="drop them even if an SFX plays them (lint then reports E019/E020)")
+    snd_remove.set_defaults(handler=cmd_sounds_remove)
+    snd_prune = snd_cmds.add_parser("prune", parents=[common], help="drop every sounds.lock entry no SFX plays")
+    snd_prune.add_argument("--dry-run", action="store_true", help="list them, change nothing")
+    snd_prune.set_defaults(handler=cmd_sounds_prune)
     snd_vendor = snd_cmds.add_parser("vendor", parents=[common], help="copy the Freesound sounds in use into <project>/sounds/ (offline builds)")
     snd_vendor.add_argument("--all", action="store_true", help="every sound in sounds.lock, used or not")
     snd_vendor.set_defaults(handler=cmd_sounds_vendor)
@@ -1547,6 +1612,11 @@ Handler = Callable[[argparse.Namespace, Output], int]
 
 
 def main(argv: Sequence[str] | None = None) -> int:
+    import faulthandler
+    import sys
+
+    if argv is None and sys.stderr is not None:
+        faulthandler.enable()  # a crash in a native library (libsndfile, numpy) prints where, instead of a silent exit 139
     parser = build_parser()
     args = parser.parse_args(argv)
     handler: Handler | None = getattr(args, "handler", None)
@@ -1558,7 +1628,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         if args.jobs < 1:
             parser.error("--jobs must be 1 or more")
         os.environ["SEGAN_JOBS"] = str(args.jobs)  # read by the render pool (and its worker processes)
-    progress.enabled = argv is None and not args.quiet and not os.environ.get("SEGAN_QUIET")
+    progress.enabled = argv is None and not getattr(args, "quiet", False) and not os.environ.get("SEGAN_QUIET")
     try:
         return handler(args, out)
     except SeganError as exc:

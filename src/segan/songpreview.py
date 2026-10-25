@@ -92,6 +92,29 @@ def _cents_off(detected: float, expected: float) -> float:
 
 
 def pitch_check(song: Song, project: Project) -> dict[str, Any]:
+    """`measure_pitch`, cached next to the song's render (it renders every track dry: minutes for a long song, #69)."""
+    import json
+
+    from segan.render import RENDERER_VERSION, cache_key
+    from segan.songrender import song_cache_parts
+
+    path = project.cache_dir / "pitch" / f"{cache_key('pitch', RENDERER_VERSION, *song_cache_parts(song, project))}.json"
+    if path.is_file():
+        try:
+            cached: dict[str, Any] = json.loads(path.read_text(encoding="utf-8"))
+            return cached
+        except (OSError, ValueError):
+            pass
+    result = measure_pitch(song, project)
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(result, sort_keys=True), encoding="utf-8")
+    except OSError:
+        pass
+    return result
+
+
+def measure_pitch(song: Song, project: Project) -> dict[str, Any]:
     """Each roll note of a monophonic track: median detected pitch on the track's dry render vs. the written
     pitch (cents, octaves folded; low notes also as the 3rd/5th harmonic). Instruments with arpeggios and one-shot
     samples (they ring over the next notes) are skipped; pitch envelopes, sample attacks and the previous note's
@@ -111,26 +134,37 @@ def pitch_check(song: Song, project: Project) -> dict[str, Any]:
         if track.drums or track.name not in dry:
             continue
         mine = sorted((p for p in placed if p.note.track == track.name), key=lambda p: p.step)
-        if not mine or any(a.step + a.note.length > b.step for a, b in zip(mine, mine[1:], strict=False)):
-            continue  # chords: one pitch per moment can't be checked this way
+        if not mine:
+            continue
+        if any(a.step + a.note.length > b.step for a, b in zip(mine, mine[1:], strict=False)):  # one pitch per moment only
+            result[track.name] = {"notes_checked": 0, "notes_skipped": len(mine), "skipped_because": {"chords or overlapping notes": len(mine)}}
+            continue
         audio = dry[track.name][:, 0]
         notes: list[tuple[Any, str, float, float]] = []  # (placed note, instrument key, detected Hz, cents)
+        skipped: dict[str, int] = {}
+
+        def skip(reason: str) -> None:
+            skipped[reason] = skipped.get(reason, 0) + 1
+
         previous_end = -1.0
         for p in mine:
             inst = song.kit.instruments.get(p.key)
             ringing_until = previous_end + (inst.env.release if inst is not None else 0.0)
             previous_end = timeline.seconds(p.step + p.note.length)
             if inst is None or inst.arp or inst.is_drum or inst.wave in ("noise", "bitnoise") or is_one_shot(inst):
+                skip("arpeggio, noise or one-shot instrument" if inst is not None else "no instrument")
                 continue
             settle = max([0.08 if inst.is_sample else 0.015, *(t for t, _ in inst.pitch_env)])
             start = max(timeline.seconds(p.step) + settle, ringing_until)
             end = min(timeline.seconds(p.step + p.note.length), start + 0.2)
             if end - start < 0.05:
+                skip("under 50 ms left to measure after the attack and the previous note's release")
                 continue
             a, b = int(start * ctx.rate), int(end * ctx.rate)
             track_pitch = yin(audio[a:b], ctx.rate, hop=0.01)
             voiced = track_pitch.hz[track_pitch.hz > 0]
             if len(voiced) == 0:
+                skip("no pitch detected")
                 continue
             detected = float(np.median(voiced))
             notes.append((p, p.key, detected, _cents_off(detected, midi_to_hz_scalar(p.midi, ctx.tuning))))
@@ -146,6 +180,7 @@ def pitch_check(song: Song, project: Project) -> dict[str, Any]:
             worst = max(worst, abs(relative))
             if abs(relative) > 50 and len(off) < 10:
                 off.append({"bar": round(timeline.bar_of(p.step), 2), "note": song.key.name(int(p.midi)), "detected_hz": round(detected, 1), "cents": round(cents)})
-        result[track.name] = {"notes_checked": len(notes), "max_abs_cents": round(worst, 1), "off": off,
+        result[track.name] = {"notes_checked": len(notes), "notes_skipped": sum(skipped.values()), **({"skipped_because": skipped} if skipped else {}),
+                              "max_abs_cents": round(worst, 1), "off": off,
                               **({"detune_cents": {(song.kit.instruments[k].name or k): v for k, v in detune.items()}} if detune else {})}  # fmt: skip
     return result

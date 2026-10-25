@@ -62,6 +62,10 @@ def test_preview_several_stems_at_once(proj: Path, capsys: pytest.CaptureFixture
     assert set(outputs) == {"main", "stem:top", "mix:calm"}
     assert set(outputs["stem:top"]["pitch_check"]) == {"lead"} and "bass" in outputs["mix:calm"]["pitch_check"]
     assert set(outputs["main"]["stem_mixes_lufs"]) == {"calm", "full"} and outputs["mix:calm"]["normalised_over_mix"] == "full"
+    # #70: every output carries the mix keys; a mix says its trim and the level it plays at
+    assert all(set(o["stem_mixes_trim_db"]) == {"calm", "full"} for o in outputs.values())
+    calm = outputs["mix:calm"]
+    assert calm["lufs_trimmed"] == round(calm["lufs"] + calm["trim_db"], 2)
     code, data = run_json(["preview", "tune", "--output", "stem:nope"], capsys)
     assert code == 1 and "stem:nope" in data["findings"][0]["message"]
 
