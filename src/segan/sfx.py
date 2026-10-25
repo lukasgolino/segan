@@ -332,7 +332,7 @@ def _resolve_ref(ref: str, root: Path, report: Report, where: str, line: int | N
 def _licensed(ref: str, path: str, meta: dict[str, str], root: Path, report: Report, where: str, line: int | None) -> RecordedSound | None:
     """The licence rule (E020): CC0 or CC BY only, with a source, and an author for CC BY (credits name them).
     The layer's own fields come first, then the sound's sounds.lock entry."""
-    from segan.licences import ALLOWED_TEXT, classify
+    from segan.licences import ALLOWED_TEXT, classify, project_extras
     from segan.sounds import lock_entry
 
     entry = lock_entry(root, ref) or {}
@@ -343,10 +343,12 @@ def _licensed(ref: str, path: str, meta: dict[str, str], root: Path, report: Rep
         report.error("E020", f"recorded sound {ref} has no licence: add licence: CC0 or CC-BY-4.0 (as its source says) and source: <where it came from>, "
                      "or record it with `segan sounds add`", line, f"{where}.licence")  # fmt: skip
         return None
-    licence = classify(licence_text)
+    extras = project_extras(root)
+    licence = classify(licence_text, extras)
     if licence is None:
-        report.error("E020", f"recorded sound {ref}: licence {licence_text!r} isn't allowed; only {ALLOWED_TEXT} (never non-commercial, share-alike or unknown)",
-                     line, f"{where}.licence")  # fmt: skip
+        cleared = f", or one this project cleared in segan.toml [sounds] extra_licences ({', '.join(extras) or 'none yet'})"
+        report.error("E020", f"recorded sound {ref}: licence {licence_text!r} isn't allowed; only {ALLOWED_TEXT}{cleared} (never non-commercial, "
+                     "share-alike or unknown)", line, f"{where}.licence")  # fmt: skip
         return None
     if not source:
         report.error("E020", f"recorded sound {ref}: add source: <the page it came from> (or \"own recording\"), so its licence can be checked", line, f"{where}.source")
@@ -362,12 +364,14 @@ def _processing(raw: Any, report: Report, where: str, line: int | None) -> Proce
     trim_start, trim_end = 0.0, None
     if "trim" in raw:
         trim = raw["trim"]
+        if isinstance(trim, list) and len(trim) == 1:
+            trim = trim[0]
         if is_number(trim) and 0 <= trim <= 600:
             trim_start = float(trim)
         elif isinstance(trim, list) and len(trim) == 2 and all(is_number(v) for v in trim) and 0 <= trim[0] < trim[1] <= 600:
             trim_start, trim_end = float(trim[0]), float(trim[1])
         else:
-            report.error(rule, "trim must be [start, end] seconds of the file (or just the start)", line_of(raw, "trim", line), f"{where}.trim")
+            report.error(rule, "trim must be [start, end] seconds of the file, or the start alone (0.03 or [0.03])", line_of(raw, "trim", line), f"{where}.trim")
             return None
     reverse = raw.get("reverse", False)
     if not isinstance(reverse, bool):

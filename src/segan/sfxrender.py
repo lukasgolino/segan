@@ -226,9 +226,22 @@ def render_sfx(sfx: Sfx, project: Project) -> Render:
     return Render(sfx.name, "sfx", outputs)
 
 
+def layer_end(layer: Layer, ctx: Context, seed: int, pitch_offset: float = 0.0, timbre: float = 0.0) -> float:
+    """Where a layer stops sounding when nothing cuts it (seconds from the sound's start, -60 dB under its peak): a
+    recording's length after trim, stretch and varispeed `pitch` (below C4 it plays slower and longer, #67)."""
+    room = layer.start + 4.0 * (layer.inst.tail() + (layer.length or 0.0) + 1.0)
+    signal, _ = render_layer(layer, ctx, min(room, layer.start + 120.0), seed, pitch_offset, timbre)
+    level = np.abs(signal)
+    if not len(level) or level.max() <= 0:
+        return layer.start
+    loud = np.flatnonzero(level > level.max() * 1e-3)
+    return round(layer.start + (int(loud[-1]) + 1) / ctx.rate, 3)
+
+
 def layer_levels(sfx: Sfx, project: Project, output_id: str) -> list[dict[str, object]]:
     """Each layer of one output on its own, dry (before the room, normalisation and the limiter), at its place in
-    the sound: peak, loudness (loudest 400 ms) and crest factor (peak over RMS while it sounds), plus the dry sum.
+    the sound: peak, loudness (loudest 400 ms) and crest factor (peak over RMS while it sounds), plus the dry sum;
+    recorded layers also say where they end uncut (`ends_s`).
     Which layer makes a sound peaky shows as the highest peak for its loudness (W001)."""
     ctx = context_for(project.config.mix)
     variation, pitch, timbre = 0, 0.0, 0.0
@@ -260,7 +273,10 @@ def layer_levels(sfx: Sfx, project: Project, output_id: str) -> list[dict[str, o
         piece = signal[: max(0, total - start)]
         placed[start : start + len(piece)] = piece
         dry += placed
-        out.append({"layer": layer.id or f"layers.{layer.index}", "start_s": layer.start, **levels(placed)})
+        entry: dict[str, object] = {"layer": layer.id or f"layers.{layer.index}", "start_s": layer.start, **levels(placed)}
+        if layer.choices:  # a recording: how long it runs after trim, stretch and varispeed
+            entry["ends_s"] = layer_end(layer, ctx, seed_of(sfx.name, layer.index, variation), pitch, timbre)
+        out.append(entry)
     out.append({"layer": "(dry mix)", "start_s": 0.0, **(levels(dry) if total else {"peak_db": SILENCE_DB, "lufs": SILENCE_DB, "crest_db": 0.0})})
     return out
 
@@ -272,8 +288,8 @@ def variation_stretch(name: str, v: Variations, variation: int) -> float:
 
 def variation_layers(name: str, layers: tuple[Layer, ...], v: Variations, variation: int) -> tuple[Layer, ...]:
     """The layers of one variation: `length` stretches every time in them (start, length, keyframes) by one factor;
-    `timing` then moves each layer's start by up to +/- timing seconds (never before 0), so bursts and bubbles don't
-    land at the same moments; `envelope` scales each layer's attack, decay and release by up to 2x either way."""
+    `timing` then moves each layer's start by up to +/- timing seconds (never before the earliest layer, which stays
+    put), so bursts and bubbles don't land at the same moments; `envelope` scales each layer's attack, decay and release by up to 2x either way."""
     if not (v.timing or v.envelope or v.length):
         return layers
     stretch = variation_stretch(name, v, variation)
@@ -282,10 +298,12 @@ def variation_layers(name: str, layers: tuple[Layer, ...], v: Variations, variat
         return None if frames is None else tuple((round(t * stretch, 6), value) for t, value in frames)
 
     out = []
+    first = min((layer.start for layer in layers), default=0.0) * stretch
     for layer in layers:
         start = layer.start * stretch
-        if v.timing:
+        if v.timing and layer.start * stretch > first:  # the earliest layer keeps its start: the attack stays instant (#64)
             start += (uniform(seed_of(name, "variation", v.seed, variation, "timing", layer.index), 0) * 2 - 1) * v.timing
+            start = max(first, start)
         changes: dict[str, Any] = {"start": round(max(0.0, start), 6)}
         if stretch != 1.0:
             changes.update(pitch=times(layer.pitch), gain=times(layer.gain), cutoff=times(layer.cutoff))

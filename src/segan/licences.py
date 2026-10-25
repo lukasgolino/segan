@@ -3,7 +3,8 @@
 CC0 needs nothing; CC BY needs attribution (title, author, source, licence, and a note that it was changed),
 which `segan sounds credits` writes. Everything else is refused: non-commercial (BY-NC) can't ship in a game that
 might be sold, share-alike (BY-SA) and no-derivatives (BY-ND) don't fit sounds that are processed and mixed into
-a game, Sampling+ is withdrawn, and an unknown licence is no licence.
+a game, Sampling+ is withdrawn, and an unknown licence is no licence. A project can clear other licences itself
+(royalty-free libraries under their own terms) by name: `[sounds] extra_licences = ["Sonniss-GDC"]`.
 
 A licence can be written as an id (`CC0`, `CC0-1.0`, `CC-BY`, `CC-BY-4.0`, `CC BY 3.0`), as a Creative Commons
 URL (`https://creativecommons.org/licenses/by/4.0/`, `.../publicdomain/zero/1.0/`), or as Freesound's licence
@@ -14,6 +15,8 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
+from functools import lru_cache
+from pathlib import Path
 
 CC0_URL = "https://creativecommons.org/publicdomain/zero/1.0/"
 
@@ -23,9 +26,12 @@ class Licence:
     id: str  # SPDX-style: CC0-1.0, CC-BY-4.0, CC-BY-3.0, ... or CC-BY (version not given)
     url: str
     attribution: bool  # credits are required (CC BY)
+    cleared: bool = False  # not CC: a licence the project cleared itself (`[sounds] extra_licences`)
 
     @property
     def title(self) -> str:
+        if self.cleared:
+            return self.id
         return "CC0 1.0" if self.id == "CC0-1.0" else self.id.replace("CC-BY", "CC BY").replace("-", " ")
 
 
@@ -41,11 +47,37 @@ _ID_RE = re.compile(r"^cc[\s_-]*by(?:[\s_-]*(\d(?:\.\d)?))?$", re.I)
 BY_VERSIONS = ("1.0", "2.0", "2.5", "3.0", "4.0")
 
 
-def classify(value: object) -> Licence | None:
-    """The allowed licence `value` names, or None (refused: non-commercial, share-alike, unknown...)."""
+def project_extras(root: Path) -> tuple[str, ...]:
+    """Licences a project has cleared itself (`[sounds] extra_licences` in segan.toml at `root`)."""
+    config = root / "segan.toml"
+    try:
+        stat = config.stat()
+    except OSError:
+        return ()
+    return _extras(str(config), stat.st_size, stat.st_mtime_ns)
+
+
+@lru_cache(maxsize=16)
+def _extras(path: str, size: int, mtime: int) -> tuple[str, ...]:
+    import tomllib
+
+    try:
+        data = tomllib.loads(Path(path).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return ()
+    names = data.get("sounds", {}).get("extra_licences", []) if isinstance(data.get("sounds"), dict) else []
+    return tuple(str(n) for n in names if isinstance(n, str) and n.strip())
+
+
+def classify(value: object, extra: tuple[str, ...] = ()) -> Licence | None:
+    """The allowed licence `value` names, or None (refused: non-commercial, share-alike, unknown...). `extra`: licences
+    the project has cleared itself (royalty-free libraries under their own terms); they need a source, not credits."""
     if not isinstance(value, str):
         return None
     text = value.strip()
+    for name in extra:
+        if text.lower() == name.strip().lower():
+            return Licence(name.strip(), "", False, cleared=True)
     if (m := _URL_RE.match(text)) is not None:
         kind, name, version = m.group(1).lower(), m.group(2).lower(), m.group(3)
         if kind == "publicdomain":

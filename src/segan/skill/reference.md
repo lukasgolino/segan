@@ -201,8 +201,9 @@ layer has no filter), `distort` (0-1; the layer's `gain` applies after it, so ga
 
 More SFX fields:
 - `variations`: `count` 1-32, `seed` (change it for a different set), `pitch` (+/- semitones), `timbre` (0-1:
-  duty, filter, envelope jitter), `gain` (+/- dB), `timing` (+/- seconds each layer's start moves, 0-0.5; never
-  before 0: bursts and bubbles land at different moments), `envelope` (0-1: each layer's attack/decay/release up to
+  duty, filter, envelope jitter), `gain` (+/- dB), `timing` (+/- seconds each layer's start moves, 0-0.5; the
+  earliest layer stays put, so the attack stays instant, and no layer moves before it: bursts and bubbles land at
+  different moments), `envelope` (0-1: each layer's attack/decay/release up to
   2x longer or shorter), `length` (0-0.5: the whole sound - duration, starts, lengths, keyframe times - up to that
   much longer or shorter). Each variation is its own WAV, all normalised to the target
   (a +dB variation aims above the target: near the limiter cap it gets W001). `include_main: false` builds only
@@ -258,6 +259,10 @@ a pitched sampled instrument.
 sound's licence, author and page come from `sounds.lock`; a local file needs `licence:` (`CC0`, `CC-BY-4.0`, or the
 creativecommons.org URL), `source:` (the page it came from, or "own recording") and, for CC BY, `author:` on
 the layer, or a sounds.lock entry (`segan sounds add sounds/x.wav --licence CC-BY-4.0 --source URL --author NAME`).
+A project that has cleared another licence itself (a royalty-free library under its own terms, e.g. the GDC bundles)
+names it in segan.toml: `[sounds] extra_licences = ["Sonniss-GDC"]`; its sounds then need `licence: Sonniss-GDC` and a
+`source`, and `segan sounds credits` lists them under "Other licences". Only the owner clears a licence: don't add
+one on your own.
 
 **sounds.lock** (next to segan.toml; commit it): one `[sounds."<ref>"]` table per sound with `name`, `author`,
 `licence`, `licence_url`, `url` (the Freesound page) or `source`, `file` (`preview-hq-ogg`, `local`), `download`,
@@ -365,7 +370,9 @@ target even with its trim.
 
 More song fields: `humanize: { timing: ms (0-40), velocity: 0-0.5 }` (every note a little early or late and
 louder or softer, seeded: the same nudge each time a section plays, in loops and flow clips; `humanize: 8` = timing
-only), `seed` (the song's own seed: change it for another take of the humanize; default from the name),
+only), `seed` (the song's own seed: change it for another take of the humanize; default from the name), `fade_in` /
+`fade_out` (seconds; songs that play once: a smooth rise from the start, a fall to silence at the end of the
+arrangement, before the room, so the room still rings out),
 `category` (default `music`: loudness target), `normalize: false`, `sample_rate` (22050 |
 32000 | 44100 | 48000) and `channels` (`mono` | `stereo`): this song's own output format over `[mix]`'s (a chip
 loop at 22050 Hz mono is a quarter of the size; it aliases more, which lint checks at that rate), `extends` (a
@@ -543,14 +550,16 @@ asset actually plays, so editing one instrument re-renders only what uses it.
 | `segan kit roll <name> --style "words" [--around KIT] [--samples\|--no-samples] [--take N] [--dry-run] [--force]` | a kit from style words and the project seed: `identity` group (2-3 signature instruments), bass, harmony, colour, 3-5 drums, from the models, effects and drums above (samples when the words ask for acoustic/orchestral, or `--samples`); `--around` keeps another kit's identity instruments |
 | `segan samples list [library\|file.sf2]` / `segan samples fetch <library> <instrument...> [--all]` | sample libraries: instruments, key ranges and what's downloaded / download instruments |
 | `segan sounds search "<query>" [--max-seconds N] [--licence cc0\|cc-by] [--limit 15] [--sort score\|rating_desc\|...]` | Freesound search (needs `FREESOUND_API_KEY`): ref, name, author, licence, duration, rating, tags; only CC0 / CC BY |
-| `segan sounds add freesound:<id>` / `add <file> --licence L --source URL [--author A]` | check the licence, fetch the HQ preview into the user cache, record it in `sounds.lock` (a local file: its licence, source, author) |
+| `segan sounds add freesound:<id>` (or the sound's page URL; without `FREESOUND_API_KEY` the public page is read) / `add <file> --licence L --source URL [--author A]` | check the licence, fetch the HQ preview into the user cache, record it in `sounds.lock` (a local file: its licence, source, author) |
 | `segan sounds inspect <ref...>` | length, peak, loudness, brightness (centroid), pitch, onsets of recordings (a Freesound ref is fetched into the cache, not recorded) |
 | `segan sounds credits [--out FILE]` | `SOUND_CREDITS.md`: attribution for every recorded sound (required for CC BY) |
+| `segan sounds remove <ref...> [--force]` / `segan sounds prune [--dry-run]` | drop sounds from `sounds.lock` (remove refuses while an SFX plays them; prune drops every entry no SFX plays: lint W028) |
 | `segan sounds vendor [--all]` | copy the Freesound sounds in use into `<project>/sounds/` (offline builds; off by default) |
 | `segan kit show [kits]` | every instrument playing a test phrase: `previews/kits/<kit>.listen.png` + WAVs; `--json` gives each instrument's `range` |
 | `segan lint [paths] [--warnings-as-errors] [--no-render] [-j N]` | errors + warnings (audio warnings render the asset; cached); exits 1 on errors, 0 when there are only warnings, 1 on warnings too with `--warnings-as-errors` (CI) |
-| `segan preview <asset...> [--output main\|variant:X\|variation:N\|phase:X\|stem:T\|mix:M\|flow:CLIP\|walk[:SEED] ...] [--from 5 --to 8]` | WAV + listen sheet (+ seam view for loops) per output in `previews/<asset>/`, analysis in `--json` (SFX: `layers` = each layer dry on its own, `peak_db`/`lufs`/`crest_db`, plus the dry mix); flow songs also get a walk; `--output reel` (an SFX): the main sound and every variation back to back, 0.4 s apart, to judge the variety; `--format ogg\|mp3` also writes each preview compressed, to share (needs `segan[ogg]`) |
-| `segan render <asset...>` | WAVs only |
+| `segan preview <asset...> [--output main\|variant:X\|variation:N\|phase:X\|stem:T\|mix:M\|flow:CLIP\|walk[:SEED] ...] [--from 5 --to 8]` | WAV + listen sheet (+ seam view for loops) per output in `previews/<asset>/`, analysis in `--json` (SFX: `layers` = each layer dry on its own, `peak_db`/`lufs`/`crest_db`, recorded layers' `ends_s` (where they end
+uncut, after trim/stretch/varispeed), plus the dry mix); flow songs also get a walk; `--output reel` (an SFX): the main sound and every variation back to back, 0.4 s apart, to judge the variety; `--format ogg\|mp3` also writes each preview compressed, to share (needs `segan[ogg]`) |
+| `segan render <asset...> [--output main\|stem:T\|mix:M\|variant:X ...]` | WAVs only, from the render cache (no analysis or sheets: fast for long stemmed songs); `--json` lists each output's WAV, length and loop |
 | `segan gallery` | every asset's waveform + spectrum and a loudness chart by category |
 | `segan bake sfx <name> [--in-place]` | expand a preset/template into every field |
 | `segan import midi <file.mid> [--kit K] [--key K] [--quantize 16] [--bars-per-pattern 2]` | MIDI -> song + change report |
@@ -590,16 +599,18 @@ mismatch, fetch failed), E020 recorded sound's licence (missing, not CC0/CC BY, 
 
 Warnings: W001 loudness target out of reach without more limiting than `max_limiting_db` (too short/spiky:
 stagger layer starts 3-9 ms, tame the peakiest layer (`preview --json` `layers`), give it body, or a quieter category; for a percussive song: `category: music_soft` + `music_soft = -19` under
-`[loudness]`), W002 unused pattern or section, W003 too many instruments in one song,
+`[loudness]`), W002 unused pattern or section, W003 too many instruments in one song (with `stems.mixes`: in one mix),
 W004 silent pattern or sound, W005 lead-in silence in an SFX, W006 made under an older style version, W007
 click at a loop point, W008 DC offset, W009 tracks clash (minor 2nd/tritone) on a beat (the felt beat: every 3 units in 6/8, 9/8, 12/8; a held note counts while above -30 dB), W010 aliasing (raise
 `[mix] oversample` or play lower), W011 SFX still sounding at `duration`, W012 note cut at the end of its
 pattern, W013 loudness off target with `normalize: false`, W014 a note held longer than its sample (no loop):
 it goes silent before it ends, W015 a flow section shorter than the ring-out of a section before it, W016 a
 soundtrack cross-fade between songs in clashing keys, W017 a stem mix that can't reach its target even with its
-trim, W018 an SFX noise layer whose filter removes more than 12 dB of its level (a narrow band-pass): raise its gain,
+trim, W018 an SFX noise layer whose filter removes more than 12 dB of its level and that ends up more than 12 dB under the
+loudest layer (a narrow band-pass, a low cutoff; a filtered bed on its own never warns): raise its gain,
 W019 a looping song's file runs more than 2 bars past the song because its last notes ring that long: give those
-instruments `max_ring`, W020 a recorded layer in a project with `[sfx] source = "synth"`.
+instruments `max_ring`, W020 a recorded layer in a project with `[sfx] source = "synth"`, W028 a `sounds.lock` entry no SFX plays (`segan sounds prune`), W027 a transient inside a
+looping SFX's (or phase's) first `crossfade` seconds: the seam blend fades it (start it later or shorten the crossfade).
 Sameness (songs are compared with every other song of the project; `segan similarity` shows the numbers): W021 two
 songs open on the same notes (step 1, two or more notes), W022 more than half of the songs share one pitch set (D minor
 = F major) or sit within 10 bpm, W023 every song plays one kit with nearly the same instruments, W024 two songs' first 8
@@ -685,7 +696,9 @@ For many similar sounds or procedural music, write a Python script with `segan.a
 (seeded `random()`, `choice()`, `range()`, `weighted()`: the same on every machine),
 `Track.roll(name, key, low, high)`, `Track.drums(name, keys)`, `Pattern(length).note(track, step, pitch, length,
 key, velocity=None)` (written as a `velocity:` row) / `.hit(track, step, drum, mark)` / `.row(track, drum, "x...x...")` / `.lane(track)`,
-`song_yaml(name, tracks=..., patterns=..., sections=..., arrangement=..., key=..., tempo=..., loop=...)`,
+`song_yaml(name, tracks=..., patterns=..., sections=..., arrangement=..., key=..., tempo=..., loop=...)` (any other
+song field as a keyword with its YAML value: `meter=[3, 4]`, `category=`, `status=`, `stems={...}`, `lint={"disable":
+[...]}`, `variants={...}`, `flow={...}`, `humanize={...}`, `seed=`),
 `sfx_yaml(name, layers=[...], ...)` (both take `comments={"patterns.chorus": "text", ...}`: `#` lines above
 those keys). `dedupe(patterns, sections)` merges identical patterns (sections follow); `derive("a", a, b, tracks)`
 writes `b` as `{from: a, transpose, mute, shift}` when it is one (else None). Write the result to a file, then lint and preview it like any other.

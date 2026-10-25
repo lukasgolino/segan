@@ -50,12 +50,30 @@ def song_cache_parts(song: Song, project: Project) -> tuple[object, ...]:
             patterns, sorted(song.sections.items()), song.arrangement, song.loop, sorted(song.markers.items()),
             sorted(song.all_variants().items()), song.normalize, song.category, song_mix(song, project),
             project.config.target(song.category), project.config.lint.max_limiting_db, wants_stems(song, project), song.stems,
-            sorted(song.section_changes.items()), song.flow, song.seed, song.humanize)  # fmt: skip
+            sorted(song.section_changes.items()), song.flow, song.seed, song.humanize, song.fades)  # fmt: skip
 
 
 def wants_stems(song: Song, project: Project) -> bool:
     """Stems for every song when `export` has "stems", and for any song with a `stems:` block."""
     return "stems" in project.config.export or song.stems is not None
+
+
+def fade_curve(total: int, rate: int, fades: tuple[float, float], end_frame: int) -> Signal:
+    """Gain per frame: a smooth rise over the first `fades[0]` seconds and a fall to silence that ends with the
+    arrangement (`end_frame`), over its last `fades[1]` seconds."""
+    from segan.dsp import cos_turns
+
+    out = np.ones(total)
+    fade_in, fade_out = (round(f * rate) for f in fades)
+    if fade_in > 0:
+        n = min(fade_in, total)
+        out[:n] = 0.5 - 0.5 * cos_turns(np.arange(n) / fade_in / 2.0)
+    if fade_out > 0:
+        start = max(0, end_frame - fade_out)
+        n = end_frame - start
+        out[start:end_frame] *= 0.5 + 0.5 * cos_turns(np.arange(n) / fade_out / 2.0)
+        out[end_frame:] = 0.0
+    return out
 
 
 def loop_offset_steps(song: Song, timeline: Timeline, tail: float) -> int:
@@ -85,6 +103,9 @@ def render_variant(song: Song, project: Project, variant: Variant | None, stems:
     total = max([end_frame, *(event_end(e, ctx) for e in events)]) + round(room_tail(mix) * rate) + 1
     total = max(total, file_end or 0)  # a sparse loop can end sounding before the file does
     tracks = render_events(events, ctx, channels, total)
+    if song.fades != (0.0, 0.0):  # before the room, so the room's tail rings out of the fade naturally
+        envelope = fade_curve(total, rate, song.fades, end_frame)
+        tracks = {name: buffer * envelope[:, None] for name, buffer in tracks.items()}
     wet: dict[str, Signal] = {}
     if stems:  # the room and tone are linear: per-stem buses still add up to the mix
         for name, members in song.stem_groups().items():

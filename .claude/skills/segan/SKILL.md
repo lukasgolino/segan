@@ -28,7 +28,8 @@ You will never hear what you make. SEGAN gives you two substitutes, and you must
    `seam_click`, `onsets_s` (when each hit starts), `pitch_hz` (SFX start/end/min/max), `pitch_check` (songs:
    every note's detected pitch vs. the written one, in cents; only tracks that play one note at a time; low notes
    are also read as their 3rd/5th harmonic; `detune_cents` = an instrument whose notes all share one offset, e.g. a sample
-   recorded slightly sharp: its notes count as off only relative to that),
+   recorded slightly sharp: its notes count as off only relative to that; `notes_skipped` and `skipped_because` say
+   which notes couldn't be measured and why: very short notes, arpeggios, one-shots, chords),
    `notes_per_pattern` (songs: compare with what you meant to write; a dropped note shows here first),
    `centroid_hz` (brightness), `clipped_samples`, `normalisation_gain_db` (how much the build had to raise or
    lower it: large values are fine, the level is set by the target either way).
@@ -184,11 +185,11 @@ is often a tiger pitched down, stretched and layered with a sub growl). Synth re
    `segan sounds inspect freesound:<id> ...` compares them without hearing: length, loudness, peak, brightness
    (`centroid_hz`), pitch, onsets (one clean hit or a clatter of several?). Prefer clean, close, dry recordings:
    a room can be added, never removed.
-   **No key?** Say so in your report, and find a sound on the web yourself (a Freesound page, or another site
-   with a clear CC0 / CC BY licence), check the licence on its page, download it into the project (`sounds/`) and
-   use it as a local file with `licence:`, `source:` (the page URL) and `author:` (or `segan sounds add <file>
-   --licence ... --source ... --author ...`, so it's recorded in sounds.lock). Never use a sound whose licence
-   you couldn't check.
+   **No key?** Search freesound.org on the web, then `segan sounds add https://freesound.org/people/<user>/sounds/<id>/`
+   (or `freesound:<id>`): without a key SEGAN reads the licence, author and HQ preview from the public page and applies
+   the same CC0 / CC BY rule. From another site with a clear CC0 / CC BY licence: check the licence on its page,
+   download it into the project (`sounds/`) and `segan sounds add <file> --licence ... --source <page> --author ...`.
+   Never use a sound whose licence you couldn't check.
 2. **Keep it**: `segan sounds add freesound:<id>`: checks the licence, fetches the preview into the user cache
    (not the repo) and records it in `sounds.lock` (commit sounds.lock; builds fetch and check the file).
 3. **Write the layer**: `sample: freesound:<id>` (or a file path, or a list: one per variation), then shape it:

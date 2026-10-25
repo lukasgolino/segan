@@ -15,7 +15,9 @@ from dataclasses import dataclass, field
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 
-from segan.analysis import PitchTrack, frames_of, short_term_lufs
+from segan.analysis import PitchTrack, frames_of, momentary_lufs, short_term_lufs
+
+SHORT_CUE_SECONDS = 6.0  # under this the loudness curve is momentary (400 ms), not short-term (3 s)
 from segan.dsp import Signal
 
 WIDTH = 1200
@@ -362,7 +364,9 @@ def _loudness_panel(draw: ImageDraw.ImageDraw, c: Canvas, y: int, height: int, t
     spec = c.spec
     draw.rectangle([LEFT, y, LEFT + PLOT, y + height], fill=PANEL)
     _grid(draw, c, y, y + height)
-    curve = short_term_lufs(spec.audio, spec.rate)
+    short = len(spec.audio) < SHORT_CUE_SECONDS * spec.rate  # a 3 s window says little about a 2-6 s cue (#73)
+    curve = momentary_lufs(spec.audio, spec.rate) if short else short_term_lufs(spec.audio, spec.rate)
+    centre = 0.2 if short else 1.5
     lo, hi = -40.0, 0.0
 
     def yy(v: float) -> float:
@@ -375,12 +379,12 @@ def _loudness_panel(draw: ImageDraw.ImageDraw, c: Canvas, y: int, height: int, t
         draw.line([(LEFT, yy(target)), (LEFT + PLOT, yy(target))], fill=GOOD)
     points = []
     for i, v in enumerate(curve):
-        t = i * 0.1 + 1.5  # window centre
+        t = i * 0.1 + centre  # window centre
         if c.t0 <= t <= c.t1:
             points.append((c.x(t), yy(float(v))))
     if len(points) > 1:
         draw.line(points, fill=WARN, width=2)
-    draw.text((6, y + 2), "LUFS-S", fill=TEXT, font=font(11))
+    draw.text((6, y + 2), "LUFS-M" if short else "LUFS-S", fill=TEXT, font=font(11))
     return height + 4
 
 

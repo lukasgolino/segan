@@ -29,7 +29,7 @@ if TYPE_CHECKING:
 
 SONG_FIELDS = (*META_FIELDS, "kit", "instruments", "groups", "tempo", "meter", "steps_per_beat", "swing", "key", "tracks",
                "patterns", "sections", "arrangement", "loop", "variants", "variant_axes", "markers", "normalize", "category", "stems",
-               "flow", "sample_rate", "channels", "seed", "humanize")  # fmt: skip
+               "flow", "sample_rate", "channels", "seed", "humanize", "fade_in", "fade_out")  # fmt: skip
 DYNAMICS_FIELDS = ("velocity", "dynamics")  # per-pattern: velocity marks per step, dB ramps per track
 VELOCITY_MARKS = {"X": 1.5, "x": 1.0, "o": 0.35, ".": None, "-": None, **{str(d): round(0.2 * d, 2) for d in range(1, 10)}}
 STEM_FIELDS = ("groups", "mixes", "main_mix")
@@ -177,6 +177,7 @@ class Song:
     channels: str | None = None
     seed: int | None = None  # the song's own seed (humanize); default: from its name
     humanize: tuple[float, float] = (0.0, 0.0)  # timing (ms, +/-), velocity (fraction, +/-)
+    fades: tuple[float, float] = (0.0, 0.0)  # fade in over the first, fade out over the last seconds (non-looping songs)
 
     @property
     def name(self) -> str:
@@ -916,6 +917,16 @@ def parse_song(data: dict[str, Any], path: Path | None, project: Project, report
         _bad(report, "E001", "humanize must be { timing: ms 0-40 (each note early/late by up to that), velocity: 0-0.5 (louder/softer by up to that "
              "fraction) }", line_of(data, "humanize", line), "humanize")  # fmt: skip
         humanize = {}
+    fades = [0.0, 0.0]
+    for i, name in enumerate(("fade_in", "fade_out")):
+        if name in data:
+            value = data[name]
+            if not (is_number(value) and 0 <= value <= 120):
+                _bad(report, "E008", f"{name} must be 0-120 seconds", line_of(data, name, line), name)
+            elif data.get("loop") not in (None, False) or "flow" in data:
+                _bad(report, "E008", f"{name} is for songs that play once (no loop or flow): a looping song's seam can't fade", line_of(data, name, line), name)
+            else:
+                fades[i] = float(value)
     if kit is None or report.failed:
         return None, report.findings
 
@@ -1005,7 +1016,7 @@ def parse_song(data: dict[str, Any], path: Path | None, project: Project, report
         return None, report.findings
     song = Song(meta, kit, float(tempo), (meter[0], meter[1]), steps_per_beat, float(swing), key, tracks, patterns, sections, arrangement, loop,
                 markers, variants, axes, normalize, category, stems, changes, flow, section_sources, sample_rate, channels, seed,
-                (float(humanize.get("timing", 0.0)), float(humanize.get("velocity", 0.0))))  # fmt: skip
+                (float(humanize.get("timing", 0.0)), float(humanize.get("velocity", 0.0))), (fades[0], fades[1]))  # fmt: skip
     for name in flow.sections if flow is not None else []:
         steps = sum(patterns[p].length for p in sections[name])
         if steps % song.steps_per_bar:
