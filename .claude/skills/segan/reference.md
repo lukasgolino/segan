@@ -329,6 +329,12 @@ Grid rules:
   track's notes by a ramp in dB (steps from 1, linear between points, held outside them): crescendos, swells,
   fades. Velocity picks sample layers (accent = MIDI 120, ghost 28) and scales synth notes. A derived pattern keeps
   its source's velocities unless it sets its own.
+- **Release** (roll tracks): `release: { pad: 3.0 }` in a pattern makes every note of that track in that pattern
+  release over that many seconds (0-30) instead of its instrument's release; `release: 3.0` = every roll track. So
+  a sting's last chord, in a pattern of its own, rings longer than the kit allows. On a track (`pad: { roll: [C3,
+  C5], release: 3.0 }`) it applies to all of the track's notes; a pattern's overrides the track's. A derived
+  pattern keeps its source's unless it sets its own. The longer ring counts for the loop offset (W019), flow clips
+  and the render cache; an instrument's `max_ring` shorter than the override is lifted to it. Drums keep their decay.
 
 ```yaml
   swell:

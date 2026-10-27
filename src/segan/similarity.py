@@ -26,8 +26,8 @@ from importlib.resources import files
 from pathlib import Path
 from typing import Any
 
-from segan.patch import Instrument
-from segan.song import Song
+from segan.patch import Instrument, with_release
+from segan.song import Song, note_release
 
 BARS = 8
 SLOTS = 16  # onset grid per bar
@@ -107,7 +107,10 @@ def fingerprint(song: Song, project_root: str = "") -> Fingerprint:
     used: dict[str, Instrument] = {}
     for p in placed:
         inst = song.kit.instruments.get(p.key)
-        if inst is not None:
+        release = note_release(song, p.note)
+        if inst is not None and release is not None and not inst.is_drum:
+            used[f"{p.key}@{release:g}"] = with_release(inst, release)  # a release override plays another timbre
+        elif inst is not None:
             used[p.key] = inst
         drums = song.tracks[p.note.track].drums
         bar = p.step // per_bar
