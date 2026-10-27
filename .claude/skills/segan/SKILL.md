@@ -288,7 +288,11 @@ resources into `output_dir`. Report what the game needs, from `manifest.json`:
 - the file (`res://...` in Godot), length, `loop` `{start, end}` in samples (end exclusive);
 - songs: `bpm`, `sections` and `markers` in samples, seconds and bars (for syncing game events), `variants`,
   `stems` (+ `godot_stems`, an AudioStreamSynchronized: set each stream's volume to bring layers in and out);
-- SFX: `variations` (+ `godot_randomizer`: play that one stream, it picks a variation each time), `phases`.
+- SFX: `variations` (+ `godot_randomizer`: play that one stream, it picks a variation each time), `phases`,
+  `playback` hints; with `[bus]` in segan.toml, each asset's `bus` and the top-level `buses` (category volumes).
+Frequent sounds (gunfire, footsteps, bursts of pickups) get `playback: { max_instances, min_gap_s,
+repeat_attenuation_db }` and quiet categories a `[bus.<category>] volume_db`, so the game doesn't invent its own
+dB table; `segan_sfx.gd` (autoload `SeganSfx`, `SeganSfx.play("coin")`) applies both (reference.md, Godot).
 In Godot, loops already loop (SEGAN writes the loop points into each WAV's `.import`); play SFX with an
 AudioStreamPlayer/2D/3D on an "SFX" bus and music on a "Music" bus. Flow songs and soundtracks are played by
 the director `segan_music.gd` (written next to the manifest): autoload it as `SeganMusic`, then

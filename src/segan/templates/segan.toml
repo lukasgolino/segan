@@ -61,6 +61,13 @@ foley = -22.0             # footsteps, cloth, small handling sounds: frequent, s
 [room]
 # ui = 0
 
+# Mix buses per category (optional): the manifest lists each asset's `bus` and the category's default volume, and
+# with export "godot" the build writes segan_buses.tres (an AudioBusLayout to opt into) and segan_sfx.gd (an SFX
+# player that honours buses and SFX `playback` hints). Unlisted categories play on Master.
+# [bus.sfx]
+# bus = "SFX"
+# volume_db = 0.0
+
 # Only with export "godot".
 [godot]
 compress = "qoa"          # how Godot compresses the WAVs: qoa, ima or none

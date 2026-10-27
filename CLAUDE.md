@@ -60,8 +60,8 @@ generated text files.
   - `midi.py` hand-written SMF reader + `segan import midi` (quantize, snap to key, GM -> kit, change report);
   - `mcp_server.py` `segan mcp`: MCP tools/resources/prompts over the CLI handlers (stdout captured, cwd pinned, one lock);
   - `build.py` `segan build` (WAVs, manifest.json, stale cleanup); `exporters/godot.py` `.import` edits, Randomizer /
-    Synchronized `.tres`, headless verify (`templates/godot_verify.gd`); `templates/segan_music.gd` the Godot music
-    director (flows + soundtracks), copied next to the manifest.
+    Synchronized `.tres`, bus layout, headless verify (`templates/godot_verify.gd`); `templates/segan_music.gd` the Godot music
+    director (flows + soundtracks) and `templates/segan_sfx.gd` the SFX player (buses + playback hints), copied next to the manifest.
 - `examples/godot/` — Godot 4.7 project receiving the demo's build; `scenes/audio_test.tscn` plays everything
   (flow songs and soundtracks through the `SeganMusic` autoload = the generated `segan_music.gd`).
   Only text outputs (manifest, .tres, .import) are committed; run `segan build` in examples/demo first.

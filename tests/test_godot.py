@@ -289,3 +289,65 @@ def test_director_cross_fades_within_a_family(flow_game: Path, tmp_path: Path) -
     finished = [float(line.split()[-1]) for line in output.splitlines() if line.startswith("EVENT finished")]
     assert len(starts) >= 2 and starts[1] < 4.5, output  # the next song comes in on the bar after 2 s, not after the 30 s gap
     assert finished and finished[0] > starts[1], output  # the first one was still fading when the second started
+
+
+SFX_HELPER = """\
+extends SceneTree
+func _init():
+	var sfx = load("res://audio/segan_sfx.gd").new()
+	root.add_child(sfx)
+	await process_frame
+	var coin_bus = sfx.bus_for("coin")  # loads the manifest (and adds the missing bus) on first use
+	print("BUS ", AudioServer.get_bus_index("SFX") != -1, " ", coin_bus, " ", sfx.bus_for("hit"))
+	var a = sfx.play("coin")
+	var dropped = sfx.play("coin")  # within min_gap_s
+	print("FIRST ", a != null, " ", a.bus, " ", a.volume_db, " DROPPED ", dropped == null)
+	var t0 := Time.get_ticks_msec()
+	while Time.get_ticks_msec() - t0 < 120:
+		await process_frame
+	var b = sfx.play("coin")
+	print("SECOND ", b.volume_db, " PLAYING ", sfx.playing("coin").size())
+	while Time.get_ticks_msec() - t0 < 240:
+		await process_frame
+	var c = sfx.play_2d("coin", Vector2(10, 0))
+	print("THIRD ", c.volume_db, " PLAYING ", sfx.playing("coin").size(), " ", is_instance_valid(a) and not a.is_queued_for_deletion())
+	var h = sfx.play_3d("hit", Vector3.ZERO)
+	print("HIT ", h.bus, " ", h.volume_db)
+	sfx.stop("coin")
+	print("UNKNOWN ", sfx.entry("nope").is_empty())
+	var layout: AudioBusLayout = load(sfx.manifest["godot_bus_layout"])
+	AudioServer.set_bus_layout(layout)
+	print("LAYOUT ", AudioServer.bus_count, " ", AudioServer.get_bus_name(1), " ", AudioServer.get_bus_send(1))
+	print("HELPER_OK")
+	quit()
+"""
+
+
+def test_sfx_helper_honours_buses_and_hints(tmp_path: Path) -> None:
+    from conftest import CONFIG, make_project, write
+
+    game = tmp_path / "game"
+    game.mkdir()
+    (game / "project.godot").write_text('config_version=5\n\n[application]\n\nconfig/name="sfx"\n')
+    config = CONFIG.replace('mode = "strict"', 'mode = "strict"\noutput_dir = "../game/audio"\nexport = ["wav", "godot"]')
+    (tmp_path / "src").mkdir()
+    project = make_project(tmp_path / "src", config + '\n[godot]\ncompress = "none"\n\n[bus.pickup]\nbus = "SFX"\nvolume_db = -3\n')
+    long_coin = "name: coin\npreset: coin\nduration: 1.0\nvariations: { count: 2 }\n"
+    write(project, "sfx", "coin", long_coin + "playback: { max_instances: 2, min_gap_s: 0.1, repeat_attenuation_db: 2 }\n")
+    write(project, "sfx", "hit", "name: hit\npreset: hit\n")
+    result = build(project)
+    assert not result.errors, result.errors
+    assert GODOT is not None
+    check = verify_with_godot(GODOT, game, "res://audio/manifest.json")
+    assert check.ok, check.output
+    script = tmp_path / "sfx_helper.gd"
+    script.write_text(SFX_HELPER)
+    output = run_script(game, script)
+    assert "HELPER_OK" in output and "SCRIPT ERROR" not in output, output
+    lines = {line.split()[0]: line.split()[1:] for line in output.splitlines() if line.split() and line.split()[0].isupper()}
+    assert lines["BUS"] == ["true", "SFX", "Master"]  # the missing bus was added; category sfx has no [bus] entry
+    assert lines["FIRST"] == ["true", "SFX", "-3.0", "DROPPED", "true"]
+    assert lines["SECOND"] == ["-5.0", "PLAYING", "2"]  # one copy sounding: 2 dB quieter
+    assert lines["THIRD"] == ["-5.0", "PLAYING", "2", "false"]  # max_instances 2: the oldest stopped
+    assert lines["HIT"] == ["Master", "0.0"] and lines["UNKNOWN"] == ["true"]
+    assert lines["LAYOUT"] == ["2", "SFX", "Master"]

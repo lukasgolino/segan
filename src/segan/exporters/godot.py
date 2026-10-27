@@ -1,5 +1,6 @@
 """Godot 4 exporter: `.import` edits (loop points, compression) for every WAV, an AudioStreamRandomizer `.tres`
-per SFX with variations and an AudioStreamSynchronized `.tres` per song with stems; plus headless verification.
+per SFX with variations, an AudioStreamSynchronized `.tres` per song with stems and an AudioBusLayout `.tres` for the
+project's `[bus]` buses; plus headless verification.
 
 Adapted from PAGAN's exporters/godot.py. Formats were checked against what Godot 4.7.2 writes itself
 (ResourceSaver output and its `.import` files): the `.tres` text matches Godot's (format=3, no uid/load_steps),
@@ -131,6 +132,16 @@ def synchronized_tres(streams: list[str]) -> str:
     lines += ["", "[resource]", f"stream_count = {len(streams)}"]
     for n, i in enumerate(ids):
         lines += [f'stream_{n}/stream = ExtResource("{i}")', f"stream_{n}/volume = 0.0"]
+    return "\n".join(lines) + "\n"
+
+
+def bus_layout_tres(buses: list[str]) -> str:
+    """AudioBusLayout with Master plus `buses` (each at 0 dB, sending to Master), as Godot 4.7.2 saves one (the
+    default Master bus isn't written). A separate file the game opts into: never default_bus_layout.tres."""
+    lines = ['[gd_resource type="AudioBusLayout" format=3]', "", "[resource]"]
+    for n, name in enumerate((b for b in buses if b != "Master"), start=1):
+        lines += [f"bus/{n}/name = &{_string(name)}", f"bus/{n}/solo = false", f"bus/{n}/mute = false", f"bus/{n}/bypass_fx = false",
+                  f"bus/{n}/volume_db = 0.0", f'bus/{n}/send = &"Master"']  # fmt: skip
     return "\n".join(lines) + "\n"
 
 

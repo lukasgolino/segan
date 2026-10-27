@@ -28,6 +28,11 @@ check before upgrading. Patch bumps never change existing behaviour. Every relea
 - Songs take a release override: `release: { pad: 3.0 }` in a pattern (every note of that track there releases over
   3 s; a number = every roll track) or `release: 3.0` on a roll track; the pattern's wins. Loop offsets, flow
   clips, the render cache and fingerprints follow it; songs without it render as before (#10).
+- Mix buses and playback hints: `[bus.<category>]` (`bus`, `volume_db`) in segan.toml goes into the manifest
+  (`buses`, each asset's `bus`) and, with export "godot", into `segan_buses.tres`, an AudioBusLayout the game opts
+  into (`default_bus_layout.tres` is never written); an SFX's `playback: { max_instances, min_gap_s,
+  repeat_attenuation_db }` is copied into its manifest entry; `segan_sfx.gd`, an optional Godot SFX player that
+  honours both, is written next to the manifest when either is used. Projects without them build as before (#17).
 
 ### Changed
 
