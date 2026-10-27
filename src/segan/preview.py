@@ -72,8 +72,12 @@ def analyze(output: Output, kind: str) -> dict[str, Any]:
     if kind == "sfx":
         result["leading_silence_ms"] = round(leading_silence(audio, rate) * 1000.0, 2)
         result["sounding_at_end"] = output.info.get("sounding_at_end", [])
-        track = yin(audio[: min(len(audio), rate * 4)], rate, require_fundamental=True)
-        voiced = track.hz[track.hz > 0]
+        head = audio[: min(len(audio), rate * 4)]
+        # YIN's 40 ms frames (down to 50 Hz) blur a fast dive into "unvoiced"; 10 ms frames (down to 200 Hz) follow
+        # it. Keep whichever track hears more of the sound (a low steady tone keeps the long frames).
+        voiced = max((track.hz[track.hz > 0] for track in (yin(head, rate, require_fundamental=True),
+                                                             yin(head, rate, fmin=200.0, require_fundamental=True))),
+                     key=len)  # fmt: skip
         if len(voiced):
             result["pitch_hz"] = {"start": round(float(voiced[0]), 1), "end": round(float(voiced[-1]), 1),
                                   "min": round(float(voiced.min()), 1), "max": round(float(voiced.max()), 1)}  # fmt: skip

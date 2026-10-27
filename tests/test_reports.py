@@ -1,4 +1,4 @@
-"""Fixes for agent reports #61-#75 that don't belong to one module's tests."""
+"""Fixes for agent reports (#61-#75, #86-#90) that don't belong to one module's tests."""
 
 from __future__ import annotations
 
@@ -309,3 +309,46 @@ def test_keyless_add_from_a_page(project: Project, monkeypatch: pytest.MonkeyPat
     pages["https://freesound.org/s/123/"] = PAGE.replace("publicdomain/zero/1.0", "licenses/by-nc/4.0").encode()
     with pytest.raises(sounds.SoundsError, match="not allowed"):
         sounds.add("freesound:123", project.root)
+
+
+DIVE = ("name: dive\nduration: 0.12\nlayers:\n"
+        "  - { osc: pulse, pitch: [[0, E6], [0.1, E5]], slide: true, env: [0.001, 0.03, 0.7, 0.02], gain: -6 }\n"
+        "  - { osc: triangle, pitch: [[0, E5], [0.1, E4]], slide: true, env: [0.001, 0.03, 0.7, 0.02], gain: -6 }\n")  # fmt: skip
+
+
+def test_pitch_hz_follows_a_fast_dive(project: Project, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
+    """#89: a 0.1 s octave dive used to read as one pitch (only its last frames were voiced in 40 ms YIN frames)."""
+    from conftest import run_json
+
+    write(project, "sfx", "dive", DIVE)
+    monkeypatch.chdir(project.root)
+    code, data = run_json(["preview", "dive", "--summary"], capsys)
+    assert code == 0, data
+    pitch = data["outputs"][0]["outputs"][0]["analysis"]["pitch_hz"]
+    assert pitch["start"] > 600 and pitch["end"] < 360 and pitch["max"] / pitch["min"] > 1.8
+    row = data["summary"][0]
+    assert row["asset"] == "dive" and row["output"] == "main" and row["dry_s"] == 0.12  # #90: one flat row per output
+    assert set(row) == {"asset", "output", "seconds", "dry_s", "lufs", "target_lufs", "peak_dbfs", "true_peak_dbtp"}
+
+
+def test_preview_summary_table(project: Project, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
+    """#90: `segan preview --summary` prints a flat table instead of the per-output lines."""
+    from segan.cli import main
+
+    write(project, "sfx", "dive", DIVE)
+    monkeypatch.chdir(project.root)
+    assert main(["preview", "dive", "--summary"]) == 0
+    lines = capsys.readouterr().out.splitlines()
+    assert lines[0].split()[:5] == ["asset", "output", "seconds", "dry", "LUFS"]
+    assert lines[1].split()[:4] == ["dive", "main", lines[1].split()[2], "0.120"] and "listen:" not in "\n".join(lines)
+
+
+@pytest.mark.parametrize(("style", "source"), [("synth", "synth"), ("chiptune", "synth"), (None, "synth"), ("orchestral", "auto")])
+def test_init_synthesised_styles_never_record(style: str | None, source: str, tmp_path: Any, monkeypatch: pytest.MonkeyPatch) -> None:
+    """#86: a synth or chiptune project starts with `[sfx] source = "synth"`."""
+    from segan.cli import main
+    from segan.project import load_project
+
+    monkeypatch.chdir(tmp_path)
+    assert main(["--quiet", "init", "p", *(["--style", style] if style else [])]) == 0
+    assert load_project(tmp_path / "p").config.sfx.source == source
