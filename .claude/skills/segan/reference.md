@@ -209,6 +209,14 @@ More SFX fields:
   much longer or shorter). Each variation is its own WAV, all normalised to the target
   (a +dB variation aims above the target: near the limiter cap it gets W001). `include_main: false` builds only
   `<name>.1..N.wav` (no `<name>.wav`) when the game plays the randomizer.
+- `takes`: structurally different takes of the same sound under one asset (more variety than `variations`' jitter):
+  `takes: [{ duration: 0.4, layers: [{ id: crack, gain: -3 }, { id: thud, remove: true }, { id: snap, osc: noise, ... }] }, ...]`.
+  Take 1 is the SFX as written; each listed take (2, 3, ...) starts from the SFX's layers and changes them by `id`
+  (fields you give change, the rest stays), adds layers with a new id (or none), and drops one with
+  `{ id: <id>, remove: true }`. `duration` defaults to the SFX's; `loop`/`crossfade` are the SFX's. Every take gets the
+  SFX's `variations` on top (3 takes x 4 variations = 12 files); a take's own `variations:` merges over the SFX's
+  (`variations: null`: none for that take; `include_main` applies per take). Files: `<name>.t<k>.wav` and
+  `<name>.t<k>.<n>.wav`; one manifest entry and one Godot randomizer over every take. Takes don't apply to phases.
 - `room: 0-1`: this SFX's room send (x `[mix] room`; 0 = dry, no tail). Default: its category's `[room]` entry, else 1.
 - `playback: { max_instances, min_gap_s, repeat_attenuation_db }`: hints for the game, copied into the manifest
   as given (the render ignores them): at most `max_instances` (1-64) copies at once (the oldest stops), plays
@@ -575,8 +583,8 @@ asset actually plays, so editing one instrument re-renders only what uses it.
 | `segan sounds vendor [--all]` | copy the Freesound sounds in use into `<project>/sounds/` (offline builds; off by default) |
 | `segan kit show [kits]` | every instrument playing a test phrase: `previews/kits/<kit>.listen.png` + WAVs; `--json` gives each instrument's `range` |
 | `segan lint [paths] [--warnings-as-errors] [--no-render] [-j N]` | errors + warnings (audio warnings render the asset; cached); exits 1 on errors, 0 when there are only warnings, 1 on warnings too with `--warnings-as-errors` (CI) |
-| `segan preview <asset...> [--output main\|variant:X\|variation:N\|phase:X\|stem:T\|mix:M\|flow:CLIP\|walk[:SEED] ...] [--from 5 --to 8] [--summary]` | WAV + listen sheet (+ seam view for loops) per output in `previews/<asset>/`; `--summary` prints one flat row per output (asset, output, seconds, dry, LUFS, target, peak, true peak; `--json`: a `summary` list); analysis in `--json` (SFX: `layers` = each layer dry on its own, `peak_db`/`lufs`/`crest_db`, recorded layers' `ends_s` (where they end
-uncut, after trim/stretch/varispeed), plus the dry mix); flow songs also get a walk; `--output reel` (an SFX): the main sound and every variation back to back, 0.4 s apart, to judge the variety; `--format ogg\|mp3` also writes each preview compressed, to share (needs `segan[ogg]`) |
+| `segan preview <asset...> [--output main\|variant:X\|variation:N\|take:K\|take:K:variation:N\|phase:X\|stem:T\|mix:M\|flow:CLIP\|walk[:SEED] ...] [--from 5 --to 8] [--summary]` | WAV + listen sheet (+ seam view for loops) per output in `previews/<asset>/`; `--summary` prints one flat row per output (asset, output, seconds, dry, LUFS, target, peak, true peak; `--json`: a `summary` list); analysis in `--json` (SFX: `layers` = each layer dry on its own, `peak_db`/`lufs`/`crest_db`, recorded layers' `ends_s` (where they end
+uncut, after trim/stretch/varispeed), plus the dry mix); flow songs also get a walk; `--output reel` (an SFX): the main sound, every variation and every take back to back, 0.4 s apart, to judge the variety; `--format ogg\|mp3` also writes each preview compressed, to share (needs `segan[ogg]`) |
 | `segan render <asset...> [--output main\|stem:T\|mix:M\|variant:X ...]` | WAVs only, from the render cache (no analysis or sheets: fast for long stemmed songs); `--json` lists each output's WAV, length and loop |
 | `segan gallery` | every asset's waveform + spectrum and a loudness chart by category |
 | `segan bake sfx <name> [--in-place]` | expand a preset/template into every field |
@@ -647,6 +655,8 @@ Turn warnings off for one asset with `lint: { disable: [...] }`, for every asset
 - with `[bus]`: `bus` on every asset whose category is listed;
 - SFX: `playback` (the SFX's hints, when it has them); `lufs`/`target_lufs`/`limiting_db` on the main sound and on each variation; `dry_seconds` on every one-shot file entry (the sound without its room tail: how long a voice pool should
   count it busy; `seconds` includes the tail), `variations` (list, + `pitch_offset_semitones`), `godot_randomizer`, `phases` (name -> file entry);
+  with `takes:`, the entry itself is take 1 and `takes` lists the others: `{ take: k, file..., lufs..., variations: [...] }`
+  (no `file` when that take's `include_main` is false);
 - songs: `bpm`, `meter`, `steps_per_beat`, `key`, `beat_seconds`, `beat_count`, `bars`, `sections` (name ->
   start/end in samples, seconds and bars, first occurrence), `arrangement` (every section in order), `markers`
   (name -> sample, seconds, bar), `loop` (`start`/`end` in the file + `offset`: the loop points sit that many
@@ -666,7 +676,7 @@ export "godot": `segan_buses.tres`), `soundtracks` (name -> `start`, `states` (s
 `gap`, `fade_out`, `crossfade`), `families`, `transitions` ("from>to" -> `at`, `fade`, `fade_in`, `stinger`,
 `start`), `default_transition`).
 Files: `music/<song>.wav`, `music/<song>.<variant>.wav`, `stems/<song>/<track>.wav`, `flow/<song>[.<variant>]/<clip>.wav`,
-`sfx/<name>.wav`, `sfx/<name>.<n>.wav`, `sfx/<name>.<phase>.wav`. WAVs are 16-bit PCM with a `smpl` loop chunk and `cue` markers.
+`sfx/<name>.wav`, `sfx/<name>.<n>.wav`, `sfx/<name>.t<k>.wav`, `sfx/<name>.t<k>.<n>.wav`, `sfx/<name>.<phase>.wav`. WAVs are 16-bit PCM with a `smpl` loop chunk and `cue` markers.
 With `"ogg"` in `export`, every music file (songs, variants, stems, flow clips) is `.ogg` instead (same samples
 count; a looping file ends exactly at its loop end, the loop restarts at `loop.start`); SFX stay `.wav`.
 The build only rewrites files that changed and deletes outputs (and their `.import`) it no longer produces.
@@ -675,7 +685,8 @@ The build only rewrites files that changed and deletes outputs (and their `.impo
 
 With `export = ["wav", "godot"]` and `output_dir` inside a Godot 4 project, SEGAN writes each WAV's loop points
 and compression into its `.import` (Godot keeps the rest; an `.ogg` gets `loop` and `loop_offset`), `sfx/<name>.tres` (AudioStreamRandomizer over the
-variations: play it and Godot picks one, never the same twice in a row) and `stems/<song>.tres`
+variations, and with `takes:` over every take's variations, or the take itself when it has none: play it and Godot
+picks one, never the same twice in a row) and `stems/<song>.tres`
 (AudioStreamSynchronized: all stems in sync; change `stream_N/volume` to layer them).
 A new file gets a minimal `.import` (importer, type, SEGAN's params); Godot adds `uid`, `path` and `dest_files` the
 first time it imports it, so the first commit after a build is followed by one more `.import` diff once the editor

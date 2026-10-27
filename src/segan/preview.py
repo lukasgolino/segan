@@ -151,7 +151,7 @@ def layer_end(layer: Layer, duration: float) -> float:
 
 def sfx_sheet(sfx: Sfx, output: Output, analysis: dict[str, Any], project: Project, threshold_click: float) -> SheetSpec:
     phase = output.id.split(":", 1)[1] if output.id.startswith("phase:") else None
-    layers = sfx.phases[phase].layers if phase else sfx.layers
+    layers = sfx.phases[phase].layers if phase else sfx.take(int(output.id.split(":")[1])).layers if output.id.startswith("take:") else sfx.layers
     duration = float(output.info.get("duration", sfx.duration))
     rows: list[str] = []
     notes_: list[RollNote] = []
@@ -285,9 +285,10 @@ def closest_song(song: Any, project: Project) -> dict[str, Any] | None:
 
 
 def reel_output(sfx: Sfx, render: Render) -> Output:
-    """Every playable take of an SFX back to back (the main sound, then each variation), REEL_GAP apart, so a
-    listener can judge the variety in one go. Each take keeps its own level, as the game plays it."""
-    takes = [o for o in render.outputs if o.id == "" or o.id.startswith("variation:")] or list(render.outputs)
+    """Every playable take of an SFX back to back (the main sound, then each variation, then each further take and
+    its variations), REEL_GAP apart, so a listener can judge the variety in one go. Each take keeps its own level, as
+    the game plays it."""
+    takes = [o for o in render.outputs if o.id == "" or o.id.startswith(("variation:", "take:"))] or list(render.outputs)
     first = takes[0]
     gap = np.zeros((round(REEL_GAP * first.rate), first.channels), dtype=np.int16)
     pcm = np.concatenate([part for o in takes for part in (o.pcm, gap)][:-1])

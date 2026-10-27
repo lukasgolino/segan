@@ -1,6 +1,7 @@
 """SFX rendering: layers -> dry mono sound -> the shared bus -> loudness (by category) -> PCM.
 
-Outputs: the main sound, one per variation (`<name>.<n>`), one per phase (`<name>.<phase>`). Loops
+Outputs: the main sound, one per variation (`<name>.<n>`), each further take and its variations (`<name>.t<k>`,
+`<name>.t<k>.<n>`), one per phase (`<name>.<phase>`). Loops
 (`loop: true`, looping phases) blend their end into their start (`crossfade`) and get the room wrapped
 around, so they repeat without a seam.
 """
@@ -9,7 +10,7 @@ from __future__ import annotations
 
 import math
 from collections.abc import Callable
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from typing import Any
 
 import numpy as np
@@ -21,7 +22,7 @@ from segan.mix import bus, finish, room_tail, trim_tail
 from segan.patch import Env, Filter, Instrument
 from segan.project import Project
 from segan.render import Output, Render, level_dict
-from segan.sfx import Layer, Sfx, Variations
+from segan.sfx import Layer, Sfx, Variations, take_name
 from segan.synth import Context, note_length, render_note
 from segan.wavio import to_pcm16
 
@@ -30,7 +31,8 @@ LOG2_10_OVER_20 = math.log2(10.0) / 20.0
 
 def sfx_cache_parts(sfx: Sfx, project: Project) -> tuple[object, ...]:
     return ("sfx", sfx.name, sfx.category, sfx.duration, sfx.layers, sfx.loop, sfx.crossfade, sfx.variations,
-            sorted(sfx.phases.items()), sfx.normalize, project.config.mix_for(sfx.category, sfx.room), project.config.target(sfx.category))  # fmt: skip
+            sorted(sfx.phases.items()), sfx.normalize, project.config.mix_for(sfx.category, sfx.room), project.config.target(sfx.category),
+            *((sfx.takes,) if sfx.takes else ()))  # fmt: skip
 
 
 def _keyframe_curve(frames: tuple[tuple[float, float], ...], slide: bool, offset: float = 0.0):  # type: ignore[no-untyped-def]
@@ -203,8 +205,8 @@ def render_sfx(sfx: Sfx, project: Project) -> Render:
     outputs: list[Output] = []
 
     def emit(output_id: str, stem: str, layers: tuple[Layer, ...], duration: float, loop: bool, crossfade: float,
-             variation: int = 0, pitch: float = 0.0, timbre: float = 0.0, gain: float = 0.0) -> None:  # fmt: skip
-        dry, sounding = dry_mix(layers, ctx, duration, sfx.name, variation, pitch, timbre, loop, crossfade)
+             variation: int = 0, pitch: float = 0.0, timbre: float = 0.0, gain: float = 0.0, seed_name: str | None = None) -> None:  # fmt: skip
+        dry, sounding = dry_mix(layers, ctx, duration, seed_name or sfx.name, variation, pitch, timbre, loop, crossfade)
         final, level = _finish_output(dry, sfx, project, loop, gain)
         pcm = to_pcm16(frames_of(final))
         if loop and len(pcm):
@@ -213,6 +215,8 @@ def render_sfx(sfx: Sfx, project: Project) -> Render:
             pcm = np.concatenate([pcm[-1:], pcm])
         info = {"sounding_at_end": sounding, "duration": duration, "variation": variation, "pitch_offset": pitch,
                 "loop": loop, "dry_frames": len(dry), "room_tail": room_tail(project.config.mix_for(sfx.category, sfx.room))}  # fmt: skip
+        if seed_name is not None:
+            info["take"] = int(output_id.split(":")[1])
         outputs.append(Output(output_id, stem, pcm, ctx.rate, (1, len(pcm)) if loop else None, [], level, info))
 
     if sfx.layers:
@@ -222,6 +226,14 @@ def render_sfx(sfx: Sfx, project: Project) -> Render:
                 layers = variation_layers(sfx.name, sfx.layers, sfx.variations, i)
                 duration = round(sfx.duration * variation_stretch(sfx.name, sfx.variations, i), 6)
                 emit(f"variation:{i}", f"{sfx.name}.{i}", layers, duration, sfx.loop, sfx.crossfade, i, pitch, timbre, gain)
+        for take in sfx.takes:  # take 1 is the main sound and its variations above
+            name, prefix = take_name(sfx.name, take.number), f"take:{take.number}"
+            emit(prefix, name, take.layers, take.duration, sfx.loop, sfx.crossfade, seed_name=name)
+            if take.variations is not None:
+                for i, (pitch, timbre, gain) in enumerate(variation_params(name, take.variations), start=1):
+                    layers = variation_layers(name, take.layers, take.variations, i)
+                    duration = round(take.duration * variation_stretch(name, take.variations, i), 6)
+                    emit(f"{prefix}:variation:{i}", f"{name}.{i}", layers, duration, sfx.loop, sfx.crossfade, i, pitch, timbre, gain, name)
     for phase in sfx.phases.values():
         emit(f"phase:{phase.name}", f"{sfx.name}.{phase.name}", phase.layers, phase.duration, phase.loop, phase.crossfade)
     return Render(sfx.name, "sfx", outputs)
@@ -245,16 +257,9 @@ def layer_levels(sfx: Sfx, project: Project, output_id: str) -> list[dict[str, o
     recorded layers also say where they end uncut (`ends_s`).
     Which layer makes a sound peaky shows as the highest peak for its loudness (W001)."""
     ctx = context_for(project.config.mix)
-    variation, pitch, timbre = 0, 0.0, 0.0
-    layers, duration, loop, crossfade = sfx.layers, sfx.duration, sfx.loop, sfx.crossfade
-    if output_id.startswith("phase:"):
-        phase = sfx.phases[output_id.split(":", 1)[1]]
-        layers, duration, loop, crossfade = phase.layers, phase.duration, phase.loop, phase.crossfade
-    elif output_id.startswith("variation:") and sfx.variations is not None:
-        variation = int(output_id.split(":", 1)[1])
-        pitch, timbre, _ = variation_params(sfx.name, sfx.variations)[variation - 1]
-        layers = variation_layers(sfx.name, layers, sfx.variations, variation)
-        duration = round(duration * variation_stretch(sfx.name, sfx.variations, variation), 6)
+    play = output_layers(sfx, output_id)
+    layers, duration, loop, crossfade, variation, pitch, timbre, name = (play.layers, play.duration, play.loop, play.crossfade, play.variation,
+                                                                         play.pitch, play.timbre, play.seed_name)  # fmt: skip
     available = duration + (crossfade if loop else 0.0)
     total = round(available * ctx.rate)
 
@@ -268,7 +273,7 @@ def layer_levels(sfx: Sfx, project: Project, output_id: str) -> list[dict[str, o
     out: list[dict[str, object]] = []
     dry = np.zeros(total)
     for layer in layers:
-        signal, _ = render_layer(layer, ctx, available, seed_of(sfx.name, layer.index, variation), pitch, timbre)
+        signal, _ = render_layer(layer, ctx, available, seed_of(name, layer.index, variation), pitch, timbre)
         start = round(layer.start * ctx.rate)
         placed = np.zeros(total)
         piece = signal[: max(0, total - start)]
@@ -276,10 +281,45 @@ def layer_levels(sfx: Sfx, project: Project, output_id: str) -> list[dict[str, o
         dry += placed
         entry: dict[str, object] = {"layer": layer.id or f"layers.{layer.index}", "start_s": layer.start, **levels(placed)}
         if layer.choices:  # a recording: how long it runs after trim, stretch and varispeed
-            entry["ends_s"] = layer_end(layer, ctx, seed_of(sfx.name, layer.index, variation), pitch, timbre)
+            entry["ends_s"] = layer_end(layer, ctx, seed_of(name, layer.index, variation), pitch, timbre)
         out.append(entry)
     out.append({"layer": "(dry mix)", "start_s": 0.0, **(levels(dry) if total else {"peak_db": SILENCE_DB, "lufs": SILENCE_DB, "crest_db": 0.0})})
     return out
+
+
+@dataclass(frozen=True)
+class Played:
+    """What one SFX output plays: its layers (after the variation's changes), length, loop and seeds."""
+
+    layers: tuple[Layer, ...]
+    duration: float
+    loop: bool
+    crossfade: float
+    seed_name: str
+    variation: int = 0
+    pitch: float = 0.0
+    timbre: float = 0.0
+
+
+def output_layers(sfx: Sfx, output_id: str) -> Played:
+    """The layers and timing behind an output id ("", "variation:2", "take:3", "take:3:variation:2", "phase:charge")."""
+    if output_id.startswith("phase:"):
+        phase = sfx.phases[output_id.split(":", 1)[1]]
+        return Played(phase.layers, phase.duration, phase.loop, phase.crossfade, sfx.name)
+    name, layers, duration, variations = sfx.name, sfx.layers, sfx.duration, sfx.variations
+    rest = output_id
+    if output_id.startswith("take:"):
+        _, number, *more = output_id.split(":", 2)
+        take = sfx.take(int(number))
+        name, layers, duration, variations = take_name(sfx.name, take.number), take.layers, take.duration, take.variations
+        rest = more[0] if more else ""
+    if rest.startswith("variation:") and variations is not None:
+        variation = int(rest.split(":", 1)[1])
+        pitch, timbre, _ = variation_params(name, variations)[variation - 1]
+        layers = variation_layers(name, layers, variations, variation)
+        duration = round(duration * variation_stretch(name, variations, variation), 6)
+        return Played(layers, duration, sfx.loop, sfx.crossfade, name, variation, pitch, timbre)
+    return Played(layers, duration, sfx.loop, sfx.crossfade, name)
 
 
 def variation_stretch(name: str, v: Variations, variation: int) -> float:

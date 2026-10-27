@@ -12,6 +12,8 @@ layers:
     pitch: [[0, B5], [0.06, E6]]     # keyframes (seconds, note | Hz); slide: true glides
     env: [0.002, 0.05, 0.4, 0.15]
 variations: { count: 4, seed: 7, pitch: 0.5, timbre: 0.1 }
+takes:                  # more takes of the same sound: layers merged by id, own duration (files <name>.t<k>[.<n>].wav)
+  - { duration: 0.3, layers: [{ id: tone, pitch: [[0, A5], [0.07, D6]] }] }
 phases:
   charge: { duration: 1.0, loop: true, layers: [...] }
 ```
@@ -39,11 +41,13 @@ if TYPE_CHECKING:
 
 PRESETS = ("coin", "jump", "laser", "explosion", "hit", "hurt", "powerup", "blip", "select", "door", "step")
 SFX_FIELDS = (*META_FIELDS, "category", "kit", "instruments", "groups", "preset", "duration", "layers", "variations", "phases", "room",
-              "loop", "crossfade", "normalize", "playback")  # fmt: skip
+              "loop", "crossfade", "normalize", "playback", "takes")  # fmt: skip
 RECORDED_FIELDS = ("trim", "reverse", "fade", "shift", "stretch", "source", "licence", "license", "author")
 LAYER_EXTRA = ("id", "instrument", "start", "length", "pitch", "slide", "gain", "cutoff", "distort", "delay", "ring", *RECORDED_FIELDS)
 PHASE_FIELDS = ("duration", "loop", "layers", "crossfade")
+TAKE_FIELDS = ("duration", "layers", "variations")
 MAX_DURATION = 30.0
+MAX_TAKES = 16
 
 
 @dataclass(frozen=True)
@@ -106,6 +110,23 @@ class Phase:
     line: int | None = None
 
 
+@dataclass(frozen=True)
+class Take:
+    """Another take of the SFX (take 1 is the SFX as written): its own layers (the SFX's, merged by id) and duration,
+    with the SFX's variations (or its own) on top. Files `<name>.t<number>.wav` and `<name>.t<number>.<n>.wav`."""
+
+    number: int  # 2, 3, ...
+    duration: float
+    layers: tuple[Layer, ...]
+    variations: Variations | None
+    line: int | None = None
+
+
+def take_name(name: str, number: int) -> str:
+    """A take's file stem and seed name (`coin.t2`); take 1 is the SFX itself."""
+    return name if number == 1 else f"{name}.t{number}"
+
+
 @dataclass
 class Sfx:
     meta: Meta
@@ -122,6 +143,14 @@ class Sfx:
     effective: dict[str, Any] = field(default_factory=dict)  # fields after preset/extends (for `segan bake sfx`)
     room: float | None = None  # room send (0-1, x mix.room); None = the category's [room] entry
     playback: dict[str, float | int] | None = None  # hints for the game (manifest only): max_instances, min_gap_s, repeat_attenuation_db
+    takes: tuple[Take, ...] = ()  # takes 2, 3, ... (take 1 is the SFX as written)
+
+    def all_layers(self) -> list[Layer]:
+        """Every layer the SFX plays: its own, its phases' and its takes'."""
+        return [*self.layers, *(layer for phase in self.phases.values() for layer in phase.layers), *(layer for take in self.takes for layer in take.layers)]
+
+    def take(self, number: int) -> Take:
+        return next(t for t in self.takes if t.number == number)
 
     @property
     def name(self) -> str:
@@ -505,10 +534,15 @@ def parse_sfx(data: dict[str, Any], path: Path | None, project: Project, report:
                     phases[str(pname)] = phase
     if duration is not None and loop and crossfade >= duration / 2:
         report.error("E008", f"crossfade {crossfade:g}s must be under half the loop's duration ({duration:g}s)", line_of(data, "crossfade", line), "crossfade")
+    takes: tuple[Take, ...] = ()
+    if "takes" in data and layers is not None and duration is not None:
+        takes = _takes(data, kit, duration, variations, loop, float(crossfade), report, line)
+        for clash in sorted(set(phases) & {f"t{take.number}" for take in takes}):
+            report.error("E008", f"phase {clash!r} and take {clash[1:]} would both write <name>.{clash}.wav: rename the phase", line_of(data, "phases", line), f"phases.{clash}")
     if report.failed or duration is None or layers is None:
         return None, report.findings
     sfx = Sfx(meta, category, kit, duration, layers, loop, float(crossfade), variations, phases, normalize,
-              preset if isinstance(preset, str) else None, dict(data), float(room) if room is not None else None, playback)  # fmt: skip
+              preset if isinstance(preset, str) else None, dict(data), float(room) if room is not None else None, playback, takes)  # fmt: skip
     return sfx, report.findings
 
 
@@ -534,6 +568,92 @@ def _playback(raw: Any, report: Report, line: int | None) -> dict[str, float | i
             return None
         out[key] = value if key == "max_instances" else float(value)
     return out
+
+
+
+def _takes(data: Any, kit: Kit | None, duration: float, variations: Variations | None, loop: bool, crossfade: float, report: Report,
+           line: int | None) -> tuple[Take, ...]:  # fmt: skip
+    """`takes:`: each take starts from the SFX's layers and changes them by id (`{ id: crack, gain: -3 }`), adds new
+    ones, or drops one (`{ id: crack, remove: true }`); `duration` and `variations` (merged over the SFX's) are its own."""
+    raw = data["takes"]
+    tline = line_of(data, "takes", line)
+    if not layers_of(data):
+        report.error("E013", "takes vary the SFX's own layers: give the SFX layers (takes don't apply to phases)", tline, "takes")
+        return ()
+    if not isinstance(raw, list) or not 1 <= len(raw) <= MAX_TAKES:
+        report.error("E013", f"takes must be a list of 1-{MAX_TAKES} takes, each {{ duration, layers, variations }} (take 1 is the SFX as written)", tline, "takes")
+        return ()
+    out: list[Take] = []
+    for i, item in enumerate(raw):
+        number, where = i + 2, f"takes.{i}"
+        iline = item.line if isinstance(item, LineMap) else tline
+        if not isinstance(item, dict) or any(k not in TAKE_FIELDS for k in item):
+            report.error("E013", "a take is { duration, layers, variations }: layers change the SFX's by id, add new ones, or drop one with "
+                         "{ id: <id>, remove: true }", iline, where)  # fmt: skip
+            continue
+        take_duration = _duration(item.get("duration", duration), report, f"{where}.duration", line_of(item, "duration", iline))
+        merged = _take_layers(layers_of(data), item.get("layers", []), report, f"{where}.layers", line_of(item, "layers", iline))
+        if merged is None or take_duration is None:
+            continue
+        layers = _layers(merged, kit, report, f"{where}.layers", line_of(item, "layers", iline))
+        take_variations = variations
+        if "variations" in item:
+            own = item["variations"]
+            base = data.get("variations")
+            combined = {**base, **own} if isinstance(base, dict) and isinstance(own, dict) else own
+            take_variations = _variations(combined, report, line_of(item, "variations", iline))
+        if loop and crossfade >= take_duration / 2:
+            report.error("E008", f"take {number}: crossfade {crossfade:g}s must be under half its duration ({take_duration:g}s)", iline, f"{where}.duration")
+            continue
+        if layers is not None:
+            out.append(Take(number, take_duration, layers, take_variations, iline))
+    return tuple(out)
+
+
+def layers_of(data: Any) -> list[Any]:
+    raw = data.get("layers")
+    return list(raw) if isinstance(raw, list) else []
+
+
+def _take_layers(base: list[Any], changes: Any, report: Report, where: str, line: int | None) -> list[Any] | None:
+    """The SFX's raw layers with a take's changes merged by id (like presets and `extends`)."""
+    if not isinstance(changes, list):
+        report.error("E013", "a take's layers must be a list: { id: <id>, <fields> } changes that layer, { id: <id>, remove: true } drops it, "
+                     "a layer with a new id (or none) is added", line, where)  # fmt: skip
+        return None
+    layers = list(base)
+    for i, change in enumerate(changes):
+        cline = change.line if isinstance(change, LineMap) else line
+        if not isinstance(change, dict):
+            report.error("E013", "a take layer must be a mapping (layer fields, or { id: <id>, remove: true })", cline, f"{where}.{i}")
+            return None
+        lid = change.get("id")
+        at = next((j for j, layer in enumerate(layers) if isinstance(layer, dict) and lid is not None and layer.get("id") == lid), None)
+        if "remove" in change:
+            if change["remove"] is not True or set(change) != {"id", "remove"}:
+                report.error("E013", "drop a layer with { id: <id>, remove: true } (nothing else)", cline, f"{where}.{i}.remove")
+                return None
+            if at is None:
+                report.error("E013", f"take removes layer {lid!r}, but the SFX has no layer with that id", cline, f"{where}.{i}.id")
+                return None
+            del layers[at]
+            continue
+        if at is None:
+            layers.append(change)
+            continue
+        combined = LineMap()
+        combined.update(layers[at])
+        combined.update(change)
+        combined.line = cline
+        if isinstance(layers[at], LineMap):
+            combined.key_lines = dict(layers[at].key_lines)
+        if isinstance(change, LineMap):
+            combined.key_lines.update(change.key_lines)
+        layers[at] = combined
+    if not layers:
+        report.error("E013", "a take must keep at least one layer", line, where)
+        return None
+    return layers
 
 
 def _variations(raw: Any, report: Report, line: int | None) -> Variations | None:

@@ -546,7 +546,7 @@ def create_server(root: Path, allow_godot: bool = False) -> MCPServer:
     @_results
     def manifest(asset: str | None = None) -> dict[str, Any]:
         """The build's manifest.json (the contract with the game): per asset its files, length, loop points (samples),
-        bpm, sections, markers, variants, variations, phases, stems and loudness. Optionally one asset."""
+        bpm, sections, markers, variants, variations, takes, phases, stems and loudness. Optionally one asset."""
         path = segan.project().output_dir / "manifest.json"
         if not path.is_file():
             raise _error("no manifest.json yet: run `build`")

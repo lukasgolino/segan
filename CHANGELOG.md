@@ -33,6 +33,10 @@ check before upgrading. Patch bumps never change existing behaviour. Every relea
   into (`default_bus_layout.tres` is never written); an SFX's `playback: { max_instances, min_gap_s,
   repeat_attenuation_db }` is copied into its manifest entry; `segan_sfx.gd`, an optional Godot SFX player that
   honours both, is written next to the manifest when either is used. Projects without them build as before (#17).
+- SFX `takes:`: structurally different takes under one asset. Each take starts from the SFX's layers (changed by `id`,
+  new ids added, `{ id: x, remove: true }` drops one), has its own `duration` and gets the SFX's `variations` (or its
+  own); files `<name>.t<k>[.<n>].wav`, one manifest entry (`takes`) and one Godot randomizer over every take. Take 1 is
+  the SFX as written, so existing SFX build exactly as before (#15, #18).
 
 ### Changed
 
