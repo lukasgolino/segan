@@ -13,6 +13,9 @@ string picks a preset (`modal: vibraphone`, `bowed: cello`, `formant: ah`), and 
 - `modal`: a struck resonator: decaying modes of a material (marimba, vibraphone, glass, bell, metal...);
 - `supersaw`: seven detuned saws (the JP-8000 trance/hoover stack).
 
+`osc: impulses` (a basic oscillator, rendered in synth.py) also takes a block: sparse random impulses (crackle,
+debris, bubbles), parsed here like `sub` and `sync`.
+
 Rendering is in modelsynth.py; renders follow the determinism rules of dsp.py.
 """
 
@@ -21,7 +24,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from segan.patch import Env, Report, is_number, parse_env
+from segan.dsp import hz_to_midi
+from segan.patch import Env, Report, is_number, parse_env, parse_note_value
 
 MODELS = ("pluck", "bowed", "additive", "wavetable", "formant", "modal", "supersaw")
 
@@ -93,6 +97,20 @@ class Sync:
     ratio: float = 2.0  # slave frequency / note frequency
     env_amount: float = 0.0  # octaves the envelope sweeps the ratio up
     env: Env | None = None  # default: the amplitude envelope
+
+
+IMPULSE_SHAPES = ("click", "tick", "bubble")
+
+
+@dataclass(frozen=True)
+class Impulses:
+    """`osc: impulses`: a Poisson stream of short impulses (crackle, debris, bubbles)."""
+
+    density: float = 30.0  # impulses per second (x the gain keyframes' linear gain)
+    shape: str = "click"  # click = 1-2 ms noise burst, tick = decaying sine, bubble = sine rising ~30% (Minnaert chirp)
+    pitch: tuple[float, float] = (round(hz_to_midi(300.0), 9), round(hz_to_midi(3000.0), 9))  # MIDI notes; log-uniform per impulse
+    decay: float = 0.02  # seconds per impulse (tick, bubble)
+    level: tuple[float, float] = (0.5, 1.0)  # amplitude range per impulse
 
 
 # --- tables ----------------------------------------------------------------------------------------
@@ -473,6 +491,46 @@ def parse_sync(value: Any, report: Report, rule: str, where: str, line: int | No
     if ratio is None or amount is None or ("env" in data and env is None):
         return None
     return Sync(ratio, amount, env)
+
+
+def _impulse_pitch(value: Any) -> float | None:
+    if isinstance(value, str):
+        note = parse_note_value(value)
+        return float(note) if note is not None else None
+    if is_number(value) and 20 <= value <= 20000:
+        return round(hz_to_midi(float(value)), 9)
+    return None
+
+
+def parse_impulses(value: Any, report: Report, rule: str, where: str, line: int | None) -> Impulses | None:
+    data = _fields(value, ("density", "shape", "pitch", "decay", "level"), report, rule, where, line, "{ density, shape, pitch, decay, level }")
+    if data is None:
+        return None
+    default = Impulses()
+    density = _num(data, "density", default.density, 0.1, 2000, report, rule, where, line, " impulses per second")
+    shape = _choice(data, "shape", default.shape, IMPULSE_SHAPES, report, rule, where, line)
+    decay = _num(data, "decay", default.decay, 0.001, 2, report, rule, where, line, " seconds per impulse")
+    pitch: tuple[float, float] | None = default.pitch
+    if "pitch" in data:
+        raw = data["pitch"]
+        pair = [_impulse_pitch(v) for v in raw] if isinstance(raw, list) and len(raw) == 2 else []
+        lo, hi = (pair[0], pair[1]) if len(pair) == 2 else (None, None)
+        if lo is None or hi is None or lo > hi:
+            report.error(rule, "pitch must be [low, high]: notes (C5) or Hz (20-20000), e.g. [300, 3000]", line, f"{where}.pitch")
+            pitch = None
+        else:
+            pitch = (lo, hi)
+    level: tuple[float, float] | None = default.level
+    if "level" in data:
+        raw = data["level"]
+        if isinstance(raw, list) and len(raw) == 2 and all(is_number(v) for v in raw) and 0 <= raw[0] <= raw[1] <= 1:
+            level = (float(raw[0]), float(raw[1]))
+        else:
+            report.error(rule, "level must be [low, high] amplitudes 0-1, e.g. [0.5, 1]", line, f"{where}.level")
+            level = None
+    if density is None or shape is None or decay is None or pitch is None or level is None:
+        return None
+    return Impulses(density, shape, pitch, decay, level)
 
 
 def describe_model(model: Model) -> str:

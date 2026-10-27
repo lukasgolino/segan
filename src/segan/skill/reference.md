@@ -36,13 +36,14 @@ Instrument fields (a source is required; everything else optional):
 
 | Field | Meaning |
 |---|---|
-| `osc` | `sine`, `triangle`, `saw`, `pulse` (all band-limited), `noise` (white), `bitnoise` (sample-and-hold noise pitched by the note: NES/sfxr crunch), `fm` (2-operator, or 3-4 operators), and the models `pluck`, `bowed`, `additive`, `wavetable`, `formant`, `modal`, `supersaw` (below) |
+| `osc` | `sine`, `triangle`, `saw`, `pulse` (all band-limited), `noise` (white), `bitnoise` (sample-and-hold noise pitched by the note: NES/sfxr crunch), `fm` (2-operator, or 3-4 operators), `impulses` (sparse random clicks, ticks or bubbles: crackle, debris, fizz; below), and the models `pluck`, `bowed`, `additive`, `wavetable`, `formant`, `modal`, `supersaw` (below) |
 | `drum` | `kick`, `snare`, `hat`, `clap`, `tom`, `cymbal`, `rim`, `shaker`, `cowbell`, `block` (wood block), `conga`, `brush` (brush swish), `metal` (struck scrap metal/anvil) - macros with `tune` (Hz), `decay` (s), `tone` (Hz), `noise` (0-1 mix), `click` (0-1), `punch` (semitones of pitch drop) |
 | `sample` | recorded sound instead of a synth (see Samples below): `vsco2/violins_sus` (library), `samples/x.sfz`, `samples/gm.sf2` + `preset`, `samples/hit.wav` + `root` |
 | `duty` | pulse width 0.01-0.99 (0.5 square, 0.25 and 0.125 thinner, NES-like) |
 | `pwm` | `[rate_hz, depth]` pulse-width modulation |
 | `fm` | `{ ratio, index, env }`: modulator frequency ratio (whole numbers = harmonic, e.g. 1, 2; 3.5 = bell-like), modulation index (brightness), optional index envelope. 3-4 operators: `{ algorithm: stack\|pairs\|branch\|stack3\|parallel, ops: [{ ratio, index, out, env, detune, mod }, ...] }` (op 1 is heard; `stack` = 4 -> 3 -> 2 -> 1, `pairs` = 2 -> 1 + 4 -> 3, `branch` = 2 -> 1 <- 3 <- 4, `stack3` = 3 -> 2 -> 1 + 4, `parallel` = all heard; an op's `mod: [3, 4]` overrides the routing) |
 | `sub` | sub-oscillator: `-1` / `-2` (octaves) or `{ octave, wave: sine\|square\|triangle, level: dB }` |
+| `impulses` | for `osc: impulses`: `{ density: 30 (per second, random Poisson timing), shape: click\|tick\|bubble, pitch: [300, 3000] (low, high: Hz or notes, picked per impulse, log-uniform), decay: 0.02 (s per impulse), level: [0.5, 1] (amplitude range per impulse) }`. `click` = a 1-2 ms noise burst (fire crackle, gravel, sparks; `pitch` and `decay` unused), `tick` = a short decaying sine at the picked pitch (debris, ticking metal), `bubble` = a sine rising ~30% over its decay (water, boiling, sinking). The note's pitch doesn't move it; in an SFX layer the `gain` keyframes scale both the level and the density (a fade thins the impulses out). Seeded like `noise`: every variation gets its own pattern |
 | `sync` | hard sync for `saw`/`pulse`: a ratio (`2.6`) or `{ ratio, env_amount: octaves, env }` (the classic sync sweep) |
 | `mute` | brass mute tone: `straight` (thin, bright), `cup` (soft, covered), `harmon` (buzzy, nasal; add `filter: { lfo }` for wah-wah) |
 | `fx` | per-instrument effects, in order: `[{ chorus: {...} }, { delay: {...} }]` (see Effects below) |

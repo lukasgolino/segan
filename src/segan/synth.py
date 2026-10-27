@@ -13,6 +13,7 @@ import math
 
 from collections.abc import Callable
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 import numpy as np
 
@@ -23,15 +24,20 @@ from segan.dsp import (
     db_to_gain,
     decimate,
     exp2,
+    midi_to_hz_scalar,
     noise,
     noise_at,
     poly_blamp,
     poly_blep,
     resonance_to_q,
+    round12,
     seed_of,
     sin_turns,
 )
 from segan.patch import Crush, Env, Instrument
+
+if TYPE_CHECKING:
+    from segan.models import Impulses
 
 BLOCK = 64  # samples per filter-envelope block (oversampled rate)
 DECLICK_ATTACK = 0.001
@@ -232,9 +238,11 @@ def render_note(
     gain_curve: Curve | None = None,
     cutoff_curve: Curve | None = None,
     length: float | None = None,
+    density_curve: Curve | None = None,
 ) -> Signal:
     """One note at the output rate: `gate` seconds held, then the release. Curves (SFX keyframes) are
-    functions of time: pitch in semitones added to `midi`, gain as a multiplier, cutoff as a multiplier."""
+    functions of time: pitch in semitones added to `midi`, gain as a multiplier, cutoff as a multiplier;
+    `density_curve` scales the rate of `osc: impulses` (the gain keyframes' linear gain; default: `gain_curve`)."""
     rate = ctx.os_rate
     total = length if length is not None else note_length(inst, gate, ctx, midi)
     n = max(1, round(total * rate))
@@ -263,7 +271,8 @@ def render_note(
             fade = min(n, round(DECLICK_RELEASE * rate))
             signal[n - fade :] *= np.linspace(1.0, 0.0, fade, endpoint=False) ** 2
     else:
-        signal = _tone(inst, ctx, n, n_gate, t, semis, seed)
+        density = density_curve or gain_curve
+        signal = _tone(inst, ctx, n, n_gate, t, semis, seed, density(t) if density is not None and inst.wave == "impulses" else None)
         signal = signal * adsr(inst.env, n_gate, n, rate, ctx.declick)
 
     if inst.tremolo:
@@ -369,14 +378,14 @@ def _sub(inst: Instrument, ctx: Context, semis: Signal, n: int) -> Signal:
     return oscillator(wave, freq / ctx.os_rate, 0.5, 0) * db_to_gain(sub.level)
 
 
-def _tone(inst: Instrument, ctx: Context, n: int, n_gate: int, t: Signal, semis: Signal, seed: int) -> Signal:
-    out = _tone_main(inst, ctx, n, n_gate, t, semis, seed)
+def _tone(inst: Instrument, ctx: Context, n: int, n_gate: int, t: Signal, semis: Signal, seed: int, density: Signal | None = None) -> Signal:
+    out = _tone_main(inst, ctx, n, n_gate, t, semis, seed, density)
     if inst.sub is not None:
         out = out + _sub(inst, ctx, semis, n)
     return out
 
 
-def _tone_main(inst: Instrument, ctx: Context, n: int, n_gate: int, t: Signal, semis: Signal, seed: int) -> Signal:
+def _tone_main(inst: Instrument, ctx: Context, n: int, n_gate: int, t: Signal, semis: Signal, seed: int, density: Signal | None = None) -> Signal:
     rate = ctx.os_rate
     if inst.model is not None:
         from segan.modelsynth import render_model
@@ -384,6 +393,10 @@ def _tone_main(inst: Instrument, ctx: Context, n: int, n_gate: int, t: Signal, s
         return render_model(inst.model, inst, rate, ctx.tuning, ctx.measure, n, n_gate, t, semis, seed)
     if inst.wave == "noise":
         return np.zeros(n) if ctx.measure else noise(n, seed_of(seed, "noise"))
+    if inst.wave == "impulses":
+        from segan.models import Impulses
+
+        return np.zeros(n) if ctx.measure else impulses(inst.impulses or Impulses(), n, rate, ctx.tuning, seed_of(seed, "impulses"), density)
     duty: Signal | float = inst.duty
     if inst.pwm:
         prate, depth = inst.pwm
@@ -417,6 +430,57 @@ def _tone_main(inst: Instrument, ctx: Context, n: int, n_gate: int, t: Signal, s
         else:
             out += oscillator(inst.wave, inc, duty, seed_of(seed, "osc", k), start)
     return out / np.sqrt(voices) if voices > 1 else out
+
+
+# --- impulses ---------------------------------------------------------------------------------
+
+BUBBLE_RISE = round(math.log2(1.3), 12)  # a bubble's pitch rises 30% over its decay (octaves)
+IMPULSE_BATCH = 64  # impulses whose random values are hashed at once
+
+
+def impulses(spec: Impulses, n: int, rate: int, tuning: float, seed: int, density: Signal | None = None) -> Signal:
+    """Sparse random impulses: a Poisson process of `spec.density` per second (times `density`, the gain keyframes'
+    linear gain, per sample). Arrival times come from the cumulative rate (rounded to 12 decimals) reaching sums of
+    exponential gaps; every random value is the splitmix64 hash of the impulse's counter, so the stream never
+    depends on the CPU."""
+    out = np.zeros(n)
+    if n == 0:
+        return out
+    if density is None:
+        cumulative = np.arange(1, n + 1, dtype=np.float64) * (spec.density / rate)
+    else:
+        cumulative = np.cumsum(np.maximum(np.asarray(density, dtype=np.float64), 0.0) * (spec.density / rate))
+    cumulative = round12(cumulative)
+    total = float(cumulative[-1])
+    lo, hi = spec.pitch
+    level_lo, level_hi = spec.level
+    arrival = 0.0
+    k = 0
+    u = np.zeros((0, 4))
+    while True:
+        if k % IMPULSE_BATCH == 0:  # four uniforms in [0, 1) per impulse: gap, pitch, level, click length
+            counter = np.arange(4 * k + 1, 4 * (k + IMPULSE_BATCH) + 1, dtype=np.uint64)
+            u = ((noise_at(counter, seed) + 1.0) * 0.5).reshape(IMPULSE_BATCH, 4)
+        gap, pick, level, click = (float(v) for v in u[k % IMPULSE_BATCH])
+        k += 1
+        arrival = round(arrival - math.log(1.0 - gap), 12)  # exponential gaps (mean 1) in units of the cumulative rate
+        start = int(np.searchsorted(cumulative, arrival, side="left"))
+        if arrival > total or start >= n:
+            break
+        if spec.shape == "click":
+            length = max(1, round((0.001 + 0.001 * click) * rate))
+            m = min(n - start, length)
+            grain = noise(m, seed_of(seed, "click", k)) * (1.0 - np.arange(m, dtype=np.float64) / length) ** 2
+        else:
+            length = max(1, round(spec.decay * rate))
+            m = min(n - start, length)
+            x = np.arange(m, dtype=np.float64) / length
+            inc = np.full(m, midi_to_hz_scalar(lo + (hi - lo) * pick, tuning) / rate)
+            if spec.shape == "bubble":
+                inc = inc * exp2(BUBBLE_RISE * x)
+            grain = sin_turns(_phase(inc)) * (1.0 - x) ** 3
+        out[start : start + m] += (level_lo + (level_hi - level_lo) * level) * grain
+    return out
 
 
 # --- samples -----------------------------------------------------------------------------------

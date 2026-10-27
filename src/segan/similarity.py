@@ -74,7 +74,7 @@ def family(inst: Instrument) -> str:
         return "sample"
     if inst.wave in ("sine", "triangle"):
         return "soft"
-    if inst.wave == "bitnoise":
+    if inst.wave in ("bitnoise", "impulses"):
         return "noise"
     return inst.wave if inst.wave in FAMILIES else "soft"
 

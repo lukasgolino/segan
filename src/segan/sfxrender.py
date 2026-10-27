@@ -118,6 +118,7 @@ def render_layer(layer: Layer, ctx: Context, available: float, seed: int, pitch_
     if layer.gain:
         db = _keyframe_curve(layer.gain, True)
         gain_curve = lambda t: exp2(db(t) * LOG2_10_OVER_20)  # noqa: E731
+    density_curve = gain_curve  # osc: impulses thins out with the gain keyframes, distorted or not
     post_gain = None
     if layer.distort > 0:  # the layer's gain comes after the distortion: changing it mustn't change the timbre
         level, curve = db_to_gain(inst.gain), gain_curve
@@ -137,7 +138,7 @@ def render_layer(layer: Layer, ctx: Context, available: float, seed: int, pitch_
         return np.zeros(0), False
     sounding = full > room + 1e-3
     length = min(full, room) if layer.delay is None and not inst.fx else room
-    signal = render_note(inst, ctx, base, gate, 1.0, seed, pitch_curve, gain_curve, cutoff_curve, length=min(full, room))
+    signal = render_note(inst, ctx, base, gate, 1.0, seed, pitch_curve, gain_curve, cutoff_curve, length=min(full, room), density_curve=density_curve)
     if inst.fx:  # SFX have no tempo: note values count at 120 bpm
         from segan.fx import apply_fx
 
