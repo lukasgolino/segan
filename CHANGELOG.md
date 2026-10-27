@@ -19,6 +19,21 @@ check before upgrading. Patch bumps never change existing behaviour. Every relea
 
 ## [Unreleased]
 
+### Added
+
+- `segan preview --summary`: one flat row per output (asset, output, seconds, dry, LUFS, target, peak, true peak);
+  with `--json` a `summary` list next to `outputs` (#90).
+
+### Changed
+
+- `segan init` with the chiptune or synth style (the default is chiptune) writes `[sfx] source = "synth"`, so a
+  synthesised game never picks recordings for weapons or impacts (#86).
+
+### Fixed
+
+- SFX `pitch_hz` follows fast dives: a 0.1 s octave drop read as one pitch (its last frames) because YIN's 40 ms frames
+  blurred the sweep; a 10 ms-frame track (down to 200 Hz) is used when it hears more of the sound (#89).
+
 ## [0.13.0] - 2026-10-25
 
 ### Added

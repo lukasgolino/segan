@@ -148,6 +148,8 @@ def cmd_init(args: argparse.Namespace, out: Output) -> int:
         output_dir = Path(os.path.relpath(target.resolve(), root.resolve())).as_posix()
         config_text = set_in_toml(config_text, "output_dir", output_dir)
         config_text = set_in_toml(config_text, "export", ["wav", "godot"])
+    if style in ("chiptune", "synth"):  # a synthesised game: "auto" would use recordings for weapons and impacts
+        config_text = set_in_toml(config_text, "sfx.source", "synth")
     if style == "orchestral":  # a hall, and an orchestra's worth of instruments per song
         config_text = set_in_toml(config_text, "mix.room", 0.3)
         config_text = set_in_toml(config_text, "mix.room_decay", 1.6)
@@ -851,6 +853,7 @@ def cmd_preview(args: argparse.Namespace, out: Output) -> int:
                               + (" (MP3 needs libsndfile 1.1 or newer)" if args.format == "mp3" else ""))
     assets, findings = load_targets(args.assets, project)
     outputs: list[dict[str, Any]] = []
+    summary: list[dict[str, Any]] = []  # one flat row per output (--summary)
     for asset in assets:
         render = render_asset(asset, project)
         result = write_preview(asset, render, project, _position(args.start, asset), _position(args.end, asset), args.output, args.format)
@@ -861,6 +864,12 @@ def cmd_preview(args: argparse.Namespace, out: Output) -> int:
             raise usage_error(f"{asset.name} has no output {', '.join(map(repr, missing or args.output or []))} (outputs: {', '.join(o.id or 'main' for o in render.outputs)})")
         for entry in result.files:
             a = entry["analysis"]
+            tail = a.get("room_tail_s")
+            summary.append({"asset": asset.name, "output": entry["output"], "seconds": a["seconds"],
+                            "dry_s": round(a["seconds"] - tail, 3) if tail is not None else None, "lufs": a["lufs"],
+                            "target_lufs": a.get("target_lufs"), "peak_dbfs": a["peak_dbfs"], "true_peak_dbtp": a["true_peak_dbtp"]})  # fmt: skip
+            if args.summary:
+                continue
             target = f" (target {a['target_lufs']:g})" if a.get("target_lufs") is not None else ""
             out.say(f"{entry['output']:>16}: {display_path(entry['sheet'])}  {a['seconds']:.2f}s, {a['lufs']:.1f} LUFS{target}, peak {a['true_peak_dbtp']:.1f} dBTP")
             out.say(f"{'':>16}  listen: {display_path(entry['wav'])}" + (f"  seam: {display_path(entry['seam'])} (click {a['seam_click']:.4f})" if "seam" in entry else ""))
@@ -868,13 +877,29 @@ def cmd_preview(args: argparse.Namespace, out: Output) -> int:
             {"output": e["output"], "wav": display_path(e["wav"]), "sheet": display_path(e["sheet"]),
              **({"seam": display_path(e["seam"])} if "seam" in e else {}), **({k: display_path(e[k]) for k in ("ogg", "mp3") if k in e}),
              "analysis": e["analysis"]} for e in result.files]})  # fmt: skip
+    extra: dict[str, Any] = {"summary": summary} if args.summary else {}
+    if args.summary and not out.as_json:
+        print(_summary_table(summary))
     if findings:
-        out.failure(findings, {"outputs": outputs})
+        out.failure(findings, {"outputs": outputs, **extra})
         return 1
     if not out.as_json:
         print("Open the .listen.png sheets to check them; a human has to listen to the WAVs before approving.")
-    out.result({"outputs": outputs})
+    out.result({"outputs": outputs, **extra})
     return 0
+
+
+def _summary_table(rows: list[dict[str, Any]]) -> str:
+    """`segan preview --summary`: asset, output, seconds, dry seconds, LUFS (target), peaks as aligned columns."""
+
+    def num(value: Any, digits: int) -> str:
+        return "-" if value is None else f"{value:.{digits}f}"
+
+    table = [("asset", "output", "seconds", "dry", "LUFS", "target", "peak", "true peak")]
+    table += [(r["asset"], r["output"], num(r["seconds"], 3), num(r["dry_s"], 3), num(r["lufs"], 1), num(r["target_lufs"], 1),
+               num(r["peak_dbfs"], 1), num(r["true_peak_dbtp"], 1)) for r in rows]  # fmt: skip
+    widths = [max(len(row[i]) for row in table) for i in range(len(table[0]))]
+    return "\n".join("  ".join(c.ljust(w) if i < 2 else c.rjust(w) for i, (c, w) in enumerate(zip(row, widths))).rstrip() for row in table)
 
 
 def cmd_gallery(args: argparse.Namespace, out: Output) -> int:
@@ -1431,6 +1456,8 @@ def build_parser() -> argparse.ArgumentParser:
     preview.add_argument("--output", action="append", help="only this output (repeat for several; one render): main, variant:<name>, variation:<n>, "
                          "phase:<name>, stem:<name>, mix:<name>, flow:<clip>, walk (a flow song: a seeded walk through its sections; walk:<seed>), "
                          "reel (an SFX: the main sound and every variation back to back)")  # fmt: skip
+    preview.add_argument("--summary", action="store_true", help="one flat table row per output: asset, output, seconds, dry, LUFS, target, "
+                         "peak, true peak (--json: a flat `summary` list next to `outputs`)")  # fmt: skip
     preview.set_defaults(handler=cmd_preview)
 
     gallery = commands.add_parser("gallery", parents=[common], help="every asset side by side + loudness by category")

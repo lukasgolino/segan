@@ -515,6 +515,7 @@ compress = "qoa"              # qoa | ima | none
 [sfx]
 source = "auto"               # auto: synthesise stylised sounds, record real-world ones (the skill's rule);
                               # synth: no recordings (W020); recorded: prefer recordings
+                              # `init --style chiptune|synth` (and plain `init`) write "synth"
 
 [ogg]
 quality = 0.4                 # Vorbis quality 0-1 (0.4 is about 128 kbit/s stereo)
@@ -557,7 +558,7 @@ asset actually plays, so editing one instrument re-renders only what uses it.
 | `segan sounds vendor [--all]` | copy the Freesound sounds in use into `<project>/sounds/` (offline builds; off by default) |
 | `segan kit show [kits]` | every instrument playing a test phrase: `previews/kits/<kit>.listen.png` + WAVs; `--json` gives each instrument's `range` |
 | `segan lint [paths] [--warnings-as-errors] [--no-render] [-j N]` | errors + warnings (audio warnings render the asset; cached); exits 1 on errors, 0 when there are only warnings, 1 on warnings too with `--warnings-as-errors` (CI) |
-| `segan preview <asset...> [--output main\|variant:X\|variation:N\|phase:X\|stem:T\|mix:M\|flow:CLIP\|walk[:SEED] ...] [--from 5 --to 8]` | WAV + listen sheet (+ seam view for loops) per output in `previews/<asset>/`, analysis in `--json` (SFX: `layers` = each layer dry on its own, `peak_db`/`lufs`/`crest_db`, recorded layers' `ends_s` (where they end
+| `segan preview <asset...> [--output main\|variant:X\|variation:N\|phase:X\|stem:T\|mix:M\|flow:CLIP\|walk[:SEED] ...] [--from 5 --to 8] [--summary]` | WAV + listen sheet (+ seam view for loops) per output in `previews/<asset>/`; `--summary` prints one flat row per output (asset, output, seconds, dry, LUFS, target, peak, true peak; `--json`: a `summary` list); analysis in `--json` (SFX: `layers` = each layer dry on its own, `peak_db`/`lufs`/`crest_db`, recorded layers' `ends_s` (where they end
 uncut, after trim/stretch/varispeed), plus the dry mix); flow songs also get a walk; `--output reel` (an SFX): the main sound and every variation back to back, 0.4 s apart, to judge the variety; `--format ogg\|mp3` also writes each preview compressed, to share (needs `segan[ogg]`) |
 | `segan render <asset...> [--output main\|stem:T\|mix:M\|variant:X ...]` | WAVs only, from the render cache (no analysis or sheets: fast for long stemmed songs); `--json` lists each output's WAV, length and loop |
 | `segan gallery` | every asset's waveform + spectrum and a loudness chart by category |
