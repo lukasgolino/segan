@@ -115,7 +115,7 @@ def level_stats(analysis: dict[str, Any], threshold_click: float | None = None) 
 
 def _layer_targets(layer: Layer, start: float, end: float, tuning: float) -> list[tuple[float, float, float]]:
     """Intended pitch of a layer over time, as short segments (for the white lines on the spectrogram)."""
-    if layer.inst.is_drum or layer.inst.wave in ("noise", "bitnoise") or layer.choices:  # a recording has no intended pitch
+    if layer.inst.is_drum or layer.inst.wave in ("noise", "bitnoise", "impulses") or layer.choices:  # a recording has no intended pitch
         return []
     frames = layer.pitch or ((0.0, float(layer.inst.note)),)
     out: list[tuple[float, float, float]] = []

@@ -155,6 +155,7 @@ bass, harmony (pad, strings, choir, organ, keys), colour (pluck, mallet, bell, a
    | UI blip/confirm | one or two tiny soft tones, category `ui` |
    | footstep | low-passed noise tap + tiny tom, category `foley`, `variations` |
    | door | noise latch click + band-passed saw creak with vibrato + tom thud |
+   | fire crackle / debris / bubbles | `osc: impulses` with `shape: click` / `tick` / `bubble` (one layer of random impulses, not many hand-placed ones); `gain` keyframes fade the density too |
    | engine/hum/alarm | `loop: true` with a `crossfade`, steady layers (or a `phases` loop) |
    | charge-up + release | `phases: { charge: { loop: true, ... }, release: { ... } }` |
 3. Things that always matter for SFX:

@@ -151,7 +151,7 @@ def measure_pitch(song: Song, project: Project) -> dict[str, Any]:
             inst = song.kit.instruments.get(p.key)
             ringing_until = previous_end + (inst.env.release if inst is not None else 0.0)
             previous_end = timeline.seconds(p.step + p.note.length)
-            if inst is None or inst.arp or inst.is_drum or inst.wave in ("noise", "bitnoise") or is_one_shot(inst):
+            if inst is None or inst.arp or inst.is_drum or inst.wave in ("noise", "bitnoise", "impulses") or is_one_shot(inst):
                 skip("arpeggio, noise or one-shot instrument" if inst is not None else "no instrument")
                 continue
             settle = max([0.08 if inst.is_sample else 0.015, *(t for t, _ in inst.pitch_env)])

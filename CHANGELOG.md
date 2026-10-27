@@ -23,6 +23,8 @@ check before upgrading. Patch bumps never change existing behaviour. Every relea
 
 - `segan preview --summary`: one flat row per output (asset, output, seconds, dry, LUFS, target, peak, true peak);
   with `--json` a `summary` list next to `outputs` (#90).
+- `osc: impulses`: sparse random impulses (`density`, `shape: click|tick|bubble`, `pitch` range, `decay`, `level` range) for
+  crackle, debris and bubbles, seeded like the noise; in SFX layers the `gain` keyframes thin the density out too (#4).
 
 ### Changed
 

@@ -1,6 +1,6 @@
 """Instrument patches: the synth parameters shared by kit instruments, inline instruments and SFX layers.
 
-A patch is a sound source (`osc: sine|triangle|saw|pulse|noise|bitnoise|fm`, `drum: kick|snare|hat|clap|tom|
+A patch is a sound source (`osc: sine|triangle|saw|pulse|noise|bitnoise|fm|impulses`, `drum: kick|snare|hat|clap|tom|
 cymbal` or `sample:` a WAV / SFZ / SoundFont / sample library) plus envelope, pitch modulation, filter, gain
 and crush. Parsing collects every problem as a Finding.
 """
@@ -20,9 +20,9 @@ from segan.yamlio import LineMap
 
 if TYPE_CHECKING:
     from segan.fx import Effect
-    from segan.models import Model, Sub, Sync
+    from segan.models import Impulses, Model, Sub, Sync
 
-BASIC_OSCILLATORS = ("sine", "triangle", "saw", "pulse", "noise", "bitnoise", "fm")
+BASIC_OSCILLATORS = ("sine", "triangle", "saw", "pulse", "noise", "bitnoise", "fm", "impulses")
 MODEL_OSCILLATORS = ("pluck", "bowed", "additive", "wavetable", "formant", "modal", "supersaw")  # models.py: each takes a same-named block
 OSCILLATORS = (*BASIC_OSCILLATORS, *MODEL_OSCILLATORS)
 DRUMS = ("kick", "snare", "hat", "clap", "tom", "cymbal", "rim", "shaker", "cowbell", "block", "conga", "brush", "metal")
@@ -51,7 +51,7 @@ DRUM_PARAMS = ("tune", "decay", "tone", "noise", "click", "punch")
 PATCH_FIELDS = (
     "name", "osc", "drum", "sample", "duty", "pwm", "fm", "detune", "unison", "env", "pitch_env", "vibrato", "tremolo",
     "arp", "arp_rate", "filter", "gain", "pan", "range", "voices", "crush", "note", "max_ring", *DRUM_PARAMS,
-    *MODEL_OSCILLATORS, "sub", "sync", "mute", "fx",
+    *MODEL_OSCILLATORS, "sub", "sync", "mute", "fx", "impulses",
 )  # fmt: skip
 
 
@@ -137,6 +137,7 @@ class Instrument:
     model: Model | None = None  # the model of a model oscillator (pluck, bowed, additive...)
     sub: Sub | None = None  # sub-oscillator an octave or two down
     sync: Sync | None = None  # hard sync (saw, pulse)
+    impulses: Impulses | None = None  # the `impulses` block of osc: impulses (None = the defaults)
     mute: str | None = None  # brass mute EQ: straight | cup | harmon
     fx: tuple[Effect, ...] = ()  # effects on each note (fx.py)
     raw: tuple[tuple[str, Any], ...] = field(default=(), compare=False, repr=False)  # new-style fields as written (for `segan bake sfx`)
@@ -525,6 +526,17 @@ def parse_patch(
         elif (sync := parse_sync(data["sync"], report, rule, f"{where}.sync", line_of(data, "sync", line))) is not None:
             changes["sync"] = sync
             raw["sync"] = data["sync"]
+    if changes.get("wave", inst.wave) != "impulses" and "impulses" in raw:  # osc changed away from impulses (extends)
+        raw.pop("impulses")
+        changes["impulses"] = None
+    if "impulses" in data:
+        from segan.models import parse_impulses
+
+        if changes.get("wave", inst.wave) != "impulses":
+            report.error(rule, "impulses: settings for sparse random impulses need osc: impulses", line_of(data, "impulses", line), f"{where}.impulses")
+        elif (imp := parse_impulses(data["impulses"], report, rule, f"{where}.impulses", line_of(data, "impulses", line))) is not None:
+            changes["impulses"] = imp
+            raw["impulses"] = data["impulses"]
     if "mute" in data:
         if data["mute"] not in MUTES:
             report.error(rule, f"mute must be {', '.join(MUTES)} (a brass mute's tone: straight = thin and bright, cup = soft and dark, harmon = buzzy and nasal)",
