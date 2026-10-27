@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 import pytest
@@ -9,6 +10,7 @@ from segan.analysis import seam_click
 from segan.project import Project
 from segan.render import render_asset
 from segan.sequence import build_timeline, placed_notes
+from segan.voices import NoteEvent
 from segan.wavio import read_wav
 
 from conftest import load, write
@@ -324,11 +326,10 @@ arrangement: [main]
 """
 
 
-def _events(song, project):  # type: ignore[no-untyped-def]
+def _events(song: Any) -> list[NoteEvent]:
     from segan.sequence import song_events
 
-    timeline = build_timeline(song)
-    return song_events(song, timeline, 22050)
+    return song_events(song, build_timeline(song), 22050)
 
 
 def test_release_overrides_parse_and_reach_the_events(project: Project) -> None:
@@ -338,7 +339,7 @@ def test_release_overrides_parse_and_reach_the_events(project: Project) -> None:
     assert song.patterns["end"].release == {"lead": 3.0}
     assert song.patterns["echo"].release == {"lead": 3.0}  # a derived pattern keeps its source's
     assert song.patterns["all"].release == {"lead": 2.0, "bass": 2.0}  # a number: every roll track
-    releases = [(e.track, e.inst.env.release, e.inst.key) for e in sorted(_events(song, project), key=lambda e: (e.start, e.track))]
+    releases = [(e.track, e.inst.env.release, e.inst.key) for e in sorted(_events(song), key=lambda e: (e.start, e.track))]
     assert releases == [
         ("bass", 0.5, "b"), ("drums", 0.1, "k"), ("lead", 0.05, "p"),  # a: the kit's release, the bass track's override
         ("bass", 0.5, "b"), ("lead", 3.0, "p"),  # end: the pattern's override for lead
