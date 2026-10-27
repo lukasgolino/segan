@@ -25,6 +25,9 @@ check before upgrading. Patch bumps never change existing behaviour. Every relea
   with `--json` a `summary` list next to `outputs` (#90).
 - `osc: impulses`: sparse random impulses (`density`, `shape: click|tick|bubble`, `pitch` range, `decay`, `level` range) for
   crackle, debris and bubbles, seeded like the noise; in SFX layers the `gain` keyframes thin the density out too (#4).
+- Songs take a release override: `release: { pad: 3.0 }` in a pattern (every note of that track there releases over
+  3 s; a number = every roll track) or `release: 3.0` on a roll track; the pattern's wins. Loop offsets, flow
+  clips, the render cache and fingerprints follow it; songs without it render as before (#10).
 
 ### Changed
 

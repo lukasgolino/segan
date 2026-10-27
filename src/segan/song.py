@@ -31,9 +31,10 @@ SONG_FIELDS = (*META_FIELDS, "kit", "instruments", "groups", "tempo", "meter", "
                "patterns", "sections", "arrangement", "loop", "variants", "variant_axes", "markers", "normalize", "category", "stems",
                "flow", "sample_rate", "channels", "seed", "humanize", "fade_in", "fade_out")  # fmt: skip
 DYNAMICS_FIELDS = ("velocity", "dynamics")  # per-pattern: velocity marks per step, dB ramps per track
+MAX_RELEASE = 30.0  # seconds: a track's or pattern's release override (the kit's env allows the same)
 VELOCITY_MARKS = {"X": 1.5, "x": 1.0, "o": 0.35, ".": None, "-": None, **{str(d): round(0.2 * d, 2) for d in range(1, 10)}}
 STEM_FIELDS = ("groups", "mixes", "main_mix")
-TRACK_FIELDS = ("roll", "drums", "chromatic", "gain", "pan")
+TRACK_FIELDS = ("roll", "drums", "chromatic", "gain", "pan", "release")
 DERIVE_FIELDS = ("from", "transpose", "semitones", "shift", "reverse", "mute", "swap")
 VARIANT_FIELDS = ("tempo", "swing", "instrument_swap", "group_swap", "kit", "transpose", "semitones", "key")
 SECTION_FIELDS = ("patterns", "from", "transpose", "semitones", "key", "instrument_swap", "group_swap", "mute", "velocity")
@@ -51,6 +52,7 @@ class Track:
     gain: float = 0.0
     pan: float = 0.0
     line: int | None = None
+    release: float | None = None  # seconds: overrides the release of every note on the track (roll tracks only)
 
     def label(self, row: int, key: Key | None) -> str:
         value = self.rows[row]
@@ -67,6 +69,7 @@ class Note:
     length: int
     key: str
     velocity: float = 1.0
+    release: float | None = None  # seconds: the pattern's release override for this note's track
 
 
 @dataclass
@@ -77,6 +80,7 @@ class Pattern:
     lanes: set[str] = field(default_factory=set)  # tracks this pattern writes (or derives)
     line: int | None = None
     source: str | None = None  # derived from
+    release: dict[str, float] = field(default_factory=dict)  # track -> release override (seconds), a derived pattern's included
 
 
 @dataclass(frozen=True)
@@ -246,7 +250,7 @@ def parse_tracks(raw: Any, kit: Kit, key: Key | None, report: Report, line: int 
             _bad(report, "E001", f"track name {name!r} must be lowercase letters, digits or '_'", tline, where)
             continue
         if not isinstance(value, dict) or any(k not in TRACK_FIELDS for k in value):
-            _bad(report, "E001", f"track {name!r} must be {{ roll: [low, high], chromatic, gain, pan }} or {{ drums: [keys], gain, pan }}", tline, where)
+            _bad(report, "E001", f"track {name!r} must be {{ roll: [low, high], chromatic, gain, pan, release }} or {{ drums: [keys], gain, pan }}", tline, where)
             continue
         gain, pan = value.get("gain", 0.0), value.get("pan", 0.0)
         if not (is_number(gain) and -60 <= gain <= 24 and is_number(pan) and -1 <= pan <= 1):
@@ -254,6 +258,11 @@ def parse_tracks(raw: Any, kit: Kit, key: Key | None, report: Report, line: int 
             continue
         if ("roll" in value) == ("drums" in value):
             _bad(report, "E001", f"track {name!r} needs exactly one of roll: [low, high] (melodic) or drums: [keys]", tline, where)
+            continue
+        release = value.get("release")
+        if release is not None and ("drums" in value or not (is_number(release) and 0 <= release <= MAX_RELEASE)):
+            why = "drum hits ring for their decay; release is for roll tracks" if "drums" in value else f"release must be 0-{MAX_RELEASE:g} seconds"
+            _bad(report, "E001", f"track {name!r}: {why}", line_of(value, "release", tline), f"{where}.release")
             continue
         if "drums" in value:
             keys = value["drums"]
@@ -289,7 +298,7 @@ def parse_tracks(raw: Any, kit: Kit, key: Key | None, report: Report, line: int 
         if len(rows) > 64:
             _bad(report, "E001", f"track {name!r}: {len(rows)} rows is too many; keep a roll within about two octaves", tline, f"{where}.roll")
             continue
-        tracks[name] = Track(name, False, rows, float(gain), float(pan), tline)
+        tracks[name] = Track(name, False, rows, float(gain), float(pan), tline, float(release) if release is not None else None)
     return tracks
 
 
@@ -390,7 +399,7 @@ def _resolve_pattern(name: str, ctx: _Context, chain: tuple[str, ...] = ()) -> P
         _bad(report, "E001", f"pattern {name!r} must be a mapping: {{ length, <track>: lane }} or {{ from: <pattern>, ... }}", pline, where)
         ctx.failed.add(name)
         return None
-    allowed = ("length", *DERIVE_FIELDS, *DYNAMICS_FIELDS, *ctx.tracks)
+    allowed = ("length", *DERIVE_FIELDS, *DYNAMICS_FIELDS, "release", *ctx.tracks)
     for k in raw:
         if k not in allowed:
             hint = f"; tracks: {', '.join(ctx.tracks)}" if k not in DERIVE_FIELDS else ""
@@ -413,6 +422,10 @@ def _resolve_pattern(name: str, ctx: _Context, chain: tuple[str, ...] = ()) -> P
         pattern = Pattern(name, length, notes, lanes, pline)
     if pattern is not None and any(k in raw for k in DYNAMICS_FIELDS):
         pattern.notes = _dynamics(name, raw, pattern, ctx, pline, where)
+    if pattern is not None and "release" in raw and "release" not in ctx.tracks:  # a track named `release` keeps its lane
+        pattern.release = {**pattern.release, **_release(name, raw["release"], ctx, line_of(raw, "release", pline), f"{where}.release")}
+    if pattern is not None and pattern.release:
+        pattern.notes = [replace(n, release=pattern.release[n.track]) if n.track in pattern.release else n for n in pattern.notes]
     if pattern is None or any(f.severity == "error" for f in report.findings[before:]):
         ctx.failed.add(name)
         return None
@@ -461,6 +474,19 @@ def _dynamics(name: str, raw: dict[str, Any], pattern: Pattern, ctx: _Context, p
 
         notes = [replace(n, velocity=round(n.velocity * 10.0 ** (level(n.step) / 20.0), 6)) if n.track == track else n for n in notes]
     return [replace(n, velocity=min(2.0, max(0.05, n.velocity))) for n in notes]
+
+
+def _release(name: str, value: Any, ctx: _Context, line: int | None, where: str) -> dict[str, float]:
+    """`release: 3.0` (every roll track) or `{ pad: 3.0 }`: the notes of those tracks in this pattern release over
+    that many seconds instead of their instrument's release."""
+    roll = [t for t, tr in ctx.tracks.items() if not tr.drums]
+    if is_number(value):
+        value = {t: value for t in roll}
+    if not isinstance(value, dict) or not all(k in roll and is_number(v) and 0 <= v <= MAX_RELEASE for k, v in value.items()):
+        _bad(ctx.report, "E003", f"pattern {name!r}: release must be seconds (0-{MAX_RELEASE:g}) for every roll track or {{ track: seconds }}, "
+             f"e.g. {{ pad: 3.0 }} (roll tracks: {', '.join(roll)}; drum hits ring for their decay)", line, where)  # fmt: skip
+        return {}
+    return {str(k): float(v) for k, v in value.items()}
 
 
 def _per_track(value: Any, tracks: dict[str, Track], what: str, report: Report, line: int | None, where: str) -> dict[str, int] | None:
@@ -561,7 +587,7 @@ def _derive(name: str, raw: dict[str, Any], ctx: _Context, chain: tuple[str, ...
             notes += parse_lane(raw[track.name], track, length, ctx.kit, ctx.key, report, f"{where}.{track.name}", line_of(raw, track.name, pline))
             lanes.add(track.name)
     lanes -= set(mute)
-    return Pattern(name, length, sorted(notes, key=lambda n: (n.track, n.step, n.row)), lanes, pline, source_name)
+    return Pattern(name, length, sorted(notes, key=lambda n: (n.track, n.step, n.row)), lanes, pline, source_name, dict(source.release))
 
 
 def _variant(name: str, raw: Any, song_kit: Kit, project: Project, report: Report, line: int | None, where: str) -> Variant | None:
@@ -1058,6 +1084,11 @@ def note_midi(song: Song, note: Note, variant: Variant | None = None, section: S
         if change is not None and midi is not None:
             midi, key = _move(midi, key, change)
     return midi if midi is not None and 0 <= midi <= 127 else None
+
+
+def note_release(song: Song, note: Note) -> float | None:
+    """A note's release override (seconds): its pattern's for its track, else its track's; None = the instrument's."""
+    return note.release if note.release is not None else song.tracks[note.track].release
 
 
 def section_key(section: SectionChange | None, key: str) -> str:

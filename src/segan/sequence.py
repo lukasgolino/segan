@@ -10,7 +10,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field, replace
 
 from segan.dsp import seed_of, uniform
-from segan.song import Note, Song, Variant, instrument_for, note_midi, section_key
+from segan.patch import with_release
+from segan.song import Note, Song, Variant, instrument_for, note_midi, note_release, section_key
 from segan.voices import NoteEvent
 
 
@@ -133,6 +134,9 @@ def song_events(song: Song, timeline: Timeline, rate: int, variant: Variant | No
         if inst is None:
             continue
         track = song.tracks[p.note.track]
+        release = note_release(song, p.note)
+        if release is not None:
+            inst = with_release(inst, release)
         start = timeline.frame(p.step, rate)
         if track.drums:
             gate = timeline.step_seconds * 0.5

@@ -260,6 +260,15 @@ class Report:
         return any(f.severity == "error" for f in self.findings)
 
 
+def with_release(inst: Instrument, seconds: float) -> Instrument:
+    """The instrument with its release set to `seconds` (a song's track/pattern override). A `max_ring` shorter
+    than that is lifted to it, so the override is heard; drums keep their decay."""
+    if inst.is_drum:
+        return inst
+    ring = inst.max_ring if inst.max_ring is None else max(inst.max_ring, seconds)
+    return replace(inst, env=replace(inst.env, release=seconds), max_ring=ring)
+
+
 def is_number(value: Any) -> bool:
     return isinstance(value, int | float) and not isinstance(value, bool) and math.isfinite(value)
 

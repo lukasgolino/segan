@@ -15,7 +15,7 @@ from segan.preview import level_stats
 from segan.project import Project
 from segan.render import Output
 from segan.sequence import Timeline, build_timeline, placed_notes
-from segan.song import Song, Variant
+from segan.song import Song, Variant, note_release
 
 
 def variant_of(song: Song, output: Output) -> Variant | None:
@@ -149,7 +149,8 @@ def measure_pitch(song: Song, project: Project) -> dict[str, Any]:
         previous_end = -1.0
         for p in mine:
             inst = song.kit.instruments.get(p.key)
-            ringing_until = previous_end + (inst.env.release if inst is not None else 0.0)
+            release = note_release(song, p.note)
+            ringing_until = previous_end + ((release if release is not None else inst.env.release) if inst is not None else 0.0)
             previous_end = timeline.seconds(p.step + p.note.length)
             if inst is None or inst.arp or inst.is_drum or inst.wave in ("noise", "bitnoise", "impulses") or is_one_shot(inst):
                 skip("arpeggio, noise or one-shot instrument" if inst is not None else "no instrument")

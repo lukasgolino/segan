@@ -284,3 +284,129 @@ def test_pitch_check_reads_harmonics_and_sample_detune(project: Project) -> None
     assert song is not None, findings
     lead = pitch_check(song, project)["lead"]
     assert lead["off"] == [] and 30 < lead["detune_cents"]["lead"] < 50 and lead["notes_checked"] >= 3
+
+
+# --- release overrides (#10) ---------------------------------------------------------------------
+
+STING = """\
+name: sting
+tempo: 120
+key: C major
+tracks:
+  lead: { roll: [C5, D5] }
+  bass: { roll: [C3, D3], release: 0.5 }
+  drums: { drums: [k] }
+patterns:
+  a:
+    length: 8
+    lead: |
+      ........  D5
+      p-......  C5
+    bass: |
+      ........  D3
+      b-......  C3
+    drums: |
+      x.......  k
+  end:
+    length: 8
+    release: { lead: 3.0 }
+    lead: |
+      ........  D5
+      p-......  C5
+    bass: |
+      ........  D3
+      b-......  C3
+  echo: { from: end, mute: [bass] }
+  all: { from: a, release: 2.0 }
+sections:
+  main: [a, end, echo, all]
+arrangement: [main]
+"""
+
+
+def _events(song, project):  # type: ignore[no-untyped-def]
+    from segan.sequence import song_events
+
+    timeline = build_timeline(song)
+    return song_events(song, timeline, 22050)
+
+
+def test_release_overrides_parse_and_reach_the_events(project: Project) -> None:
+    song, findings = load(project, "song", "sting", STING)
+    assert song is not None, findings
+    assert song.tracks["bass"].release == 0.5 and song.tracks["lead"].release is None
+    assert song.patterns["end"].release == {"lead": 3.0}
+    assert song.patterns["echo"].release == {"lead": 3.0}  # a derived pattern keeps its source's
+    assert song.patterns["all"].release == {"lead": 2.0, "bass": 2.0}  # a number: every roll track
+    releases = [(e.track, e.inst.env.release, e.inst.key) for e in sorted(_events(song, project), key=lambda e: (e.start, e.track))]
+    assert releases == [
+        ("bass", 0.5, "b"), ("drums", 0.1, "k"), ("lead", 0.05, "p"),  # a: the kit's release, the bass track's override
+        ("bass", 0.5, "b"), ("lead", 3.0, "p"),  # end: the pattern's override for lead
+        ("lead", 3.0, "p"),  # echo
+        ("bass", 2.0, "b"), ("drums", 0.1, "k"), ("lead", 2.0, "p"),  # all: the pattern's over the track's
+    ]  # fmt: skip
+
+
+@pytest.mark.parametrize(
+    ("old", "new", "rule"),
+    [
+        ("  bass: { roll: [C3, D3], release: 0.5 }", "  bass: { roll: [C3, D3], release: 31 }", "E001"),
+        ("  drums: { drums: [k] }", "  drums: { drums: [k], release: 1.0 }", "E001"),
+        ("release: { lead: 3.0 }", "release: { drums: 3.0 }", "E003"),
+        ("release: { lead: 3.0 }", "release: { nope: 3.0 }", "E003"),
+        ("release: { lead: 3.0 }", "release: { lead: -1 }", "E003"),
+        ("release: { lead: 3.0 }", "release: long", "E003"),
+    ],
+)
+def test_release_override_errors(project: Project, old: str, new: str, rule: str) -> None:
+    assert old in STING
+    song, findings = load(project, "song", "sting", STING.replace(old, new, 1))
+    assert song is None and rule in [f.rule for f in findings], [(f.rule, f.message) for f in findings]
+
+
+def test_a_track_named_release_keeps_its_lane(project: Project) -> None:
+    text = STING.replace("  bass: { roll: [C3, D3], release: 0.5 }", "  release: { roll: [C3, D3] }").replace("    bass: |", "    release: |")
+    text = text.replace("  echo: { from: end, mute: [bass] }", "  echo: { from: end, mute: [release] }").replace("    release: { lead: 3.0 }\n", "")
+    text = text.replace("  all: { from: a, release: 2.0 }", "  all: { from: a }")
+    song, findings = load(project, "song", "sting", text)
+    assert song is not None, findings
+    assert song.patterns["end"].release == {} and any(n.track == "release" for n in song.patterns["end"].notes)
+
+
+def test_release_override_rings_out_in_the_loop_and_the_cache_key(project: Project) -> None:
+    from segan.similarity import fingerprint
+    from segan.songrender import song_cache_parts
+
+    text = SPARSE.replace("p...|", "q...|")  # two voices: the next pass doesn't cut the last note
+    plain, _ = load(project, "song", "sparse", text)
+    long, findings = load(project, "song", "sparse", text.replace("    length: 16\n", "    length: 16\n    release: { lead: 4.0 }\n"))
+    assert long is not None, findings
+    assert song_cache_parts(plain, project) != song_cache_parts(long, project)
+    assert fingerprint(plain).timbre != fingerprint(long).timbre
+    a, b = render_asset(plain, project).main, render_asset(long, project).main
+    assert a.loop is not None and b.loop is not None
+    assert b.loop[0] - a.loop[0] == round(2.0 * 22050)  # the 4 s release rings into a second bar of loop offset (the loop's length)
+    assert b.frames > a.frames
+
+
+def test_release_override_lifts_max_ring() -> None:
+    from segan.patch import Env, Instrument, with_release
+
+    inst = Instrument(env=Env(release=0.1), max_ring=0.5)
+    assert with_release(inst, 2.0).max_ring == 2.0 and with_release(inst, 2.0).env.release == 2.0
+    assert with_release(inst, 0.2).max_ring == 0.5
+    drum = Instrument(source="drum", wave="kick")
+    assert with_release(drum, 2.0) is drum
+
+
+def test_flow_sections_ring_out_with_the_release_override(project: Project) -> None:
+    from segan.flowrender import flow_sections
+
+    flow = "sections:\n  a1: [a]\n  b1: [end]\narrangement: [a1, b1]\nflow: { start: a1, next: { a1: [b1], b1: [a1] } }\n"
+    import re
+
+    patterns = re.sub(r"([-.a-z]{8})(  [A-Za-z])", lambda m: m.group(1) + "........" + m.group(2), STING.split("sections:")[0])
+    song, findings = load(project, "song", "sting", patterns.replace("    length: 8", "    length: 16") + flow)
+    assert song is not None, findings
+    sections, _ = flow_sections(song, project, None)
+    assert sections["b1"].ring >= round(1.2 * 22050) > sections["a1"].ring  # 0.25 s held + 3 s release - the 2 s bar
