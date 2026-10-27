@@ -46,7 +46,7 @@ patterns:
   drift). Every command takes `--json` and exits non-zero on errors; lint findings carry rule id, file, line
   and a fix hint.
 
-> **Status:** v0.13: the full pipeline works (kits, SFX, songs, lint, listen sheets, build, Godot 4, MIDI
+> **Status:** v0.14: the full pipeline works (kits, SFX, songs, lint, listen sheets, build, Godot 4, MIDI
 > import, MCP server, Claude skill), with synth and sampled instruments. See [PLAN.md](PLAN.md) and
 > [CHANGELOG.md](CHANGELOG.md).
 
@@ -55,9 +55,9 @@ patterns:
 Requires Python 3.11+. SEGAN isn't on PyPI yet; install a tagged release from GitHub:
 
 ```sh
-pip install "git+https://github.com/lukasgolino/segan.git@v0.13.0"                 # the CLI + library
-pip install "segan[mcp] @ git+https://github.com/lukasgolino/segan.git@v0.13.0"    # + the MCP server
-pip install "segan[ogg] @ git+https://github.com/lukasgolino/segan.git@v0.13.0"    # + Ogg Vorbis music export, .ogg/.flac/.mp3 recordings
+pip install "git+https://github.com/lukasgolino/segan.git@v0.14.0"                 # the CLI + library
+pip install "segan[mcp] @ git+https://github.com/lukasgolino/segan.git@v0.14.0"    # + the MCP server
+pip install "segan[ogg] @ git+https://github.com/lukasgolino/segan.git@v0.14.0"    # + Ogg Vorbis music export, .ogg/.flac/.mp3 recordings
 segan --version
 ```
 
@@ -126,7 +126,7 @@ segan skill install          # copies it to <repo>/.claude/skills/segan/
 ## Using SEGAN from any agent (MCP)
 
 ```sh
-pip install "segan[mcp] @ git+https://github.com/lukasgolino/segan.git@v0.13.0"
+pip install "segan[mcp] @ git+https://github.com/lukasgolino/segan.git@v0.14.0"
 segan mcp --project path/to/audio      # stdio MCP server: 26 tools, listen sheets as images, WAVs as audio
 ```
 

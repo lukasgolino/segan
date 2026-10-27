@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "segan"
-version = "0.13.0"
+version = "0.14.0"
 description = "SEGAN (Sound Effect Grammar And Notation): write game sound effects and music as text, build them into WAVs and game-ready assets."
 readme = "README.md"
 license = "MIT"
