@@ -20,6 +20,7 @@ phases:
 from __future__ import annotations
 
 import re
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from importlib.resources import files
 from pathlib import Path
@@ -38,7 +39,7 @@ if TYPE_CHECKING:
 
 PRESETS = ("coin", "jump", "laser", "explosion", "hit", "hurt", "powerup", "blip", "select", "door", "step")
 SFX_FIELDS = (*META_FIELDS, "category", "kit", "instruments", "groups", "preset", "duration", "layers", "variations", "phases", "room",
-              "loop", "crossfade", "normalize")  # fmt: skip
+              "loop", "crossfade", "normalize", "playback")  # fmt: skip
 RECORDED_FIELDS = ("trim", "reverse", "fade", "shift", "stretch", "source", "licence", "license", "author")
 LAYER_EXTRA = ("id", "instrument", "start", "length", "pitch", "slide", "gain", "cutoff", "distort", "delay", "ring", *RECORDED_FIELDS)
 PHASE_FIELDS = ("duration", "loop", "layers", "crossfade")
@@ -120,6 +121,7 @@ class Sfx:
     preset: str | None = None
     effective: dict[str, Any] = field(default_factory=dict)  # fields after preset/extends (for `segan bake sfx`)
     room: float | None = None  # room send (0-1, x mix.room); None = the category's [room] entry
+    playback: dict[str, float | int] | None = None  # hints for the game (manifest only): max_instances, min_gap_s, repeat_attenuation_db
 
     @property
     def name(self) -> str:
@@ -490,6 +492,7 @@ def parse_sfx(data: dict[str, Any], path: Path | None, project: Project, report:
     if room is not None and not (is_number(room) and 0 <= room <= 1):
         report.error("E013", "room must be a send of 0-1 (x the project's mix.room; 0 = dry, no tail)", line_of(data, "room", line), "room")
         room = None
+    playback = _playback(data.get("playback"), report, line_of(data, "playback", line))
     phases: dict[str, Phase] = {}
     raw_phases = data.get("phases")
     if raw_phases is not None:
@@ -505,8 +508,32 @@ def parse_sfx(data: dict[str, Any], path: Path | None, project: Project, report:
     if report.failed or duration is None or layers is None:
         return None, report.findings
     sfx = Sfx(meta, category, kit, duration, layers, loop, float(crossfade), variations, phases, normalize,
-              preset if isinstance(preset, str) else None, dict(data), float(room) if room is not None else None)  # fmt: skip
+              preset if isinstance(preset, str) else None, dict(data), float(room) if room is not None else None, playback)  # fmt: skip
     return sfx, report.findings
+
+
+PLAYBACK_HINTS: dict[str, tuple[Callable[[Any], bool], str]] = {  # name -> (check, range text); the game (or segan_sfx.gd) applies them, the render never does
+    "max_instances": (lambda v: isinstance(v, int) and not isinstance(v, bool) and 1 <= v <= 64, "a whole number 1-64"),
+    "min_gap_s": (lambda v: is_number(v) and 0 <= v <= 10, "0-10 seconds"),
+    "repeat_attenuation_db": (lambda v: is_number(v) and 0 <= v <= 24, "0-24 dB"),
+}
+
+
+def _playback(raw: Any, report: Report, line: int | None) -> dict[str, float | int] | None:
+    """`playback: { max_instances, min_gap_s, repeat_attenuation_db }`: copied into the manifest as given."""
+    if raw is None:
+        return None
+    if not isinstance(raw, dict) or not raw or any(k not in PLAYBACK_HINTS for k in raw):
+        report.error("E013", "playback must be { max_instances (at once), min_gap_s (between starts), repeat_attenuation_db (per copy already playing) }", line, "playback")
+        return None
+    out: dict[str, float | int] = {}
+    for key, value in raw.items():
+        check, text = PLAYBACK_HINTS[key]
+        if not check(value):
+            report.error("E013", f"playback.{key} must be {text}", line, f"playback.{key}")
+            return None
+        out[key] = value if key == "max_instances" else float(value)
+    return out
 
 
 def _variations(raw: Any, report: Report, line: int | None) -> Variations | None:

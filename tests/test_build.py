@@ -105,6 +105,63 @@ def test_godot_export(tmp_path: Path) -> None:
     start, end = tune["loop"]["start"], tune["loop"]["end"]
     assert f"edit/loop_begin={start - 1}" in imported and f"edit/loop_end={end - 1}" in imported and "compress/mode=2" in imported
     assert "edit/loop_mode=1" in (audio / "sfx" / "coin.wav.import").read_text()
+    # #17: without [bus] or playback hints nothing new appears
+    assert "buses" not in manifest and "godot_bus_layout" not in manifest and all("bus" not in e and "playback" not in e for e in manifest["assets"].values())
+    assert not (audio / "segan_sfx.gd").exists() and not (audio / "segan_buses.tres").exists()
+
+
+BUSES = """
+[bus.pickup]
+bus = "SFX"
+volume_db = -3
+
+[bus]
+music = { bus = "Music", volume_db = -6 }
+ui = { bus = "SFX" }
+"""
+
+
+def test_buses_and_playback_hints(tmp_path: Path) -> None:
+    (tmp_path / "game").mkdir()
+    (tmp_path / "game" / "project.godot").write_text("config_version=5\n")
+    (tmp_path / "src").mkdir()
+    config = CONFIG.replace('default_kit = "t"', 'default_kit = "t"\noutput_dir = "../game/audio"\nexport = ["wav", "godot"]')
+    root = setup(tmp_path / "src", config + BUSES)  # both TOML shapes: [bus.<category>] and inline tables
+    write(load_project(root), "sfx", "coin", "name: coin\npreset: coin\nvariations: { count: 3, seed: 1, pitch: 1 }\n"
+          "playback: { max_instances: 2, min_gap_s: 0.03, repeat_attenuation_db: 2 }\n")  # fmt: skip
+    project = load_project(root)
+    assert project.config.bus["ui"].bus == "SFX" and project.config.bus["ui"].volume_db == 0.0
+    result = build(project)
+    assert not result.errors, result.errors
+    audio = tmp_path / "game" / "audio"
+    manifest = json.loads((audio / "manifest.json").read_text())
+    assert manifest["buses"] == {"music": {"bus": "Music", "volume_db": -6.0}, "pickup": {"bus": "SFX", "volume_db": -3.0},
+                                 "ui": {"bus": "SFX", "volume_db": 0.0}}  # fmt: skip
+    coin, hum, tune = (manifest["assets"][n] for n in ("coin", "hum", "tune"))
+    assert coin["bus"] == "SFX" and tune["bus"] == "Music" and "bus" not in hum  # category sfx isn't listed: Master
+    assert coin["playback"] == {"max_instances": 2, "min_gap_s": 0.03, "repeat_attenuation_db": 2.0} and "playback" not in hum
+    assert manifest["godot_bus_layout"] == "res://audio/segan_buses.tres"
+    layout = (audio / "segan_buses.tres").read_text()
+    assert layout.startswith('[gd_resource type="AudioBusLayout" format=3]') and 'bus/1/name = &"Music"' in layout and 'bus/2/name = &"SFX"' in layout
+    assert "bus/3/" not in layout and "Master\"\n" in layout and not (audio / "default_bus_layout.tres").exists()
+    assert (audio / "segan_sfx.gd").read_text().startswith("# SEGAN SFX player")
+    assert {"segan_buses.tres", "segan_sfx.gd"} <= set(manifest["files"])
+    # dropping [bus] and the hints removes both files again
+    (root / "segan.toml").write_text(config)
+    write(load_project(root), "sfx", "coin", "name: coin\npreset: coin\nvariations: { count: 3, seed: 1, pitch: 1 }\n")
+    result = build(load_project(root))
+    assert sorted(p.name for p in result.removed) == ["segan_buses.tres", "segan_sfx.gd"]
+    assert "buses" not in json.loads((audio / "manifest.json").read_text())
+
+
+def test_buses_without_godot_are_manifest_only(tmp_path: Path) -> None:
+    root = setup(tmp_path, CONFIG + '\n[bus.pickup]\nbus = "SFX"\n')
+    result = build(load_project(root))
+    assert not result.errors, result.errors
+    out = root / "build" / "audio"
+    manifest = json.loads((out / "manifest.json").read_text())
+    assert manifest["buses"] == {"pickup": {"bus": "SFX", "volume_db": 0.0}} and "godot_bus_layout" not in manifest
+    assert not (out / "segan_sfx.gd").exists() and not (out / "segan_buses.tres").exists()  # Godot files need export "godot"
 
 
 def test_edit_import_keeps_godots_lines(tmp_path: Path) -> None:

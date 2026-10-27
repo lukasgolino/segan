@@ -250,3 +250,17 @@ def test_preview_reel_plays_every_variation(project: Project, monkeypatch: pytes
     wav = read_wav(Path(entry["wav"]).read_bytes())  # paths are shown relative to the cwd (the project)
     assert wav.frames / 22050 == pytest.approx(takes[-1]["start_s"] + takes[-1]["seconds"], abs=1e-3)
     assert Path(entry["sheet"]).exists()
+
+
+def test_playback_hints(project: Project) -> None:
+    """#17: game-side hints, parsed and checked but never rendered."""
+    from segan.sfxrender import sfx_cache_parts
+
+    sfx, findings = load(project, "sfx", "zap", BASIC + "playback: { max_instances: 3, min_gap_s: 0.05, repeat_attenuation_db: 1.5 }\n")
+    assert sfx is not None, findings
+    assert sfx.playback == {"max_instances": 3, "min_gap_s": 0.05, "repeat_attenuation_db": 1.5}
+    plain, _ = load(project, "sfx", "zap", BASIC)
+    assert plain is not None and plain.playback is None and sfx_cache_parts(plain, project) == sfx_cache_parts(sfx, project)
+    for bad in ("{ max_instances: 0 }", "{ max_instances: 2.5 }", "{ min_gap_s: -1 }", "{ repeat_attenuation_db: 30 }", "{ cooldown: 1 }", "{}", "4"):
+        sfx, findings = load(project, "sfx", "zap", BASIC + f"playback: {bad}\n")
+        assert sfx is None and "E013" in rules(findings), bad

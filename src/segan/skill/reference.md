@@ -210,6 +210,11 @@ More SFX fields:
   (a +dB variation aims above the target: near the limiter cap it gets W001). `include_main: false` builds only
   `<name>.1..N.wav` (no `<name>.wav`) when the game plays the randomizer.
 - `room: 0-1`: this SFX's room send (x `[mix] room`; 0 = dry, no tail). Default: its category's `[room]` entry, else 1.
+- `playback: { max_instances, min_gap_s, repeat_attenuation_db }`: hints for the game, copied into the manifest
+  as given (the render ignores them): at most `max_instances` (1-64) copies at once (the oldest stops), plays
+  closer than `min_gap_s` (0-10 s) to the last start dropped, each copy still sounding makes a new one
+  `repeat_attenuation_db` (0-24 dB) quieter. For frequent sounds (gunfire, footsteps, pickups in a burst):
+  `playback: { max_instances: 4, min_gap_s: 0.03, repeat_attenuation_db: 2 }`. `segan_sfx.gd` honours them (Godot).
 - `phases`: `{ <name>: { duration, loop, crossfade, layers } }` - each phase is its own output `<name>.<phase>.wav`
   (layers default to the SFX's own); e.g. a looping `charge` and a one-shot `release`.
 - `loop: true` + `crossfade` (s, default 0.05): a seamless loop (engine hum, alarm): the end blends into the start.
@@ -510,6 +515,11 @@ tail_trim_db = -70.0          # room tail cut this far below the peak (-40 = sho
 
 [room]                        # room send per category, 0-1 x mix.room (unlisted: 1); e.g. ui = 0 (dry, no tail)
 
+[bus.pickup]                  # mix bus per category (optional; unlisted categories play on Master)
+bus = "SFX"                   #   engine bus name: a letter, then letters, digits or '_'
+volume_db = -3                #   the category's default playback volume, -60..12 dB (the bus stays at 0 dB)
+                              # same TOML: [bus] pickup = { bus = "SFX", volume_db = -3 }; `segan config set bus.pickup.volume_db -3`
+
 [loudness]                    # LUFS per category, -60..-5 (songs: integrated; SFX: loudest 400 ms; unlisted categories, songs too, use sfx)
 music = -16.0
 sfx = -14.0
@@ -634,7 +644,8 @@ Turn warnings off for one asset with `lint: { disable: [...] }`, for every asset
 `tags`, `status`, `style_version`, `sample_rate`, and
 - every audio file as `{ file, seconds, samples, channels, loop }` (`loop` = `{start, end}` in samples, end
   exclusive, or null), `lufs`, `target_lufs`, `limiting_db`;
-- SFX: `lufs`/`target_lufs`/`limiting_db` on the main sound and on each variation; `dry_seconds` on every one-shot file entry (the sound without its room tail: how long a voice pool should
+- with `[bus]`: `bus` on every asset whose category is listed;
+- SFX: `playback` (the SFX's hints, when it has them); `lufs`/`target_lufs`/`limiting_db` on the main sound and on each variation; `dry_seconds` on every one-shot file entry (the sound without its room tail: how long a voice pool should
   count it busy; `seconds` includes the tail), `variations` (list, + `pitch_offset_semitones`), `godot_randomizer`, `phases` (name -> file entry);
 - songs: `bpm`, `meter`, `steps_per_beat`, `key`, `beat_seconds`, `beat_count`, `bars`, `sections` (name ->
   start/end in samples, seconds and bars, first occurrence), `arrangement` (every section in order), `markers`
@@ -650,7 +661,8 @@ Turn warnings off for one asset with `lint: { disable: [...] }`, for every asset
   head (`from[prev]` or `head`) for `head_samples` samples, then `rest` for `samples - head_samples`; after the
   last section, its `tail`. Clip files carry 32 extra samples (Godot stops a WAV a few samples before its end):
   play each for its stated length, not to its end.
-Top level: `soundtracks` (name -> `start`, `states` (state -> `songs` [{song, variant, weight, family}], `play`,
+Top level: `buses` (with `[bus]` only: category -> `bus`, `volume_db`), `godot_bus_layout` (with `[bus]` and
+export "godot": `segan_buses.tres`), `soundtracks` (name -> `start`, `states` (state -> `songs` [{song, variant, weight, family}], `play`,
 `gap`, `fade_out`, `crossfade`), `families`, `transitions` ("from>to" -> `at`, `fade`, `fade_in`, `stinger`,
 `start`), `default_transition`).
 Files: `music/<song>.wav`, `music/<song>.<variant>.wav`, `stems/<song>/<track>.wav`, `flow/<song>[.<variant>]/<clip>.wav`,
@@ -694,6 +706,22 @@ land after it), `random_seed` (0 = a different walk every run). It chains sectio
 AudioStreamGenerator fed from the clips); a new song starts on the old one's grid within one audio mix chunk.
 Native `AudioStreamInteractive`/`AudioStreamPlaylist` aren't generated: in Godot 4.7 the first switches a mix
 chunk early and cuts tails, the second clicks at every seam.
+
+**SFX player** (`segan_sfx.gd`, written next to `manifest.json` when the project has a `[bus]` table or any SFX
+has `playback` hints). Add it as an autoload named `SeganSfx`, then:
+
+```gdscript
+SeganSfx.play("coin")                        # its randomizer (or file), on its category's bus at its volume_db
+SeganSfx.play_2d("hit", global_position)     # / play_3d(name, Vector3): positional players
+var hum = SeganSfx.play("engine", -6.0)      # extra dB on top; returns the player (null: dropped by min_gap_s)
+SeganSfx.stop("engine")
+```
+
+It applies `playback` hints (min gap, instance cap stealing the oldest, repeat attenuation) and adds any bus the
+manifest names that the game's layout lacks (`add_missing_buses`, default on). `segan_buses.tres` is an
+AudioBusLayout with those buses (0 dB, sending to Master); SEGAN never writes `default_bus_layout.tres`. To use
+it: `AudioServer.set_bus_layout(load("res://.../segan_buses.tres"))`, or copy its buses into your own layout.
+`bus_for(name)`, `volume_db_for(name)` and `stream_for(name)` serve a game that plays through its own players.
 
 ## Generator scripts: `segan.api`
 

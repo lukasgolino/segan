@@ -95,6 +95,15 @@ class OggConfig:
     quality: float = 0.4  # Vorbis quality 0-1 (q0-q10 / 10); 0.4 is about 128 kbit/s stereo
 
 
+BUS_NAME_RE = re.compile(r"[A-Za-z][A-Za-z0-9_]{0,31}")
+
+
+@dataclass(frozen=True)
+class BusConfig:
+    bus: str = "Master"  # the engine bus this category's assets play on
+    volume_db: float = 0.0  # default playback volume for this category's assets (the bus itself stays at 0 dB)
+
+
 @dataclass(frozen=True)
 class Config:
     mode: Mode = "strict"
@@ -113,6 +122,7 @@ class Config:
     sounds: SoundsConfig = field(default_factory=SoundsConfig)
     seed: int | None = None  # the project seed: suggestions and rolled kits branch from it
     room: dict[str, float] = field(default_factory=dict)  # category -> room send (0-1, x mix.room)
+    bus: dict[str, BusConfig] = field(default_factory=dict)  # category -> mix bus + default dB ([bus.<category>])
 
     def target(self, category: str) -> float:
         """Loudness target (LUFS) for a category; categories not listed use `sfx`."""
@@ -228,7 +238,7 @@ def parse_config(data: dict[str, Any], path: Path) -> Config:
 
     defaults = Config()
     allowed = ("mode", "default_kit", "output_dir", "preview_dir", "export", "style_version", "seed", "mix", "loudness", "room", "lint", "godot", "ogg", "sfx",
-               "similarity", "sounds")  # fmt: skip
+               "similarity", "sounds", "bus")  # fmt: skip
     for key in data:
         if key not in allowed:
             error(f"unknown setting {key!r}; allowed: {', '.join(allowed)}", key)
@@ -268,6 +278,7 @@ def parse_config(data: dict[str, Any], path: Path) -> Config:
     mix = _parse_mix(data.get("mix", {}), error)
     loudness = _parse_loudness(data.get("loudness", {}), error)
     room = _parse_room(data.get("room", {}), error)
+    bus = _parse_bus(data.get("bus", {}), error)
     lint = _parse_lint(data.get("lint", {}), error)
     godot = _parse_godot(data.get("godot", {}), error)
     ogg = _parse_ogg(data.get("ogg", {}), error)
@@ -293,6 +304,7 @@ def parse_config(data: dict[str, Any], path: Path) -> Config:
         sounds=sounds,
         seed=seed,
         room=room,
+        bus=bus,
     )
 
 
@@ -370,6 +382,30 @@ def _parse_room(data: Any, error: Callable[[str, str], None]) -> dict[str, float
             error(f"room.{key} must be a send of 0-1 (x mix.room; 0 = dry, no tail)", f"room.{key}")
         else:
             out[key] = float(value)
+    return out
+
+
+def _parse_bus(data: Any, error: Callable[[str, str], None]) -> dict[str, BusConfig]:
+    """`[bus.<category>]` tables (or `<category> = { bus = "SFX", volume_db = -3 }` under `[bus]`: the same TOML)."""
+    out: dict[str, BusConfig] = {}
+    if not isinstance(data, dict):
+        error("[bus] must hold one table per category: [bus.<category>] with bus and volume_db", "bus")
+        return out
+    for key, table in data.items():
+        where = f"bus.{key}"
+        if not re.fullmatch(r"[a-z][a-z0-9_]*", key):
+            error(f"bus category {key!r} must be lowercase letters, digits or '_'", where)
+            continue
+        if not isinstance(table, dict) or set(table) - {"bus", "volume_db"}:
+            error(f'[bus.{key}] takes bus (an engine bus name, e.g. "SFX") and volume_db (the category\'s default dB)', where)
+            continue
+        name, volume = table.get("bus", "Master"), table.get("volume_db", 0.0)
+        if not (isinstance(name, str) and BUS_NAME_RE.fullmatch(name)):
+            error(f"{where}.bus must be a bus name: a letter, then letters, digits or '_' (up to 32), e.g. \"SFX\"", f"{where}.bus")
+        elif not (_number(volume) and -60 <= volume <= 12):
+            error(f"{where}.volume_db must be -60..12 dB (the category's default playback volume)", f"{where}.volume_db")
+        else:
+            out[key] = BusConfig(bus=name, volume_db=float(volume))
     return out
 
 

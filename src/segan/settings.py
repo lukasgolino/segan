@@ -88,6 +88,12 @@ def lookup(key: str) -> Setting | None:
         return Setting(key, None, f"loudness target for SFX with category {key.split('.')[1]}", "all")
     if re.fullmatch(r"room\.[a-z][a-z0-9_]*", key):
         return Setting(key, None, f"room send (0-1, x mix.room; 0 = dry, no tail) for assets with category {key.split('.')[1]}", "all")
+    bus = re.fullmatch(r"bus\.([a-z][a-z0-9_]*)\.(bus|volume_db)", key)
+    if bus:
+        category, name = bus.groups()
+        if name == "bus":
+            return Setting(key, None, f'mix bus (e.g. "SFX") for assets with category {category}: in manifest.json and segan_buses.tres', "build")
+        return Setting(key, None, f"default playback volume (dB) for assets with category {category}: in manifest.json `buses`", "build")
     return None
 
 
@@ -97,6 +103,9 @@ def current_value(config: Config, key: str) -> Any:
         return config.loudness.get(name)
     if table == "room":
         return config.room.get(name)
+    if table.startswith("bus."):
+        bus = config.bus.get(table[4:])
+        return getattr(bus, name) if bus is not None else None
     source: Any = getattr(config, table) if table else config
     value = getattr(source, name)
     if isinstance(value, tuple):
@@ -279,6 +288,7 @@ def unset_setting(project: Project, key: str) -> Change:
 def describe(config: Config) -> list[dict[str, Any]]:
     extra = [lookup(f"loudness.{c}") for c in sorted(config.loudness) if f"loudness.{c}" not in BY_KEY]
     extra += [lookup(f"room.{c}") for c in sorted(config.room)]
+    extra += [lookup(f"bus.{c}.{name}") for c in sorted(config.bus) for name in ("bus", "volume_db")]
     return [
         {
             "key": s.key,

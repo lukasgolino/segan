@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
@@ -69,3 +70,19 @@ def test_loudness_targets_reach_minus_60(tmp_path: Path) -> None:
     (tmp_path / "segan.toml").write_text('[loudness]\nhover = -61\n')
     with pytest.raises(SeganError):
         load_project(tmp_path)
+
+
+def test_bus_config_and_config_set(in_tmp: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    config = parse_config({"bus": {"ui": {"bus": "SFX", "volume_db": -3}, "music": {"volume_db": -6}}}, Path("segan.toml"))
+    assert (config.bus["ui"].bus, config.bus["ui"].volume_db, config.bus["music"].bus) == ("SFX", -3.0, "Master")
+    for bad in ({"UI": {"bus": "SFX"}}, {"ui": {"bus": "S FX"}}, {"ui": {"volume_db": 20}}, {"ui": {"gain": 1}}, {"ui": "SFX"}, ["x"]):
+        with pytest.raises(SeganError):
+            parse_config({"bus": bad}, Path("segan.toml"))
+    make_project(in_tmp)
+    assert run_json(["config", "set", "bus.ui.bus", "SFX"], capsys)[0] == 0
+    code, data = run_json(["config", "set", "bus.ui.volume_db", "-4.5"], capsys)
+    assert code == 0 and data["new"] == -4.5 and data["refreshes"] == "build"
+    assert "[bus.ui]" in (in_tmp / "segan.toml").read_text()
+    code, data = run_json(["config", "show"], capsys)
+    assert code == 0 and '"bus.ui.volume_db"' in json.dumps(data)
+    assert run_json(["config", "set", "bus.ui.bus", "two words"], capsys)[0] != 0
