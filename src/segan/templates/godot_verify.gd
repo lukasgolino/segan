@@ -119,6 +119,15 @@ func _walk(value, rate: int) -> void:
 		for item in value:
 			_walk(item, rate)
 
+# An SFX randomizer plays every variation; with takes, each take's variations (or the take itself when it has none).
+func _random_streams(entry: Dictionary) -> int:
+	if not entry.has("takes"):
+		return entry.get("variations", []).size()
+	var count := 0
+	for take in [entry] + entry["takes"]:
+		count += take["variations"].size() if take.has("variations") else 1
+	return count
+
 func _check() -> int:
 	var args := OS.get_cmdline_user_args()
 	var manifest_path: String = args[0] if args.size() > 0 else "res://assets/generated/audio/manifest.json"
@@ -137,8 +146,8 @@ func _check() -> int:
 			var randomizer = load(entry["godot_randomizer"])
 			if randomizer == null or not (randomizer is AudioStreamRandomizer):
 				_fail("not an AudioStreamRandomizer: " + str(entry["godot_randomizer"]))
-			elif randomizer.streams_count != entry.get("variations", []).size():
-				_fail(str(entry["godot_randomizer"]) + " has " + str(randomizer.streams_count) + " streams, expected " + str(entry.get("variations", []).size()))
+			elif randomizer.streams_count != _random_streams(entry):
+				_fail(str(entry["godot_randomizer"]) + " has " + str(randomizer.streams_count) + " streams, expected " + str(_random_streams(entry)))
 			else:
 				_plays(randomizer, entry["godot_randomizer"])
 				checked += 1

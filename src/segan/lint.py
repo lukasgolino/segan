@@ -176,7 +176,7 @@ def _unused_sounds(project: Project, assets: list[Any], errors: int) -> list[Fin
     except SoundsError:
         return []
     used = {lock_key(sound.ref, project.root) for a in assets if a.kind == "sfx"
-            for layer in [*a.layers, *(lay for phase in a.phases.values() for lay in phase.layers)] for sound in layer.recorded}  # fmt: skip
+            for layer in a.all_layers() for sound in layer.recorded}  # fmt: skip
     unused = sorted(k for k in entries if k not in used)
     if not unused:
         return []
@@ -223,7 +223,7 @@ def lint_asset(asset: Any, project: Project, render: bool = True) -> list[Findin
 
         found += lint_song_source(asset, project)
     if asset.kind == "sfx" and project.config.sfx.source == "synth":
-        layers = {id(layer): layer for layer in [*asset.layers, *(layer for phase in asset.phases.values() for layer in phase.layers)]}
+        layers = {id(layer): layer for layer in asset.all_layers()}
         for layer in layers.values():
             if layer.choices:
                 found.append(Finding("W020", f"layer {layer.id or layer.index} plays a recording, but segan.toml says [sfx] source = \"synth\": synthesise it, "
@@ -306,7 +306,7 @@ def lint_audio(asset: Any, project: Project) -> list[Finding]:
                 found.append(Finding("W005", f"{label} starts after {silence:.0f} ms of near-silence (> {cfg.max_leading_silence_ms:g} ms): it will feel "
                                      "late in game. Start the main layer at 0 and use a fast attack", path, None, label))  # fmt: skip
             for layer in output.info.get("sounding_at_end", []):
-                runs = _recorded_end(asset, layer, ctx)
+                runs = _recorded_end(asset, output.id, layer, ctx)
                 where = f" (the recording runs to {runs:g}s after trim/stretch/varispeed: a pitch below C4 plays it slower and longer)" if runs else ""
                 found.append(Finding("W011", f"{label}: layer {layer} is still sounding at duration {output.info.get('duration'):g}s and gets cut{where} "
                                      "(a click or a truncated tail): lengthen duration, or shorten the layer's length/release", path, None, f"duration ({layer})"))  # fmt: skip
@@ -317,16 +317,19 @@ def lint_audio(asset: Any, project: Project) -> list[Finding]:
     return list(dict.fromkeys(found))
 
 
-def _recorded_end(asset: Any, name: str, ctx: Context) -> float | None:
+def _recorded_end(asset: Any, output_id: str, name: str, ctx: Context) -> float | None:
     """Where a recorded layer named `name` ends uncut (W011's hint), None for synth layers."""
     from segan.dsp import seed_of
+    from segan.sfx import take_name
     from segan.sfxrender import layer_end
 
-    layers = {layer.id or f"layers.{layer.index}": layer for layer in asset.layers}
+    number = int(output_id.split(":")[1]) if output_id.startswith("take:") else 1
+    source = asset.take(number).layers if number > 1 else asset.layers
+    layers = {layer.id or f"layers.{layer.index}": layer for layer in source}
     layer = layers.get(name)
     if layer is None or not layer.choices:
         return None
-    return layer_end(layer, ctx, seed_of(asset.name, layer.index, 0))
+    return layer_end(layer, ctx, seed_of(take_name(asset.name, number), layer.index, 0))
 
 
 def _crossfade_onsets(asset: Any, ctx: Context) -> list[Finding]:
@@ -337,11 +340,12 @@ def _crossfade_onsets(asset: Any, ctx: Context) -> list[Finding]:
 
     loops = [("", asset.layers, asset.duration, asset.crossfade)] if asset.loop else []
     loops += [(f".{name}", phase.layers, phase.duration, phase.crossfade) for name, phase in asset.phases.items() if phase.loop]
+    loops += [(f".t{take.number}", take.layers, take.duration, asset.crossfade) for take in asset.takes if asset.loop]
     out = []
     for suffix, layers, duration, crossfade in loops:
         if crossfade <= 0:
             continue
-        dry, _ = dry_mix(layers, ctx, duration, asset.name, 0, 0.0, 0.0, False, 0.0)
+        dry, _ = dry_mix(layers, ctx, duration, asset.name + suffix if suffix.startswith(".t") else asset.name, 0, 0.0, 0.0, False, 0.0)
         early = [t for t in onsets(dry, ctx.rate) if 0.005 < t < crossfade]
         if early:
             out.append(Finding("W027", f"{asset.name}{suffix}: an onset at {early[0]:.2f}s falls inside the {crossfade:g}s loop crossfade, so it's blended "
@@ -367,7 +371,7 @@ def _filter_loss(asset: Any, ctx: Context) -> list[Finding]:
     from segan.sfxrender import render_layer
 
     out = []
-    groups = [list(asset.layers), *(list(phase.layers) for phase in asset.phases.values())]
+    groups = [list(asset.layers), *(list(phase.layers) for phase in asset.phases.values()), *(list(take.layers) for take in asset.takes)]
     for layers in groups:
         levels: dict[int, float] = {}
         rendered: dict[int, Any] = {}
@@ -409,6 +413,12 @@ def _asset_aliasing(asset: Any, ctx: Context, threshold: float) -> list[Finding]
         for layer in layers.values():
             name = layer.id or f"layers.{layer.index}"
             tops[name] = (layer.inst, min(127, round(layer.top_midi())), layer.line, name)
+        for take in asset.takes:  # a take may play a layer higher than the SFX does
+            for layer in take.layers:
+                name = layer.id or f"layers.{layer.index}"
+                top = min(127, round(layer.top_midi()))
+                if name not in tops or top > tops[name][1]:
+                    tops[name] = (layer.inst, top, layer.line, name)
     else:
         from segan.sequence import build_timeline, placed_notes
 

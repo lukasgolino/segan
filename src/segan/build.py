@@ -115,6 +115,15 @@ def build(project: Project) -> BuildResult:
         assert godot_root is not None
         return res_path(path, godot_root)
 
+    def emit_variations(outputs: list[Output]) -> list[dict[str, Any]]:
+        infos = []
+        for output in outputs:
+            info = emit(output, "sfx")
+            info["pitch_offset_semitones"] = round(float(output.info.get("pitch_offset", 0.0)), 4)
+            info.update(_levels(output))  # each variation's own loudness (a +dB variation aims above the target)
+            infos.append(info)
+        return infos
+
     entries: dict[str, Any] = {}
     for asset in sorted((a for a in lint.assets if not a.meta.template), key=lambda a: a.name):
         render = render_asset(asset, project)
@@ -137,15 +146,26 @@ def build(project: Project) -> BuildResult:
                 entry.update(_levels(main))
             variations = [o for o in render.outputs if o.id.startswith("variation:")]
             if variations:
-                entry["variations"] = []
-                for output in variations:
-                    info = emit(output, "sfx")
-                    info["pitch_offset_semitones"] = round(float(output.info.get("pitch_offset", 0.0)), 4)
-                    info.update(_levels(output))  # each variation's own loudness (a +dB variation aims above the target)
-                    entry["variations"].append(info)
-                if godot_root is not None:
-                    streams = [v["file"] for v in entry["variations"]]
-                    entry["godot_randomizer"] = emit_tres(out / "sfx" / f"{asset.name}.tres", randomizer_tres(streams))
+                entry["variations"] = emit_variations(variations)
+            streams = [v["file"] for v in entry.get("variations", [])]
+            if asset.takes:  # take 1 is the entry itself; the randomizer plays every take's variations (or the take itself)
+                if not streams and "file" in entry:
+                    streams.append(entry["file"])
+                entry["takes"] = []
+                for take in asset.takes:
+                    prefix = f"take:{take.number}"
+                    info = {"take": take.number}
+                    if take.variations is None or take.variations.include_main:
+                        own = render.output(prefix)
+                        info.update(emit(own, "sfx"))
+                        info.update(_levels(own))
+                    take_variations = [o for o in render.outputs if o.id.startswith(f"{prefix}:variation:")]
+                    if take_variations:
+                        info["variations"] = emit_variations(take_variations)
+                    streams += [v["file"] for v in info["variations"]] if take_variations else [info["file"]]
+                    entry["takes"].append(info)
+            if godot_root is not None and streams and (variations or asset.takes):
+                entry["godot_randomizer"] = emit_tres(out / "sfx" / f"{asset.name}.tres", randomizer_tres(streams))
             phases = [o for o in render.outputs if o.id.startswith("phase:")]
             if phases:
                 entry["phases"] = {o.id.split(":", 1)[1]: emit(o, "sfx") for o in phases}

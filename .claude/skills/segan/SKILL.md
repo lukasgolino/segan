@@ -163,7 +163,8 @@ bass, harmony (pad, strings, choir, organ, keys), colour (pluck, mallet, bell, a
    - `duration` is the hard end of the dry sound; anything still sounding is cut (W011): lengthen it or shorten
      `length`/release.
    - Sounds that repeat a lot (steps, shots, hits) get `variations: { count: 4, pitch: 1, timbre: 0.3 }`;
-     Godot gets an AudioStreamRandomizer that cycles them.
+     Godot gets an AudioStreamRandomizer that cycles them. When the jitter still sounds samey, add `takes:` (other
+     layer mixes, envelopes and lengths of the same sound, merged by layer `id`): one asset, one randomizer over all.
    - The file is `duration` plus the shared room's tail (the sheet shows "1.10s + 0.26s room tail"). Short,
      frequent sounds (UI clicks) can go dry: `room: 0` on the SFX or `[room] ui = 0` in segan.toml.
    - `category` picks the loudness target: `sfx` -14, `ui` -20, `foley` -22 LUFS (segan.toml `[loudness]`).
@@ -288,7 +289,7 @@ resources into `output_dir`. Report what the game needs, from `manifest.json`:
 - the file (`res://...` in Godot), length, `loop` `{start, end}` in samples (end exclusive);
 - songs: `bpm`, `sections` and `markers` in samples, seconds and bars (for syncing game events), `variants`,
   `stems` (+ `godot_stems`, an AudioStreamSynchronized: set each stream's volume to bring layers in and out);
-- SFX: `variations` (+ `godot_randomizer`: play that one stream, it picks a variation each time), `phases`,
+- SFX: `variations`, `takes` (+ `godot_randomizer`: play that one stream, it picks a variation or take each time), `phases`,
   `playback` hints; with `[bus]` in segan.toml, each asset's `bus` and the top-level `buses` (category volumes).
 Frequent sounds (gunfire, footsteps, bursts of pickups) get `playback: { max_instances, min_gap_s,
 repeat_attenuation_db }` and quiet categories a `[bus.<category>] volume_db`, so the game doesn't invent its own

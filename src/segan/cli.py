@@ -400,7 +400,7 @@ def used_sounds(project: Project) -> tuple[dict[str, list[str]], dict[str, dict[
         asset, _ = load_asset(path, project)
         if asset is None:
             continue
-        layers = [*asset.layers, *(layer for phase in asset.phases.values() for layer in phase.layers)]
+        layers = asset.all_layers()
         for layer in layers:
             for sound in layer.recorded:
                 key = lock_key(sound.ref, project.root)
@@ -942,7 +942,7 @@ def cmd_bake_sfx(args: argparse.Namespace, out: Output) -> int:
     if target.exists() and not (args.force or args.in_place):
         raise usage_error("file already exists (pass --force to overwrite)", target)
     header = f"# Baked from {path.name}" + (f" (preset {sfx.preset})" if sfx.preset else "") + ": every field written out for hand-tuning.\n"
-    order = ["name", "description", "category", "kit", "duration", "loop", "crossfade", "normalize", "status", "style_version", "tags", "lint", "layers", "variations", "phases"]
+    order = ["name", "description", "category", "kit", "duration", "loop", "crossfade", "normalize", "status", "style_version", "tags", "lint", "layers", "variations", "takes", "phases"]
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(header + dump_mapping(fields, order), encoding="utf-8")
     out.say(f"baked {sfx.name} -> {display_path(target)}")
@@ -1454,8 +1454,8 @@ def build_parser() -> argparse.ArgumentParser:
     preview.add_argument("--to", dest="end", help="end of the shown window")
     preview.add_argument("--format", choices=("ogg", "mp3"), help="also write each preview as .ogg or .mp3 (to share; needs segan[ogg])")
     preview.add_argument("--output", action="append", help="only this output (repeat for several; one render): main, variant:<name>, variation:<n>, "
-                         "phase:<name>, stem:<name>, mix:<name>, flow:<clip>, walk (a flow song: a seeded walk through its sections; walk:<seed>), "
-                         "reel (an SFX: the main sound and every variation back to back)")  # fmt: skip
+                         "take:<k>, take:<k>:variation:<n>, phase:<name>, stem:<name>, mix:<name>, flow:<clip>, walk (a flow song: a seeded walk through its sections; walk:<seed>), "
+                         "reel (an SFX: the main sound, every variation and every take back to back)")  # fmt: skip
     preview.add_argument("--summary", action="store_true", help="one flat table row per output: asset, output, seconds, dry, LUFS, target, "
                          "peak, true peak (--json: a flat `summary` list next to `outputs`)")  # fmt: skip
     preview.set_defaults(handler=cmd_preview)
