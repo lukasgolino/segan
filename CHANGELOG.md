@@ -19,6 +19,8 @@ check before upgrading. Patch bumps never change existing behaviour. Every relea
 
 ## [Unreleased]
 
+## [0.14.0] - 2026-10-28
+
 ### Added
 
 - `segan preview --summary`: one flat row per output (asset, output, seconds, dry, LUFS, target, peak, true peak);
