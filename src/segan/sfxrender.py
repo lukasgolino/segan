@@ -15,7 +15,7 @@ from typing import Any
 
 import numpy as np
 
-from segan.analysis import SILENCE_DB, frames_of, max_momentary_lufs, peak_db, to_db
+from segan.analysis import MOMENTARY_WINDOW, SILENCE_DB, frames_of, max_momentary_lufs, peak_db, sfx_window, to_db
 from segan.dsp import Signal, db_to_gain, exp2, seed_of, sin_turns, uniform
 from segan.kitshow import context_for
 from segan.mix import bus, finish, room_tail, trim_tail
@@ -32,7 +32,7 @@ LOG2_10_OVER_20 = math.log2(10.0) / 20.0
 def sfx_cache_parts(sfx: Sfx, project: Project) -> tuple[object, ...]:
     return ("sfx", sfx.name, sfx.category, sfx.duration, sfx.layers, sfx.loop, sfx.crossfade, sfx.variations,
             sorted(sfx.phases.items()), sfx.normalize, project.config.mix_for(sfx.category, sfx.room), project.config.target(sfx.category),
-            *((sfx.takes,) if sfx.takes else ()))  # fmt: skip
+            *((sfx.takes,) if sfx.takes else ()), *(("short_sfx", project.config.short_sfx) if project.config.short_sfx != "window" else ()))  # fmt: skip
 
 
 def _keyframe_curve(frames: tuple[tuple[float, float], ...], slide: bool, offset: float = 0.0):  # type: ignore[no-untyped-def]
@@ -182,7 +182,8 @@ def dry_mix(layers: tuple[Layer, ...], ctx: Context, duration: float, name: str,
     return out, sounding
 
 
-def _finish_output(dry: Signal, sfx: Sfx, project: Project, loop: bool, gain_offset: float = 0.0) -> tuple[Signal, dict[str, float | None]]:
+def _finish_output(dry: Signal, sfx: Sfx, project: Project, loop: bool, gain_offset: float = 0.0,
+                   window: float = MOMENTARY_WINDOW) -> tuple[Signal, dict[str, float | None]]:  # fmt: skip
     mix = project.config.mix_for(sfx.category, sfx.room)
     rate = mix.sample_rate
     channels = 2 if mix.sfx_channels == "stereo" else 1
@@ -196,7 +197,7 @@ def _finish_output(dry: Signal, sfx: Sfx, project: Project, loop: bool, gain_off
     target = project.config.target(sfx.category) + gain_offset if sfx.normalize else None
     if target is None and gain_offset:
         wet = wet * 2.0 ** (gain_offset * LOG2_10_OVER_20)
-    final, level, _ = finish(wet, rate, target, "momentary", mix.limiter, project.config.lint.max_limiting_db)
+    final, level, _ = finish(wet, rate, target, "momentary", mix.limiter, project.config.lint.max_limiting_db, window)
     return final, level_dict(level)
 
 
@@ -207,7 +208,8 @@ def render_sfx(sfx: Sfx, project: Project) -> Render:
     def emit(output_id: str, stem: str, layers: tuple[Layer, ...], duration: float, loop: bool, crossfade: float,
              variation: int = 0, pitch: float = 0.0, timbre: float = 0.0, gain: float = 0.0, seed_name: str | None = None) -> None:  # fmt: skip
         dry, sounding = dry_mix(layers, ctx, duration, seed_name or sfx.name, variation, pitch, timbre, loop, crossfade)
-        final, level = _finish_output(dry, sfx, project, loop, gain)
+        window = sfx_window(duration, loop, project.config.short_sfx)
+        final, level = _finish_output(dry, sfx, project, loop, gain, window)
         pcm = to_pcm16(frames_of(final))
         if loop and len(pcm):
             # Loops start one frame in: the file opens with the loop's last frame, so players that (like Godot)
@@ -217,6 +219,8 @@ def render_sfx(sfx: Sfx, project: Project) -> Render:
                 "loop": loop, "dry_frames": len(dry), "room_tail": room_tail(project.config.mix_for(sfx.category, sfx.room))}  # fmt: skip
         if seed_name is not None:
             info["take"] = int(output_id.split(":")[1])
+        if window != MOMENTARY_WINDOW:
+            info["loudness_window"] = window
         outputs.append(Output(output_id, stem, pcm, ctx.rate, (1, len(pcm)) if loop else None, [], level, info))
 
     if sfx.layers:

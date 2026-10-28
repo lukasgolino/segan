@@ -903,6 +903,7 @@ def _summary_table(rows: list[dict[str, Any]]) -> str:
 
 
 def cmd_gallery(args: argparse.Namespace, out: Output) -> int:
+    from segan.analysis import MOMENTARY_WINDOW, max_momentary_lufs, true_peak_db
     from segan.listen import GalleryItem, gallery_image
     from segan.render import render_asset
 
@@ -913,8 +914,10 @@ def cmd_gallery(args: argparse.Namespace, out: Output) -> int:
         render = render_asset(asset, project)
         main = render.main
         category = getattr(asset, "category", "music")
+        dry = float(main.info.get("duration", MOMENTARY_WINDOW)) if asset.kind == "sfx" and not main.info.get("loop") else MOMENTARY_WINDOW
+        sounding = max_momentary_lufs(main.audio, main.rate, max(0.01, dry)) if dry < MOMENTARY_WINDOW else None
         items.append(GalleryItem(main.stem, category, main.audio, main.rate, float(main.level.get("lufs") or -100.0),
-                                 main.level.get("target"), float(main.level.get("measured") or -100.0)))  # fmt: skip
+                                 main.level.get("target"), true_peak_db(main.audio), sounding))  # fmt: skip
     path = Path(args.out) if args.out else project.preview_dir / "gallery.png"
     path.parent.mkdir(parents=True, exist_ok=True)
     gallery_image(items, f"{project.root.name} gallery").save(path)

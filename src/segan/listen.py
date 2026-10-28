@@ -455,7 +455,8 @@ class GalleryItem:
     rate: int
     lufs: float
     target: float | None
-    peak: float
+    peak: float  # true peak, dBTP
+    sounding: float | None = None  # a one-shot shorter than 400 ms: its loudest stretch of its own length (LUFS)
 
 
 def gallery_image(items: Sequence[GalleryItem], title: str) -> Image.Image:
@@ -488,14 +489,15 @@ def gallery_image(items: Sequence[GalleryItem], title: str) -> Image.Image:
             img.paste(Image.fromarray(pixels, "RGB"), (x, y + wave_h + 2))
         draw.text((x + w - 120, y + 1), f"{len(data) / item.rate:.2f}s {item.lufs:.1f} LUFS", fill=DIM, font=font(10))
     y = 40 + rows * cell_h + 10
-    draw.text((10, y), "loudness by asset (bar = LUFS, tick = category target)", fill=TEXT, font=f)
+    draw.text((10, y), "loudness by asset (bar = LUFS, tick = category target, dot = true peak dBTP; "
+                       "short one-shots: LUFS over their own length in brackets)", fill=TEXT, font=f)  # fmt: skip
     y += 18
     lo, hi = -40.0, 0.0
     order = sorted(items, key=lambda it: (it.category, it.name))
     for item in order:
         draw.text((10, y), f"{item.category}/{item.name}"[:28], fill=DIM, font=f)
         x0 = 230
-        span = WIDTH - x0 - 80
+        span = WIDTH - x0 - 200
 
         def px(v: float) -> float:
             return x0 + (max(lo, min(hi, v)) - lo) / (hi - lo) * span
@@ -505,6 +507,10 @@ def gallery_image(items: Sequence[GalleryItem], title: str) -> Image.Image:
         draw.rectangle([x0, y + 2, px(item.lufs), y + 12], fill=colour)
         if item.target is not None:
             draw.line([(px(item.target), y), (px(item.target), y + 14)], fill=TEXT, width=2)
-        draw.text((x0 + span + 6, y), f"{item.lufs:.1f}", fill=TEXT, font=f)
+        peak_x = px(item.peak)
+        draw.ellipse([peak_x - 3, y + 4, peak_x + 3, y + 10], fill=TEXT)
+        draw.text((x0 + span + 6, y), f"{item.lufs:.1f}  pk {item.peak:.1f}", fill=TEXT, font=f)
+        if item.sounding is not None:
+            draw.text((x0 + span + 116, y), f"({item.sounding:.1f})", fill=DIM, font=f)
         y += 18
     return img

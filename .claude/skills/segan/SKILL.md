@@ -311,6 +311,7 @@ Global changes go through the shared mix, so **every asset changes at once** and
 | "more retro / lo-fi" | `segan mix adjust --crush 8` (`0` = off) |
 | "everything too loud" | `segan mix adjust --loudness -2` (all targets) or `segan config set loudness.sfx -16` |
 | "UI too loud" | `segan config set loudness.ui -23` |
+| "short clicks/lasers too hot" (peak as high as an explosion) | `segan config set loudness.short_sfx duration` (one-shots under 400 ms measured over their own length); `segan gallery` shows peaks and that level in brackets |
 | "high notes sound harsh/buzzy" | `segan config set mix.oversample 4` (less aliasing) |
 | "the lead should be softer" | edit the kit instrument (every song using it changes); `segan kit show` |
 | "make the music more tense" | variants (`tempo`, `key`, `instrument_swap`) or new sections |

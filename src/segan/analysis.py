@@ -106,9 +106,14 @@ def integrated_lufs(x: Signal, rate: int) -> float:
     return float(_lufs(final.mean())) if len(final) else SILENCE_DB
 
 
-def momentary_lufs(x: Signal, rate: int) -> Signal:
-    """Momentary loudness (400 ms window) every 100 ms; short sounds are measured as one zero-padded window."""
-    return _lufs(_block_power(k_weight(x, rate), rate, 0.4, 0.1)) if len(x) else np.array([SILENCE_DB])
+MOMENTARY_WINDOW = 0.4  # seconds (BS.1770 momentary loudness)
+
+
+def momentary_lufs(x: Signal, rate: int, window: float = MOMENTARY_WINDOW) -> Signal:
+    """Momentary loudness (400 ms window) every 100 ms; short sounds are measured as one zero-padded window.
+    A shorter `window` (duration-aware SFX loudness) hops by a quarter of it."""
+    hop = 0.1 if window >= MOMENTARY_WINDOW else window / 4.0
+    return _lufs(_block_power(k_weight(x, rate), rate, window, hop)) if len(x) else np.array([SILENCE_DB])
 
 
 def short_term_lufs(x: Signal, rate: int) -> Signal:
@@ -116,13 +121,25 @@ def short_term_lufs(x: Signal, rate: int) -> Signal:
     return _lufs(_block_power(k_weight(x, rate), rate, 3.0, 0.1)) if len(x) else np.array([SILENCE_DB])
 
 
-def max_momentary_lufs(x: Signal, rate: int) -> float:
-    return float(momentary_lufs(x, rate).max())
+def max_momentary_lufs(x: Signal, rate: int, window: float = MOMENTARY_WINDOW) -> float:
+    return float(momentary_lufs(x, rate, window).max())
 
 
-def loudness(x: Signal, rate: int, measure: str) -> float:
-    """"integrated" (music) or "momentary" (one-shot SFX: the loudest 400 ms)."""
-    return integrated_lufs(x, rate) if measure == "integrated" else max_momentary_lufs(x, rate)
+def loudness(x: Signal, rate: int, measure: str, window: float = MOMENTARY_WINDOW) -> float:
+    """"integrated" (music) or "momentary" (one-shot SFX: the loudest 400 ms, or the loudest `window`)."""
+    return integrated_lufs(x, rate) if measure == "integrated" else max_momentary_lufs(x, rate, window)
+
+
+def sfx_window(duration: float, loop: bool, short_sfx: str) -> float:
+    """The window an SFX's loudness is measured over: 400 ms, or with `[loudness] short_sfx = "duration"` a one-shot's
+    own dry length when it is shorter (at least 10 ms), so a 60 ms click is measured while it sounds instead of
+    averaged with 340 ms of silence. Loops are heard continuously: always 400 ms."""
+    if short_sfx != "duration" or loop:
+        return MOMENTARY_WINDOW
+    return round(min(MOMENTARY_WINDOW, max(SHORT_SFX_MIN_WINDOW, duration)), 6)
+
+
+SHORT_SFX_MIN_WINDOW = 0.01
 
 
 # --- time-domain checks ------------------------------------------------------------------------
