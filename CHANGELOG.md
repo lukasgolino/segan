@@ -24,6 +24,11 @@ check before upgrading. Patch bumps never change existing behaviour. Every relea
 - Band-pass and notch filters take `bandwidth` (octaves between the -3 dB points, 0.05-4), overriding `resonance`; with
   `slope: 24` it is two identical stages with the same -3 dB points, so `{ type: bp, bandwidth: 0.1, slope: 24 }` is a
   narrow, steep band for zips and whistles. Also on the `filter` effect. Filters without it render as before (#88).
+- `[loudness] short_sfx = "duration"` (opt-in; default `"window"`): one-shot SFX shorter than 400 ms are measured over
+  their own dry length instead of a zero-padded 400 ms window, so a 60 ms click no longer comes out about 8 dB hotter
+  than it sounds. Loops and longer SFX are measured as before; preview's `loudness_measure` names the window (#87).
+- `segan gallery` shows each asset's true peak (a dot and `pk` in dBTP) and, for one-shots shorter than 400 ms, their
+  loudness over their own length in brackets (#87).
 
 ## [0.14.0] - 2026-10-28
 

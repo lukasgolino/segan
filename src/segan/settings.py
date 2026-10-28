@@ -60,6 +60,7 @@ SETTINGS: tuple[Setting, ...] = (
     Setting("loudness.music", -16.0, "loudness target for songs (integrated LUFS)", "all"),
     Setting("loudness.sfx", -14.0, "loudness target for SFX (loudest 400 ms, LUFS); any category not listed uses this", "all"),
     Setting("loudness.ui", -20.0, "loudness target for SFX with category ui", "all"),
+    Setting("loudness.short_sfx", "window", 'how one-shot SFX shorter than 400 ms are measured: "window" (the loudest 400 ms, zero-padded: short sounds come out hot) or "duration" (over their own length, so a 60 ms click sits about 8 dB lower); loops always use 400 ms', "all"),
     Setting("loudness.foley", -22.0, "loudness target for SFX with category foley (footsteps, handling: frequent, so quieter)", "all"),
     Setting("lint.disable", [], "warning ids to turn off", "lint"),
     Setting("lint.max_seam_click", 0.02, "W007: largest click allowed at a loop point (fraction of full scale)", "lint"),
@@ -99,6 +100,8 @@ def lookup(key: str) -> Setting | None:
 
 def current_value(config: Config, key: str) -> Any:
     table, _, name = key.rpartition(".")
+    if key == "loudness.short_sfx":
+        return config.short_sfx
     if table == "loudness":
         return config.loudness.get(name)
     if table == "room":

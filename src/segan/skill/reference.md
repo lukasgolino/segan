@@ -533,6 +533,8 @@ music = -16.0
 sfx = -14.0
 ui = -20.0
 foley = -22.0                 # add any category: boss = -12
+# short_sfx = "duration"      # opt-in: one-shots shorter than 400 ms are measured over their own length, not 400 ms
+                              # zero-padded (default "window": a 60 ms click comes out about 8 dB hotter than it sounds)
 
 [godot]
 compress = "qoa"              # qoa | ima | none

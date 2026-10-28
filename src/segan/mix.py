@@ -12,7 +12,7 @@ from functools import lru_cache
 
 import numpy as np
 
-from segan.analysis import frames_of, loudness, true_peak_envelope
+from segan.analysis import MOMENTARY_WINDOW, frames_of, loudness, true_peak_envelope
 from segan.dsp import Signal, biquad, db_to_gain, exp2, noise, round12, seed_of
 from segan.patch import Crush
 from segan.project import MixConfig
@@ -138,13 +138,14 @@ def limiter_gain(peaks: Signal, ceiling_db: float, rate: int) -> Signal:
     return np.asarray(np.minimum(smooth, required), dtype=np.float64)
 
 
-def finish(x: Signal, rate: int, target: float | None, measure: str, ceiling_db: float, max_limiting_db: float = 3.0) -> tuple[Signal, Level, Signal]:
+def finish(x: Signal, rate: int, target: float | None, measure: str, ceiling_db: float, max_limiting_db: float = 3.0,
+           window: float = MOMENTARY_WINDOW) -> tuple[Signal, Level, Signal]:  # fmt: skip
     """Normalise to `target` LUFS (None = keep the level) and limit to the true-peak ceiling. The limiter never
     takes off more than `max_limiting_db`: a sound too peaky to reach its target that way stays quieter
     (lint W001 reports the shortfall). Returns the signal, the level report and the total gain curve applied
     (so stems can follow the mix exactly)."""
     data = frames_of(x)
-    measured = loudness(data, rate, measure)
+    measured = loudness(data, rate, measure, window)
     gain_db = 0.0 if target is None or measured <= -100 else target - measured
     peaks = true_peak_envelope(data) if len(data) else np.zeros(0)
     if len(data) and target is not None:
@@ -157,7 +158,7 @@ def finish(x: Signal, rate: int, target: float | None, measure: str, ceiling_db:
     curve = limit_curve(peaks, gain, ceiling_db, rate)
     limited = data * (gain * curve)[:, None]
     reduction = -20.0 * math.log10(float(curve.min())) if len(curve) and curve.min() > 0 else 0.0
-    level = Level(measured, gain_db, target, reduction, loudness(limited, rate, measure))
+    level = Level(measured, gain_db, target, reduction, loudness(limited, rate, measure, window))
     return limited, level, curve * gain
 
 

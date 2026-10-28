@@ -13,6 +13,7 @@ from typing import Any
 import numpy as np
 
 from segan.analysis import (
+    MOMENTARY_WINDOW,
     clipped_samples,
     dc_offset,
     integrated_lufs,
@@ -41,6 +42,7 @@ def analyze(output: Output, kind: str) -> dict[str, Any]:
     audio = output.audio
     rate = output.rate
     measure = "integrated" if kind == "song" else "momentary"
+    window = float(output.info.get("loudness_window", MOMENTARY_WINDOW))  # [loudness] short_sfx = "duration"
     result: dict[str, Any] = {
         "file": output.stem + ".wav",
         "seconds": round(output.seconds, 4),
@@ -49,8 +51,8 @@ def analyze(output: Output, kind: str) -> dict[str, Any]:
         "sample_rate": rate,
         "peak_dbfs": round(peak_db(audio), 2),
         "true_peak_dbtp": round(true_peak_db(audio), 2),
-        "lufs": round(integrated_lufs(audio, rate) if measure == "integrated" else max_momentary_lufs(audio, rate), 2),
-        "loudness_measure": "integrated" if measure == "integrated" else "max momentary (400 ms)",
+        "lufs": round(integrated_lufs(audio, rate) if measure == "integrated" else max_momentary_lufs(audio, rate, window), 2),
+        "loudness_measure": "integrated" if measure == "integrated" else f"max momentary ({window * 1000:g} ms)",
         "target_lufs": output.level.get("target"),
         "normalisation_gain_db": round(float(output.level.get("gain_db") or 0.0), 2),
         "limiter_reduction_db": round(float(output.level.get("limiting_db") or 0.0), 2),

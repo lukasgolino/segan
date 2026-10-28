@@ -26,6 +26,7 @@ MIN_TARGET_LUFS = -60.0  # quietest [loudness] target (a hover tick can sit at -
 CHANNELS = ("mono", "stereo")
 GODOT_COMPRESS = ("none", "ima", "qoa")
 DEFAULT_LOUDNESS = {"music": -16.0, "sfx": -14.0, "ui": -20.0, "foley": -22.0}
+SHORT_SFX = ("window", "duration")  # [loudness] short_sfx: how one-shots shorter than 400 ms are measured
 
 Mode = Literal["strict", "open"]
 
@@ -114,6 +115,7 @@ class Config:
     style_version: int = 1
     mix: MixConfig = field(default_factory=MixConfig)
     loudness: dict[str, float] = field(default_factory=lambda: dict(DEFAULT_LOUDNESS))
+    short_sfx: str = "window"  # [loudness] short_sfx: "window" (400 ms, zero-padded) or "duration" (a short one-shot's own length)
     lint: LintConfig = field(default_factory=LintConfig)
     godot: GodotConfig = field(default_factory=GodotConfig)
     ogg: OggConfig = field(default_factory=OggConfig)
@@ -276,7 +278,16 @@ def parse_config(data: dict[str, Any], path: Path) -> Config:
         error("seed must be a whole number 0..2^63 (the project seed; `segan init` picks one)", "seed")
         seed = None
     mix = _parse_mix(data.get("mix", {}), error)
-    loudness = _parse_loudness(data.get("loudness", {}), error)
+    loudness_table = data.get("loudness", {})
+    short_sfx = defaults.short_sfx
+    if isinstance(loudness_table, dict) and "short_sfx" in loudness_table:
+        loudness_table = dict(loudness_table)
+        short_sfx = loudness_table.pop("short_sfx")
+        if short_sfx not in SHORT_SFX:
+            error('loudness.short_sfx must be "window" (one-shots measured over 400 ms, the default) or "duration" (one-shots '
+                  'shorter than 400 ms measured over their own length)', "loudness.short_sfx")  # fmt: skip
+            short_sfx = defaults.short_sfx
+    loudness = _parse_loudness(loudness_table, error)
     room = _parse_room(data.get("room", {}), error)
     bus = _parse_bus(data.get("bus", {}), error)
     lint = _parse_lint(data.get("lint", {}), error)
@@ -296,6 +307,7 @@ def parse_config(data: dict[str, Any], path: Path) -> Config:
         style_version=style_version,
         mix=mix,
         loudness=loudness,
+        short_sfx=short_sfx,
         lint=lint,
         godot=godot,
         ogg=ogg,
