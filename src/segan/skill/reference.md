@@ -54,7 +54,7 @@ Instrument fields (a source is required; everything else optional):
 | `tremolo` | `[rate_hz, depth 0-1]` |
 | `arp` | semitone offsets cycled while the note holds, e.g. `[0, 7, 12]`; `arp_rate` notes per second (default 20) |
 | `unison`, `detune` | 1-8 stacked voices spread over +/- `detune` cents (with `unison: 1`, `detune` just shifts the pitch) |
-| `filter` | `{ type: lp\|hp\|bp\|notch, cutoff: Hz, resonance: 0-1, env_amount: octaves, env: [...], keytrack: 0-1, lfo: [rate_hz, octaves], slope: 12\|24 }` (`lfo` sweeps the cutoff up and back from each note's start) |
+| `filter` | `{ type: lp\|hp\|bp\|notch, cutoff: Hz, resonance: 0-1, bandwidth: octaves, env_amount: octaves, env: [...], keytrack: 0-1, lfo: [rate_hz, octaves], slope: 12\|24 }` (`lfo` sweeps the cutoff up and back from each note's start; `bandwidth` (bp/notch only, 0.05-4) is the width between the -3 dB points and overrides `resonance`: `bandwidth: 0.3, slope: 24` is a narrow, steep band for zips and whistles) |
 | `gain` | dB (relative level inside the kit) |
 | `pan` | -1 left .. 1 right (stereo music only) |
 | `range` | `[lowest, highest]` notes it may play (E007 outside) |
@@ -112,7 +112,7 @@ make the note stereo. A shorthand `fx: [chorus]` uses the defaults.
 | `ring` | `ratio: 2 (x the note) or freq: Hz, mix: 0.5` |
 | `tremolo` | `rate: 5, depth: 0.5, shape: sine\|square` |
 | `autopan` | `rate: 0.5, depth: 0.7` |
-| `filter` | `type, cutoff: 1200, resonance: 0.3, lfo: [rate, octaves]` (auto-wah, tempo-synced sweeps) |
+| `filter` | `type, cutoff: 1200, resonance: 0.3, bandwidth: octaves (bp/notch; overrides resonance), lfo: [rate, octaves]` (auto-wah, tempo-synced sweeps) |
 
 Echoes and reverb lengthen a song's loop file like a long release does (W019 if it runs more than 2 bars past the song).
 

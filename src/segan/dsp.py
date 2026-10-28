@@ -209,6 +209,18 @@ def resonance_to_q(resonance: float) -> float:
     return _round(0.7071 * (14.14 ** resonance))
 
 
+def bandwidth_to_q(octaves: float, kind: str, stages: int = 1) -> float:
+    """Band-pass / notch bandwidth in octaves (between the -3 dB points of the whole filter) -> the Q of each of
+    `stages` identical biquads. One stage: Q = sqrt(2^N) / (2^N - 1) (analog prototype; the bilinear transform
+    narrows the band slightly near Nyquist). Two cascaded stages keep the same -3 dB points with each stage's Q
+    scaled by sqrt(sqrt(2) - 1) (band-pass) or sqrt(sqrt(2) + 1) (notch)."""
+    ratio = 2.0**octaves
+    q = math.sqrt(ratio) / (ratio - 1.0)
+    if stages == 2:
+        q *= math.sqrt(math.sqrt(2.0) + (1.0 if kind == "notch" else -1.0))
+    return _round(q)
+
+
 # --- decimation --------------------------------------------------------------------------------
 
 

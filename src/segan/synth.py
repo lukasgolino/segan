@@ -19,6 +19,7 @@ import numpy as np
 
 from segan.dsp import (
     Signal,
+    bandwidth_to_q,
     biquad,
     cos_turns,
     db_to_gain,
@@ -290,11 +291,17 @@ def render_note(
             cutoff = cutoff * exp2(f.lfo[1] * 0.5 * (1.0 - cos_turns(t * f.lfo[0])))
         if cutoff_curve is not None:
             cutoff = cutoff * cutoff_curve(t)
-        q = resonance_to_q(f.resonance)
-        if f.slope == 24:  # two stages with Butterworth Qs (0.54, 1.31); resonance raises the second
-            signal = apply_filter(signal, f.type, cutoff, 0.541, rate)
-            q = round(1.307 * q / 0.7071, 12)
-        signal = apply_filter(signal, f.type, cutoff, q, rate)
+        if f.bandwidth is not None:  # bp/notch: two identical stages at 24 dB/oct, same -3 dB points
+            stages = 2 if f.slope == 24 else 1
+            q = bandwidth_to_q(f.bandwidth, f.type, stages)
+            for _ in range(stages):
+                signal = apply_filter(signal, f.type, cutoff, q, rate)
+        else:
+            q = resonance_to_q(f.resonance)
+            if f.slope == 24:  # two stages with Butterworth Qs (0.54, 1.31); resonance raises the second
+                signal = apply_filter(signal, f.type, cutoff, 0.541, rate)
+                q = round(1.307 * q / 0.7071, 12)
+            signal = apply_filter(signal, f.type, cutoff, q, rate)
     if inst.mute is not None:
         signal = _mute(signal, inst.mute, rate)
     if gain_curve is not None:

@@ -27,6 +27,7 @@ MODEL_OSCILLATORS = ("pluck", "bowed", "additive", "wavetable", "formant", "moda
 OSCILLATORS = (*BASIC_OSCILLATORS, *MODEL_OSCILLATORS)
 DRUMS = ("kick", "snare", "hat", "clap", "tom", "cymbal", "rim", "shaker", "cowbell", "block", "conga", "brush", "metal")
 FILTER_TYPES = ("lp", "hp", "bp", "notch")
+BANDWIDTH_RANGE = (0.05, 4.0)  # filter.bandwidth, octaves
 MUTES = ("straight", "cup", "harmon")
 RESERVED_KEYS = (".", "-", "|")  # rest, hold, bar line
 
@@ -77,6 +78,7 @@ class Filter:
     keytrack: float = 0.0  # 0 = fixed cutoff, 1 = follows the note pitch
     lfo: tuple[float, float] | None = None  # rate Hz, octaves (the cutoff sweeps up and back, from each note's start)
     slope: int = 12  # dB/octave: 12 (one biquad) or 24 (two)
+    bandwidth: float | None = None  # bp/notch: octaves between the -3 dB points; overrides resonance when given
 
 
 @dataclass(frozen=True)
@@ -226,7 +228,8 @@ class Instrument:
             f = self.filter
             out["filter"] = {"type": f.type, "cutoff": f.cutoff, "resonance": f.resonance, "env_amount": f.env_amount,
                              "keytrack": f.keytrack, **({"env": f.env.as_list()} if f.env else {}), **({"lfo": list(f.lfo)} if f.lfo else {}),
-                             **({"slope": f.slope} if f.slope != 12 else {})}  # fmt: skip
+                             **({"slope": f.slope} if f.slope != 12 else {}),
+                             **({"bandwidth": f.bandwidth} if f.bandwidth is not None else {})}  # fmt: skip
         if self.gain:
             out["gain"] = self.gain
         if self.pan:
@@ -730,9 +733,9 @@ def _parse_fm_ops(fm: dict[str, Any], report: Report, rule: str, where: str, lin
 
 
 def _parse_filter(value: Any, report: Report, rule: str, where: str, line: int | None) -> Filter | None:
-    allowed = ("type", "cutoff", "resonance", "env_amount", "env", "keytrack", "lfo", "slope")
+    allowed = ("type", "cutoff", "resonance", "bandwidth", "env_amount", "env", "keytrack", "lfo", "slope")
     if not isinstance(value, dict):
-        report.error(rule, "filter must be { type: lp|hp|bp|notch, cutoff: Hz, resonance: 0-1, env_amount: octaves, env, keytrack, lfo: [rate, octaves], slope: 12|24 }", line, where)
+        report.error(rule, "filter must be { type: lp|hp|bp|notch, cutoff: Hz, resonance: 0-1, bandwidth: octaves (bp/notch), env_amount: octaves, env, keytrack, lfo: [rate, octaves], slope: 12|24 }", line, where)
         return None
     for k in value:
         if k not in allowed:
@@ -766,7 +769,16 @@ def _parse_filter(value: Any, report: Report, rule: str, where: str, line: int |
     if slope not in (12, 24) or isinstance(slope, bool):
         report.error(rule, "filter.slope must be 12 or 24 (dB per octave)", line, f"{where}.slope")
         return None
+    bandwidth = value.get("bandwidth")
+    if bandwidth is not None:
+        if ftype not in ("bp", "notch"):
+            report.error(rule, "filter.bandwidth is for type bp or notch only (lp/hp take resonance)", line, f"{where}.bandwidth")
+            return None
+        if not (is_number(bandwidth) and BANDWIDTH_RANGE[0] <= bandwidth <= BANDWIDTH_RANGE[1]):
+            report.error(rule, f"filter.bandwidth must be {BANDWIDTH_RANGE[0]:g}-{BANDWIDTH_RANGE[1]:g} octaves (between the -3 dB points)", line, f"{where}.bandwidth")
+            return None
     env = parse_env(value["env"], report, rule, f"{where}.env", line) if "env" in value else None
     if "env" in value and env is None:
         return None
-    return Filter(ftype, float(cutoff), float(resonance), float(amount), env, float(keytrack), (float(lfo[0]), float(lfo[1])) if lfo else None, int(slope))
+    return Filter(ftype, float(cutoff), float(resonance), float(amount), env, float(keytrack), (float(lfo[0]), float(lfo[1])) if lfo else None, int(slope),
+                  float(bandwidth) if bandwidth is not None else None)  # fmt: skip
