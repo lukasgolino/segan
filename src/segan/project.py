@@ -19,7 +19,7 @@ from segan.kit import KIT_SUFFIX, NAME_RE, Kit, load_kit_file
 
 CONFIG_NAME = "segan.toml"
 MODES = ("strict", "open")
-EXPORTERS = ("wav", "godot", "stems", "ogg")
+EXPORTERS = ("wav", "godot", "stems", "ogg", "web")
 SAMPLE_RATES = (22050, 32000, 44100, 48000)
 OVERSAMPLE = (1, 2, 4, 8)
 MIN_TARGET_LUFS = -60.0  # quietest [loudness] target (a hover tick can sit at -45)
@@ -266,6 +266,10 @@ def parse_config(data: dict[str, Any], path: Path) -> Config:
     export = data.get("export", list(defaults.export))
     if not isinstance(export, list) or not all(isinstance(e, str) and e in EXPORTERS for e in export):
         error(f"export must be a list drawn from {', '.join(EXPORTERS)}", "export")
+        export = list(defaults.export)
+    elif "godot" in export and "web" in export:
+        error('export can\'t have both "godot" and "web": Godot writes res:// paths into manifest.json; build the web '
+              'audio into its own output_dir', "export")  # fmt: skip
         export = list(defaults.export)
 
     style_version = data.get("style_version", defaults.style_version)

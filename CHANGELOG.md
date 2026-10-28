@@ -29,6 +29,11 @@ check before upgrading. Patch bumps never change existing behaviour. Every relea
   than it sounds. Loops and longer SFX are measured as before; preview's `loudness_measure` names the window (#87).
 - `segan gallery` shows each asset's true peak (a dot and `pk` in dBTP) and, for one-shots shorter than 400 ms, their
   loudness over their own length in brackets (#87).
+- `export` takes `"web"`: `segan build` writes `segan_audio.js` next to `manifest.json`, an ES module that plays SFX
+  by name with the Web Audio API (random variation, never the same twice in a row; category bus and `volume_db`;
+  `playback` hints) and loops songs at their manifest loop points. Not combinable with `"godot"` (E001) (#34).
+- Skill reference: "Other engines" (Unity, Unreal, Defold, web): what to set on import and what to read from the
+  manifest (#34).
 
 ## [0.14.0] - 2026-10-28
 

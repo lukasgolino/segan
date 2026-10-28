@@ -40,7 +40,7 @@ SETTINGS: tuple[Setting, ...] = (
     Setting("default_kit", None, "kit for songs and SFX that don't name one; switching it re-voices all of them", "all"),
     Setting("output_dir", "build/audio", "where `segan build` writes final assets (e.g. a game engine's audio folder; keep it apart from PAGAN's)", "build"),
     Setting("preview_dir", "previews", "scratch folder for previews and listen sheets", "none"),
-    Setting("export", ["wav"], 'build outputs: "wav" (WAVs + manifest.json, always), "godot" (.import loop/compression edits + AudioStreamRandomizer/Synchronized .tres), "stems" (one WAV per song track), "ogg" (music as Ogg Vorbis instead of WAV; SFX stay WAV; needs segan[ogg])', "build"),
+    Setting("export", ["wav"], 'build outputs: "wav" (WAVs + manifest.json, always), "godot" (.import loop/compression edits + AudioStreamRandomizer/Synchronized .tres), "stems" (one WAV per song track), "ogg" (music as Ogg Vorbis instead of WAV; SFX stay WAV; needs segan[ogg]), "web" (segan_audio.js: a Web Audio player for the manifest; not with "godot")', "build"),
     Setting("seed", None, "the project seed (`segan init` picks one at random): `segan suggest` and `segan kit roll` branch from it, so two projects with the same brief start from different places", "none"),
     Setting("style_version", 1, "current sound style version; assets made under older ones get W006 (use `segan style bump`)", "lint"),
     Setting("mix.sample_rate", 44100, "output sample rate (Hz): 44100 (Godot's default mix rate) or 48000", "all"),
