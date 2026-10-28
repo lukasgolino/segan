@@ -19,6 +19,8 @@ check before upgrading. Patch bumps never change existing behaviour. Every relea
 
 ## [Unreleased]
 
+## [0.15.0] - 2026-10-28
+
 ### Added
 
 - Band-pass and notch filters take `bandwidth` (octaves between the -3 dB points, 0.05-4), overriding `resonance`; with
