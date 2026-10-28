@@ -46,7 +46,7 @@ FX_FIELDS: dict[str, dict[str, tuple[Any, float, float, str]]] = {
     "tremolo": {"rate": (5.0, 0.01, 50, "hz"), "depth": (0.5, 0, 1, "n"), "shape": ("sine", 0, 0, "c:sine|square")},
     "autopan": {"rate": (0.5, 0.01, 20, "hz"), "depth": (0.7, 0, 1, "n")},
     "filter": {"type": ("lp", 0, 0, "c:lp|hp|bp|notch"), "cutoff": (1200.0, 20, 20000, "n"), "resonance": (0.3, 0, 1, "n"),
-               "lfo": (None, 0, 0, "lfo")},
+               "bandwidth": (None, 0.05, 4, "n"), "lfo": (None, 0, 0, "lfo")},
 }  # fmt: skip
 STEREO = ("chorus", "ensemble", "autopan", "reverb")
 
@@ -115,6 +115,9 @@ def parse_fx(value: Any, report: Report, rule: str, where: str, line: int | None
                 report.error(rule, f"{kind}.{name} must be {what}", line, f"{iwhere}.{name}")
                 return None
             values.append((str(name), raw if not (is_number(raw) and not isinstance(raw, bool)) else float(raw)))
+        if kind == "filter" and "bandwidth" in settings and settings.get("type", "lp") not in ("bp", "notch"):
+            report.error(rule, "filter.bandwidth is for type bp or notch only (lp/hp take resonance)", line, f"{iwhere}.bandwidth")
+            return None
         out.append(Effect(kind, tuple(values)))
     return tuple(out)
 
@@ -353,7 +356,7 @@ def _comb(x: Signal, fx: Effect, rate: int, midi: float, tuning: float) -> Signa
 
 
 def _autofilter(x: Signal, fx: Effect, rate: int, beat: float) -> Signal:
-    from segan.dsp import exp2, resonance_to_q
+    from segan.dsp import bandwidth_to_q, exp2, resonance_to_q
     from segan.synth import apply_filter
 
     cutoff: Signal | float = float(fx.get("cutoff"))
@@ -361,7 +364,10 @@ def _autofilter(x: Signal, fx: Effect, rate: int, beat: float) -> Signal:
     if lfo is not None:
         t = np.arange(len(x), dtype=np.float64) / rate
         cutoff = float(fx.get("cutoff")) * exp2(float(lfo[1]) * 0.5 * (1.0 - cos_turns(t * hertz(lfo[0], beat))))
-    return apply_filter(x, str(fx.get("type")), cutoff, resonance_to_q(float(fx.get("resonance"))), rate)
+    kind = str(fx.get("type"))
+    bandwidth = fx.get("bandwidth")
+    q = bandwidth_to_q(float(bandwidth), kind) if bandwidth is not None else resonance_to_q(float(fx.get("resonance")))
+    return apply_filter(x, kind, cutoff, q, rate)
 
 
 def apply_fx(x: Signal, effects: tuple[Effect, ...], rate: int, beat: float, channels: int, midi: float, tuning: float = 440.0) -> Signal:

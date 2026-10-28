@@ -19,6 +19,12 @@ check before upgrading. Patch bumps never change existing behaviour. Every relea
 
 ## [Unreleased]
 
+### Added
+
+- Band-pass and notch filters take `bandwidth` (octaves between the -3 dB points, 0.05-4), overriding `resonance`; with
+  `slope: 24` it is two identical stages with the same -3 dB points, so `{ type: bp, bandwidth: 0.1, slope: 24 }` is a
+  narrow, steep band for zips and whistles. Also on the `filter` effect. Filters without it render as before (#88).
+
 ## [0.14.0] - 2026-10-28
 
 ### Added
