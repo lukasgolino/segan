@@ -244,14 +244,14 @@ def shipped() -> list[Fingerprint]:
 
 
 def reference_example(reference: Path) -> str:
-    """The generator script in reference.md's `segan.api` section (the example every agent sees first)."""
+    """The generator script in the `api` docs topic (the example every agent sees first)."""
     text = reference.read_text(encoding="utf-8")
     section = text[text.index("## Generator scripts: `segan.api`") :]
     return section[section.index("```python") + len("```python") : section.index("```", section.index("```python") + 9)]
 
 
 def make_shipped(repo: Path) -> dict[str, Any]:
-    """Fingerprints of the demo project's songs and of reference.md's generator example (run against the demo's kits)."""
+    """Fingerprints of the demo project's songs and of the `api` topic's generator example (run against the demo's kits)."""
     import runpy
     import shutil
     import tempfile
@@ -277,7 +277,7 @@ def make_shipped(repo: Path) -> dict[str, Any]:
         shutil.copytree(demo, work, ignore=shutil.ignore_patterns("previews", ".segan-cache", "build", "music"))
         (work / "music").mkdir()
         script = Path(tmp) / "example.py"
-        script.write_text(reference_example(repo / "src" / "segan" / "skill" / "reference.md"), encoding="utf-8")
+        script.write_text(reference_example(repo / "src" / "segan" / "skill" / "topics" / "api.md"), encoding="utf-8")
         cwd = os.getcwd()
         try:
             os.chdir(work)

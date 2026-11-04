@@ -117,7 +117,7 @@ $Coin.play()
 The files are plain WAV (Ogg for music with `"ogg"`), so any engine plays them; `manifest.json` is the
 engine-neutral contract (variations, loop points, buses, playback hints). With `"web"` in `export`, the build also
 writes `segan_audio.js`, a Web Audio player for the manifest. Unity, Unreal and Defold: see "Other engines" in the
-[skill reference](src/segan/skill/reference.md) for their import settings and what to read from the manifest.
+[engines topic](src/segan/skill/topics/engines.md) (`segan docs engines`) for their import settings and what to read from the manifest.
 
 ## Using SEGAN with Claude
 

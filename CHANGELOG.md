@@ -19,6 +19,25 @@ check before upgrading. Patch bumps never change existing behaviour. Every relea
 
 ## [Unreleased]
 
+### Changed
+
+- **The skill is split for agents that pay per token** (#104). `SKILL.md` is a 5.5 KB core (was 30.8 KB) that is
+  loaded whenever the skill triggers; the rest of the old SKILL.md and all of `reference.md` (67 KB) moved, unchanged,
+  into 19 topic files (`skill/topics/*.md`). `segan skill install` writes them and removes an installed
+  `reference.md`. The MCP resource `segan://reference` became `segan://docs/{topic}`.
+- **`--json` prints compact JSON** (one line, no indentation): 40-57% fewer characters. Pipe through
+  `python -m json.tool` to read it by eye.
+- `segan status` lists assets grouped by what they need (one line per group) instead of two lines per asset;
+  `-v` / `--verbose` (MCP: `verbose`) gives the old per-asset listing with descriptions. `--json` leaves out
+  descriptions unless `--verbose`. The demo: 3.6k -> 0.8k characters (text), 9.4k -> 4.6k (JSON).
+- `segan preview` text output adds a checks line per output (SFX: pitch start -> end, lead-in, onsets; songs:
+  pitch check, notes per pattern, closest song), so an agent needn't parse `--json` for them.
+
+### Added
+
+- `segan docs [topic...] [--search words]` (MCP tool `docs`): lists the topics with their size, prints one, or
+  prints the few paragraphs that match. Budget tests keep `SKILL.md`, its description and each topic under a size.
+
 ## [0.15.1] - 2026-11-04
 
 ## [0.15.0] - 2026-10-28
