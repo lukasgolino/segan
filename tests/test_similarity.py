@@ -6,13 +6,12 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from conftest import CONFIG, rules, run_json
+from conftest import make_project as _make_project
 
 from segan import api, similarity
 from segan.lint import lint_paths
 from segan.project import Project, load_project
-
-from conftest import CONFIG, rules, run_json
-from conftest import make_project as _make_project
 
 
 def make_project(root: Path, config: str = CONFIG) -> Project:

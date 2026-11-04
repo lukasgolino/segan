@@ -21,6 +21,7 @@ Rendering is in modelsynth.py; renders follow the determinism rules of dsp.py.
 
 from __future__ import annotations
 
+import itertools
 from dataclasses import dataclass
 from typing import Any
 
@@ -438,7 +439,7 @@ def _formant(value: Any, report: Report, rule: str, where: str, line: int | None
             else:
                 vowels = []
                 break
-    if not vowels or any(b[0] < a[0] for a, b in zip(vowels, vowels[1:])):
+    if not vowels or any(b[0] < a[0] for a, b in itertools.pairwise(vowels)):
         report.error(rule, "vowel must be a, e, i, o, u (or ah, eh, ee, oh, oo), a list of them ([ah, oh]: one per second) or keyframes "
                      "[[seconds, vowel], ...] in time order", line, f"{where}.vowel")  # fmt: skip
         return None

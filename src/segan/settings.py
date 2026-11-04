@@ -208,7 +208,7 @@ def _edit_toml(text: str, key: str, entry: str | None) -> str:
             if not match:
                 continue
             last = i
-            while _bracket_depth("".join(_split_comment(l)[0] for l in lines[i : last + 1])) > 0 and last + 1 < end:
+            while _bracket_depth("".join(_split_comment(line)[0] for line in lines[i : last + 1])) > 0 and last + 1 < end:
                 last += 1  # a value spread over several lines
             if entry is None:
                 replacement = [f"{match.group(1)}# {name} = {code.split('=', 1)[1].strip()}"] if last == i else []

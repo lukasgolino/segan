@@ -3,10 +3,9 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+from conftest import run_json
 
 from segan.lint import WARNING_RULES
-
-from conftest import run_json
 
 ROOT = Path(__file__).parent.parent
 SKILL = ROOT / "src" / "segan" / "skill"

@@ -20,6 +20,8 @@ jobs:
         run: pip install -e ".[dev]"
       - name: Smoke test CLI
         run: segan --version
+      - name: Lint
+        run: ruff check .
       - name: Type check
         run: mypy
       - name: Run tests

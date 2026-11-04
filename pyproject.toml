@@ -19,7 +19,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8", "mypy>=1.10", "types-PyYAML", "mcp>=2.3,<3", "soundfile>=0.12"]
+dev = ["pytest>=8", "mypy>=1.10", "ruff>=0.15", "types-PyYAML", "mcp>=2.3,<3", "soundfile>=0.12"]
 mcp = ["mcp>=2.3,<3"]
 ogg = ["soundfile>=0.12"]
 
@@ -43,3 +43,11 @@ ignore_missing_imports = true
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["tests"]
+
+[tool.ruff]
+line-length = 140
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP"]
+ignore = ["E501"]  # long lines are fine; no formatter is enforced

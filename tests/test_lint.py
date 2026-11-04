@@ -3,14 +3,12 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+from conftest import CONFIG, make_project, write
+from test_song import SONG
 
 from segan.findings import SeganError
 from segan.lint import WARNING_RULES, lint_paths
 from segan.project import Project, load_project
-
-from conftest import CONFIG, make_project, write
-
-from test_song import SONG
 
 
 def lint_rules(project: Project, kind: str, name: str, text: str) -> list[tuple[str, str | None]]:

@@ -4,6 +4,7 @@ from typing import Any
 
 import numpy as np
 import pytest
+from conftest import load, rules
 
 from segan.analysis import yin
 from segan.dsp import midi_to_hz_scalar
@@ -12,8 +13,6 @@ from segan.kitshow import aliasing_of
 from segan.patch import Instrument, Report, parse_patch
 from segan.synth import Context, render_note
 from segan.voices import NoteEvent, event_end, render_events
-
-from conftest import load, rules
 
 CTX = Context(rate=22050, oversample=2)
 

@@ -1,11 +1,10 @@
 from __future__ import annotations
 
 import pytest
+from conftest import load
 
 from segan import api
 from segan.project import Project
-
-from conftest import load
 
 
 def test_notes_scales_chords() -> None:

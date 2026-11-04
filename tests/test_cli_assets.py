@@ -3,11 +3,10 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-
-from segan.cli import main
-
 from conftest import make_project, run_json, write
 from test_song import SONG
+
+from segan.cli import main
 
 
 @pytest.fixture

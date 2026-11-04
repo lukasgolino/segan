@@ -12,11 +12,12 @@ The reference implementation of every convention is PAGAN at `/home/lgolino/repo
 python3 -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"
 segan --version          # or: python -m segan --version
+ruff check .              # lint (config in pyproject.toml; long lines allowed)
 mypy                     # strict type check (config in pyproject.toml)
 pytest
 ```
 
-CI (`.github/workflows/ci.yml`) runs install + mypy + pytest + `segan lint --warnings-as-errors` on the demo on
+CI (`.github/workflows/ci.yml`) runs install + ruff + mypy + pytest + `segan lint --warnings-as-errors` on the demo on
 Python 3.11-3.13, and a `godot` job that downloads Godot 4.7.2, rebuilds the demo into `examples/godot/`
 (failing if the committed text outputs differ), verifies every stream loads, loops and plays, and runs
 `tests/test_godot.py` (skipped locally unless `GODOT=/path/to/godot` or `godot` on PATH).
@@ -86,7 +87,7 @@ generated text files.
 - Open questions: ask as you go (tight questions, each with a recommended default).
 - Bugs, feature requests and future work live in GitHub issues (`gh issue list --repo lukasgolino/segan`); games
   report through the `agent-report` template. No plan/report files in the repo.
-- Dependencies: numpy, scipy, Pillow, PyYAML; extras `mcp`, `ogg` (soundfile); dev: pytest, mypy, types-PyYAML, mcp, soundfile.
+- Dependencies: numpy, scipy, Pillow, PyYAML; extras `mcp`, `ogg` (soundfile); dev: pytest, mypy, ruff, types-PyYAML, mcp, soundfile.
 
 ## Decisions log
 

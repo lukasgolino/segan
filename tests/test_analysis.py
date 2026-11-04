@@ -48,7 +48,7 @@ def test_onsets() -> None:
         i = int(at * rate)
         x[i : i + 4000] = sine(800, 4000 / rate, rate)[:4000] * np.linspace(1, 0, 4000) ** 3
     found = onsets(x, rate)
-    assert len(found) == 3 and all(abs(a - b) < 0.03 for a, b in zip(found, (0.1, 0.4, 0.7)))
+    assert len(found) == 3 and all(abs(a - b) < 0.03 for a, b in zip(found, (0.1, 0.4, 0.7), strict=True))
 
 
 def test_leading_silence_and_dc() -> None:

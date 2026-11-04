@@ -11,10 +11,9 @@ shared by every project. Nothing is bundled: the audio is the library author's, 
 
 from __future__ import annotations
 
-import re
-
 import json
 import os
+import re
 import urllib.parse
 import urllib.request
 from collections.abc import Callable
