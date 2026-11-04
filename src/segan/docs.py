@@ -86,6 +86,9 @@ LONG_BLOCK = 700  # characters; a longer block is cut down to its matching sente
 def _trim(block: str, patterns: list[re.Pattern[str]]) -> str:
     if len(block) <= LONG_BLOCK:
         return block
+    if block.startswith("|"):  # a long table: its header and the matching rows
+        rows = block.split("\n")
+        return "\n".join(rows[:2] + [r for r in rows[2:] if any(p.search(r) for p in patterns)])
     if block.startswith("```"):  # a long example: the matching lines with one line around them, gaps marked
         lines = block.split("\n")
         keep = {0, len(lines) - 1}
