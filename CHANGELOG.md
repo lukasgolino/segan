@@ -19,6 +19,8 @@ check before upgrading. Patch bumps never change existing behaviour. Every relea
 
 ## [Unreleased]
 
+## [0.16.0] - 2026-11-04
+
 ### Changed
 
 - **The skill is split for agents that pay per token** (#104). `SKILL.md` is a 5.5 KB core (was 30.8 KB) that is
