@@ -111,9 +111,8 @@ def test_kit_aliasing_warning(tmp_path: Path) -> None:
 
 @pytest.mark.parametrize("rule", sorted(WARNING_RULES))
 def test_every_warning_is_documented(rule: str) -> None:
-    reference = (Path(__file__).parent.parent / "src" / "segan" / "skill" / "reference.md")
-    if reference.exists():
-        assert rule in reference.read_text()
+    lint_topic = Path(__file__).parent.parent / "src" / "segan" / "skill" / "topics" / "lint.md"
+    assert rule in lint_topic.read_text()
 
 
 CLASH = """\

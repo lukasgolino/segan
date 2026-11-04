@@ -197,16 +197,26 @@ def create_server(root: Path, allow_godot: bool = False) -> MCPServer:
     # --- project ---------------------------------------------------------------------------
 
     @server.tool(annotations=READ)
-    def status() -> dict[str, Any]:
+    def status(verbose: bool = False) -> dict[str, Any]:
         """Every song and SFX (kind, category, length, status, style version, errors/warnings, what needs
-        attention), the style version, kits and default kit. Call this first."""
-        return segan.cli("status")
+        attention), the style version, kits and default kit. Call this first. `verbose` adds each asset's
+        description."""
+        return segan.cli("status", *(["--verbose"] if verbose else []))
 
     @server.tool(annotations=READ)
     def read_docs() -> dict[str, Any]:
         """BRIEF.md (what the game needs, decisions log) and SOUND.md (how it must sound). Read both before making
         or changing anything: they are the project's memory between sessions."""
         return {"ok": True, **{name: (segan.root / name).read_text(encoding="utf-8") if (segan.root / name).is_file() else None for name in DOCS}}
+
+    @server.tool(annotations=READ)
+    def docs(topic: str = "", search: str = "") -> dict[str, Any]:
+        """SEGAN's documentation, one topic at a time: no arguments = the topic list (name, summary, size);
+        `topic` = that topic's text (e.g. "sfx", "songs", "lint"); `search` = the few paragraphs matching those
+        words across all topics. Read only what the task needs."""
+        if search:
+            return segan.cli("docs", "--search", *search.split())
+        return segan.cli("docs", *topic.split())
 
     @server.tool(annotations=OVERWRITE)
     @_results
@@ -561,7 +571,7 @@ def create_server(root: Path, allow_godot: bool = False) -> MCPServer:
     # --- resources and prompts ---------------------------------------------------------------
 
     def skill_text(name: str) -> str:
-        text = files("segan").joinpath("skill", name).read_text(encoding="utf-8")
+        text = files("segan").joinpath("skill", *name.split("/")).read_text(encoding="utf-8")
         if text.startswith("---"):
             text = text.split("---", 2)[2].lstrip("\n")  # drop the skill frontmatter
         return text
@@ -570,9 +580,9 @@ def create_server(root: Path, allow_godot: bool = False) -> MCPServer:
     def workflow() -> str:
         return skill_text("SKILL.md")
 
-    @server.resource("segan://reference", mime_type="text/markdown", description="The SEGAN notation, settings and lint rules")
-    def reference() -> str:
-        return skill_text("reference.md")
+    @server.resource("segan://docs/{topic}", mime_type="text/markdown", description="One documentation topic (the `docs` tool lists them)")
+    def docs_topic(topic: str) -> str:
+        return skill_text(f"topics/{topic}.md")
 
     @server.resource("segan://brief", mime_type="text/markdown", description="BRIEF.md: what the game needs, decisions log")
     def brief() -> str:
