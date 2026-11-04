@@ -84,8 +84,22 @@ LONG_BLOCK = 700  # characters; a longer block is cut down to its matching sente
 
 
 def _trim(block: str, patterns: list[re.Pattern[str]]) -> str:
-    if len(block) <= LONG_BLOCK or block.startswith("```"):
+    if len(block) <= LONG_BLOCK:
         return block
+    if block.startswith("```"):  # a long example: the matching lines with one line around them, gaps marked
+        lines = block.split("\n")
+        keep = {0, len(lines) - 1}
+        for i, line in enumerate(lines):
+            if any(p.search(line) for p in patterns):
+                keep |= {i - 1, i, i + 1}
+        out: list[str] = []
+        previous = -1
+        for i in sorted(k for k in keep if 0 <= k < len(lines)):
+            if previous >= 0 and i > previous + 1:
+                out.append("...")
+            out.append(lines[i])
+            previous = i
+        return "\n".join(out)
     sentences = re.split(r"(?<=[.;!?])\s+(?=[A-Z`*(])|,\s+(?=[WE]\d{3}\b)", re.sub(r"\s*\n\s*", " ", block))
     kept = [s for s in sentences if any(p.search(s) for p in patterns)]
     return " ... ".join(kept) if kept else block[:LONG_BLOCK] + " ..."
