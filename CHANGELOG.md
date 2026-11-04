@@ -19,6 +19,12 @@ check before upgrading. Patch bumps never change existing behaviour. Every relea
 
 ## [Unreleased]
 
+### Fixed
+
+- Godot export: an Ogg Vorbis loop's `loop_offset` is written with 9 decimals instead of Python's full-precision
+  repr, which Godot rewrote in the last digit for some values, so a looping stem's `.ogg.import` changed on every
+  build + import with no real change. The loop point is unchanged (still a quarter frame past the loop start) (#105).
+
 ## [0.15.0] - 2026-10-28
 
 ### Added
