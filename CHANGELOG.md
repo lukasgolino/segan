@@ -19,6 +19,8 @@ check before upgrading. Patch bumps never change existing behaviour. Every relea
 
 ## [Unreleased]
 
+## [0.15.1] - 2026-11-04
+
 ## [0.15.0] - 2026-10-28
 
 ### Added

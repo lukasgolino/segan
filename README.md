@@ -55,9 +55,9 @@ patterns:
 Requires Python 3.11+. SEGAN isn't on PyPI yet; install a tagged release from GitHub:
 
 ```sh
-pip install "git+https://github.com/lukasgolino/segan.git@v0.15.0"                 # the CLI + library
-pip install "segan[mcp] @ git+https://github.com/lukasgolino/segan.git@v0.15.0"    # + the MCP server
-pip install "segan[ogg] @ git+https://github.com/lukasgolino/segan.git@v0.15.0"    # + Ogg Vorbis music export, .ogg/.flac/.mp3 recordings
+pip install "git+https://github.com/lukasgolino/segan.git@v0.15.1"                 # the CLI + library
+pip install "segan[mcp] @ git+https://github.com/lukasgolino/segan.git@v0.15.1"    # + the MCP server
+pip install "segan[ogg] @ git+https://github.com/lukasgolino/segan.git@v0.15.1"    # + Ogg Vorbis music export, .ogg/.flac/.mp3 recordings
 segan --version
 ```
 
@@ -131,7 +131,7 @@ segan skill install          # copies it to <repo>/.claude/skills/segan/
 ## Using SEGAN from any agent (MCP)
 
 ```sh
-pip install "segan[mcp] @ git+https://github.com/lukasgolino/segan.git@v0.15.0"
+pip install "segan[mcp] @ git+https://github.com/lukasgolino/segan.git@v0.15.1"
 segan mcp --project path/to/audio      # stdio MCP server: 26 tools, listen sheets as images, WAVs as audio
 ```
 
