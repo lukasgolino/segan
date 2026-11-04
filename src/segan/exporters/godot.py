@@ -12,7 +12,9 @@ SEGAN's loops always start at frame 1 or later for that reason.
 
 Ogg Vorbis (export "ogg", music only): Godot loops an AudioStreamOggVorbis from the end of the file back to
 frame floor(loop_offset * rate) (measured), so `loop_offset` is written a quarter frame past the loop start
-and the file must end where the loop does (SEGAN's looping songs do).
+and the file must end where the loop does (SEGAN's looping songs do). It is written with 9 decimals (1 ns, far inside
+the quarter-frame margin): Godot's own float text differs from Python's repr in the last digit for some values, so a
+full-precision repr was rewritten on every import; a short decimal reads and writes back identically in both.
 """
 
 from __future__ import annotations
@@ -66,7 +68,7 @@ def ogg_import_params(loop: tuple[int, int] | None, rate: int) -> dict[str, str]
     """The `.import` [params] lines SEGAN owns for an Ogg Vorbis file."""
     if loop is None:
         return {"loop": "false", "loop_offset": "0"}
-    return {"loop": "true", "loop_offset": repr((loop[0] + 0.25) / rate)}
+    return {"loop": "true", "loop_offset": f"{(loop[0] + 0.25) / rate:.9f}".rstrip("0")}
 
 
 IMPORTERS = {".wav": ("wav", "AudioStreamWAV"), ".ogg": ("oggvorbisstr", "AudioStreamOggVorbis")}
