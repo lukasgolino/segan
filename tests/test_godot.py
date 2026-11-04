@@ -367,8 +367,10 @@ def test_ogg_loop_offsets_survive_a_godot_import(tmp_path: Path) -> None:
         ogg = tmp_path / f"s{i}.ogg"
         ogg.write_bytes(data)
         params.append(ogg_import_params((start, start + 1000), rate))
-        sidecars.append(edit_import(ogg, params[-1]))
+        edit_import(ogg, params[-1])
+        sidecars.append(ogg.with_name(ogg.name + ".import"))
     before = [s.read_text() for s in sidecars]
+    assert GODOT is not None
     subprocess.run([GODOT, "--headless", "--path", str(tmp_path), "--import"], capture_output=True, timeout=300)
     after = [s.read_text() for s in sidecars]
     assert all("uid=" in text for text in after)  # Godot did import them
