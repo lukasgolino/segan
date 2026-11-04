@@ -236,7 +236,6 @@ def lint_asset(asset: Any, project: Project, render: bool = True) -> list[Findin
 
 def lint_audio(asset: Any, project: Project) -> list[Finding]:
     from segan.render import render_asset
-
     from segan.song import Song
     from segan.songrender import song_mix
 

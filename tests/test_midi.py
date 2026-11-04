@@ -3,12 +3,11 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+from conftest import make_project, run_json
 
 from segan.lint import lint_paths
 from segan.midi import MidiError, estimate_key, import_midi, key_from_signature, read_midi, smf_bytes
 from segan.project import Project
-
-from conftest import make_project, run_json
 
 Q = 480  # ticks per quarter
 

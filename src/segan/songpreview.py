@@ -120,9 +120,9 @@ def measure_pitch(song: Song, project: Project) -> dict[str, Any]:
     samples (they ring over the next notes) are skipped; pitch envelopes, sample attacks and the previous note's
     release are waited out. An instrument whose notes share one offset (a sample recorded a bit sharp or flat) gets
     `detune_cents`, and its notes count as off only when they're more than 50 cents from that."""
-    from segan.synth import is_one_shot
     from segan.kitshow import context_for
     from segan.sequence import song_events
+    from segan.synth import is_one_shot
     from segan.voices import render_events
 
     ctx = context_for(project.config.mix)
@@ -144,7 +144,7 @@ def measure_pitch(song: Song, project: Project) -> dict[str, Any]:
         skipped: dict[str, int] = {}
 
         def skip(reason: str) -> None:
-            skipped[reason] = skipped.get(reason, 0) + 1
+            skipped[reason] = skipped.get(reason, 0) + 1  # noqa: B023 (called in this iteration)
 
         previous_end = -1.0
         for p in mine:

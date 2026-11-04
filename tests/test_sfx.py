@@ -4,14 +4,13 @@ from pathlib import Path
 
 import numpy as np
 import pytest
+from conftest import load, rules, write
 
 from segan.findings import Finding
 from segan.project import Project
 from segan.render import render_asset
 from segan.sfx import PRESETS
 from segan.wavio import read_wav
-
-from conftest import load, rules, write
 
 BASIC = """\
 name: zap
@@ -237,6 +236,7 @@ def test_variation_envelope_and_length(project: Project) -> None:
 def test_preview_reel_plays_every_variation(project: Project, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
     """#20: `segan preview <sfx> --output reel`: the main sound and each variation back to back in one WAV."""
     from conftest import run_json
+
     from segan.preview import REEL_GAP
 
     write(project, "sfx", "zap", BASIC + "variations: { count: 3, pitch: 1 }\n")

@@ -15,7 +15,16 @@ from pathlib import Path
 from typing import Any
 
 from segan import __version__, oggio
-from segan.exporters.godot import bus_layout_tres, edit_import, find_godot_project, import_params, ogg_import_params, randomizer_tres, res_path, synchronized_tres
+from segan.exporters.godot import (
+    bus_layout_tres,
+    edit_import,
+    find_godot_project,
+    import_params,
+    ogg_import_params,
+    randomizer_tres,
+    res_path,
+    synchronized_tres,
+)
 from segan.findings import Finding
 from segan.lint import LintResult, lint_paths
 from segan.project import Project

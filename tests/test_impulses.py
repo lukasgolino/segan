@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
+from conftest import load
 
 from segan.dsp import hz_to_midi
 from segan.kitshow import aliasing_of, context_for
@@ -12,8 +13,6 @@ from segan.patch import Env, Instrument, Report, parse_patch
 from segan.project import Project
 from segan.render import render_asset
 from segan.synth import Context, impulses
-
-from conftest import load
 
 RATE = 8000
 

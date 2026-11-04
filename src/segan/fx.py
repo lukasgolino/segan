@@ -88,7 +88,7 @@ def parse_fx(value: Any, report: Report, rule: str, where: str, line: int | None
         kind, settings = next(iter(item.items()))
         settings = settings or {}
         fields = FX_FIELDS[kind]
-        if not isinstance(settings, dict) or (unknown := [k for k in settings if k not in fields]):
+        if not isinstance(settings, dict) or any(k not in fields for k in settings):
             report.error(rule, f"{kind}: settings must be a mapping of {', '.join(fields)}", line, iwhere)
             return None
         values: list[tuple[str, Any]] = []

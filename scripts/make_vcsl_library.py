@@ -17,7 +17,7 @@ from library_maps import ROOT, Inst, Spec, build
 REPO = "sgossner/VCSL"
 COMMIT = "c1ea7bcc3c7309650ab0da9d15c9cd1fbc4a4c7e"
 OUT = ROOT / "src" / "segan" / "libraries" / "vcsl"
-C, I, M = "Chordophones", "Idiophones/Struck Idiophones", "Membranophones/Struck Membranophones"
+C, I, M = "Chordophones", "Idiophones/Struck Idiophones", "Membranophones/Struck Membranophones"  # noqa: E741
 
 # kind: sus (held), shot (rings to its end), hit (unpitched)
 INSTRUMENTS: dict[str, Inst] = {

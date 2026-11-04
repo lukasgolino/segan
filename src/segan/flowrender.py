@@ -32,8 +32,8 @@ from segan.mix import apply_crush, apply_room, apply_tone, gain_and_limit, room_
 from segan.project import Project
 from segan.render import Output
 from segan.sequence import build_timeline, song_events
-from segan.songrender import song_mix
 from segan.song import Song, Variant
+from segan.songrender import song_mix
 from segan.synth import Context
 from segan.voices import NoteEvent, assign_cuts, event_end, render_events
 from segan.wavio import to_pcm16
@@ -150,7 +150,7 @@ def walk(song: Song, seed: int, seconds: float = WALK_SECONDS) -> list[str]:
         if not options:
             break
         pick = rng.random() * sum(w for _, w in options)
-        for name, weight in options:
+        for name, weight in options:  # noqa: B007 (name is the pick, used after the loop)
             pick -= weight
             if pick < 0:
                 break

@@ -7,17 +7,17 @@ import argparse
 import json
 import os
 import re
-from struct import error as struct_error
 from collections.abc import Callable, Sequence
 from importlib.resources import files
 from pathlib import Path
 from string import Template
+from struct import error as struct_error
 from typing import Any
 
 from segan import progress
+from segan.asset import SFX_SUFFIX, SONG_SUFFIX, load_asset_or_raise
 from segan.buildinfo import is_editable, version_string
 from segan.findings import Finding, SeganError, display_path
-from segan.asset import SFX_SUFFIX, SONG_SUFFIX, load_asset_or_raise
 from segan.kit import KIT_SUFFIX, NAME_RE, Kit, load_kit_file
 from segan.lint import lint_paths
 from segan.notes import note_name
@@ -664,9 +664,7 @@ def _song_scaffold(name: str, description: str, kit_line: str, kit: Kit | None, 
     steps_per_beat = 2 if meter[1] >= 8 else 4
     beat = steps_per_beat
     length = bars * meter[0] * steps_per_beat
-    melodic = [k for k, i in (kit.instruments.items() if kit else []) if not i.is_drum]
     drums = [k for k, i in (kit.instruments.items() if kit else []) if i.is_drum][:3] or ["k", "s", "h"]
-    lead = melodic[0] if melodic else "p"
     keys_line = ", ".join(f"{k}={i.name or i.describe()}" for k, i in kit.instruments.items()) if kit else "see the kit"
     root = key.root
     lead_low = 60 + root if 60 + root <= 64 else 48 + root + 12
@@ -899,7 +897,7 @@ def _summary_table(rows: list[dict[str, Any]]) -> str:
     table += [(r["asset"], r["output"], num(r["seconds"], 3), num(r["dry_s"], 3), num(r["lufs"], 1), num(r["target_lufs"], 1),
                num(r["peak_dbfs"], 1), num(r["true_peak_dbtp"], 1)) for r in rows]  # fmt: skip
     widths = [max(len(row[i]) for row in table) for i in range(len(table[0]))]
-    return "\n".join("  ".join(c.ljust(w) if i < 2 else c.rjust(w) for i, (c, w) in enumerate(zip(row, widths))).rstrip() for row in table)
+    return "\n".join("  ".join(c.ljust(w) if i < 2 else c.rjust(w) for i, (c, w) in enumerate(zip(row, widths, strict=True))).rstrip() for row in table)
 
 
 def cmd_gallery(args: argparse.Namespace, out: Output) -> int:

@@ -7,12 +7,11 @@ from pathlib import Path
 
 import numpy as np
 import pytest
+from conftest import CONFIG, load, make_project, rules, run_json, write
 
 from segan.build import build
 from segan.project import Project, load_project
 from segan.render import render_asset
-
-from conftest import CONFIG, load, make_project, rules, run_json, write
 
 HIT = """\
 name: hit

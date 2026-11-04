@@ -14,14 +14,14 @@ import pytest
 
 pytest.importorskip("mcp")
 
+from conftest import make_project, write  # noqa: E402
 from mcp import Client  # noqa: E402
 from mcp.types import AudioContent, CallToolResult, ImageContent, TextContent  # noqa: E402
 from PIL import Image  # noqa: E402
-
-from conftest import make_project, write  # noqa: E402
-from segan.mcp_server import create_server  # noqa: E402
 from test_midi import song_file  # noqa: E402
 from test_song import SONG  # noqa: E402
+
+from segan.mcp_server import create_server  # noqa: E402
 
 
 def run(root: Path, body: Callable[[Client], Awaitable[Any]], allow_godot: bool = False) -> Any:

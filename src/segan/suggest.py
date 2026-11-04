@@ -670,7 +670,7 @@ def suggest_song(name: str, words: str, project_seed: int, existing: list[Any], 
     # opening voicing: the first chord, inverted/spread/coloured and placed in a register; never one already used
     opening: list[int] = []
     shape = {}
-    for attempt in range(24):
+    for _attempt in range(24):
         degree = _degree(progression[0])
         size = rng.choice([3, 3, 4]) if len(key.intervals) == 7 else 3
         register = rng.choice(["low", "middle", "middle", "high"])

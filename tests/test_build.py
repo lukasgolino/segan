@@ -4,14 +4,13 @@ import json
 from pathlib import Path
 
 import pytest
+from conftest import CONFIG, make_project, write
+from test_song import SONG
 
 from segan.build import build
 from segan.exporters.godot import edit_import, import_params, randomizer_tres, synchronized_tres
 from segan.project import load_project
 from segan.wavio import read_wav
-
-from conftest import CONFIG, make_project, write
-from test_song import SONG
 
 
 def setup(root: Path, config: str = CONFIG) -> Path:

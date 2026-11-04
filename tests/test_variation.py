@@ -6,14 +6,13 @@ from typing import Any
 
 import pytest
 import yaml
+from conftest import load, rules, run_json
 
 from segan.kit import load_kit_file
 from segan.notes import parse_key
 from segan.project import Project, load_project
-from segan.sequence import build_timeline, placed_notes, song_events
+from segan.sequence import build_timeline, song_events
 from segan.suggest import roll_kit, suggest_song
-
-from conftest import load, rules, run_json
 
 SONG = """\
 name: s

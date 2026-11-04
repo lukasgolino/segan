@@ -465,12 +465,12 @@ def _dynamics(name: str, raw: dict[str, Any], pattern: Pattern, ctx: _Context, p
         steps, dbs = [p[0] - 1 for p in points], [float(p[1]) for p in points]
 
         def level(step: int) -> float:
-            if step <= steps[0]:
-                return dbs[0]
-            for (a, da), (b, db) in zip(zip(steps, dbs), zip(steps[1:], dbs[1:])):
+            if step <= steps[0]:  # noqa: B023 (called in this iteration)
+                return dbs[0]  # noqa: B023
+            for (a, da), (b, db) in itertools.pairwise(zip(steps, dbs, strict=True)):  # noqa: B023
                 if step <= b:
                     return da + (db - da) * (step - a) / (b - a) if b > a else db
-            return dbs[-1]
+            return dbs[-1]  # noqa: B023
 
         notes = [replace(n, velocity=round(n.velocity * 10.0 ** (level(n.step) / 20.0), 6)) if n.track == track else n for n in notes]
     return [replace(n, velocity=min(2.0, max(0.05, n.velocity))) for n in notes]

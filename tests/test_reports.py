@@ -6,14 +6,13 @@ from typing import Any
 
 import numpy as np
 import pytest
+from conftest import load, rules, write
 
 from segan import oggio
 from segan.lint import lint_paths
 from segan.project import Project
 from segan.sfx import Variations
 from segan.sfxrender import variation_layers
-
-from conftest import load, rules, write
 
 
 def test_trim_takes_a_one_item_list(project: Project) -> None:
@@ -267,6 +266,7 @@ def test_cleared_licences(project: Project) -> None:
 def test_sounds_remove_and_prune(project: Project, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
     """#63: drop sounds from sounds.lock; prune drops what no SFX plays; lint says so (W028)."""
     from conftest import run_json
+
     from segan.wavio import wav_bytes
 
     (project.root / "sounds").mkdir()
