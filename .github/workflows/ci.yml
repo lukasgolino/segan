@@ -1,8 +1,9 @@
 name: CI
 
+# Checks run only when started (Actions → CI → Run workflow, or `gh workflow run ci.yml --ref <branch>`): once per PR,
+# just before merging, after the review. Pushes and PRs don't start them (Actions minutes cost money).
 on:
-  push:
-  pull_request:
+  workflow_dispatch:
 
 jobs:
   test:
