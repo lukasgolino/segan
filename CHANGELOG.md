@@ -19,6 +19,12 @@ check before upgrading. Patch bumps never change existing behaviour. Every relea
 
 ## [Unreleased]
 
+### Changed
+
+- CI: lint, types and tests on one Python run on every push. The full Python matrix, the Godot checks and the
+  orchestra build run on the PR once it leaves draft, and again only if a commit lands after that, as the last gate
+  before merge.
+
 ## [0.16.0] - 2026-11-04
 
 ### Changed
