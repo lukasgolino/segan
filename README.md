@@ -153,4 +153,4 @@ with a report of every change.
 
 ## License
 
-MIT. See [LICENSE](https://github.com/lukasgolino/segan/blob/main/LICENSE).
+Apache 2.0. See [LICENSE](https://github.com/lukasgolino/segan/blob/main/LICENSE).

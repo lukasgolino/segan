@@ -8,12 +8,12 @@
     "source": "github"
   },
   "websiteUrl": "https://segan.top/",
-  "version": "0.17.0",
+  "version": "0.17.1",
   "packages": [
     {
       "registryType": "pypi",
       "identifier": "segan-gen",
-      "version": "0.17.0",
+      "version": "0.17.1",
       "runtimeHint": "uvx",
       "transport": {
         "type": "stdio"

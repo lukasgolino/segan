@@ -238,7 +238,7 @@ def main() -> None:
     (OUT / "library.json").write_text(json.dumps(data, indent=1, sort_keys=True) + "\n", encoding="utf-8")
     (OUT / "LICENSE.txt").write_text("The VSCO 2 Community Edition samples are by Versilian Studios, released under CC0 1.0 Universal\n"
                                      f"({lib.url}). SEGAN doesn't ship them: `segan samples fetch vsco2` downloads them.\n"
-                                     "The .sfz maps in this folder are part of SEGAN (MIT).\n", encoding="utf-8")  # fmt: skip
+                                     "The .sfz maps in this folder are part of SEGAN (Apache-2.0).\n", encoding="utf-8")  # fmt: skip
     print(f"wrote {len(chosen)} instruments to {OUT}")
 
 
