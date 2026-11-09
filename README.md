@@ -46,7 +46,7 @@ patterns:
   drift). Every command takes `--json` and exits non-zero on errors; lint findings carry rule id, file, line
   and a fix hint.
 
-> **Status:** v0.16: the full pipeline works (kits, SFX, songs, lint, listen sheets, build, Godot 4, MIDI
+> **Status:** v0.17: the full pipeline works (kits, SFX, songs, lint, listen sheets, build, Godot 4, MIDI
 > import, MCP server, Claude skill), with synth and sampled instruments. See [PLAN.md](https://github.com/lukasgolino/segan/blob/main/PLAN.md) and
 > [CHANGELOG.md](https://github.com/lukasgolino/segan/blob/main/CHANGELOG.md).
 

@@ -121,7 +121,7 @@ jobs:
       contents: write
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Versions match the tag
         run: |
           python3 - "${GITHUB_REF_NAME#v}" <<'EOF'
@@ -154,8 +154,8 @@ jobs:
     env:
       MCP_PUBLISHER_VERSION: v1.8.8
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
       - name: Build

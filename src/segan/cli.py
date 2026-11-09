@@ -1543,7 +1543,7 @@ def build_parser() -> argparse.ArgumentParser:
     preview.add_argument("assets", nargs="+", help="asset files or names")
     preview.add_argument("--from", dest="start", help="start of the shown window: bar number (songs) or seconds (2.5s)")
     preview.add_argument("--to", dest="end", help="end of the shown window")
-    preview.add_argument("--format", choices=("ogg", "mp3"), help="also write each preview as .ogg or .mp3 (to share; needs segan[ogg])")
+    preview.add_argument("--format", choices=("ogg", "mp3"), help="also write each preview as .ogg or .mp3 (to share; needs segan-gen[ogg])")
     preview.add_argument("--output", action="append", help="only this output (repeat for several; one render): main, variant:<name>, variation:<n>, "
                          "take:<k>, take:<k>:variation:<n>, phase:<name>, stem:<name>, mix:<name>, flow:<clip>, walk (a flow song: a seeded walk through its sections; walk:<seed>), "
                          "reel (an SFX: the main sound, every variation and every take back to back)")  # fmt: skip

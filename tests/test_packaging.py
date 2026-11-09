@@ -22,3 +22,10 @@ def test_server_json_matches_pyproject_and_readme() -> None:
 def test_installed_version_is_the_project_version() -> None:
     project = tomllib.loads((ROOT / "pyproject.toml").read_text())["project"]
     assert segan.__version__ == project["version"]
+
+
+def test_install_hints_name_the_pypi_distribution() -> None:
+    """Hints like `pip install "segan[extra]"` would point at another project's name on PyPI."""
+    stale = [f"{p.relative_to(ROOT)}:{n}" for p in (ROOT / "src" / "segan").rglob("*") if p.is_file() and p.suffix in {".py", ".md", ".toml", ".gd"}
+             for n, line in enumerate(p.read_text(errors="ignore").splitlines(), 1) if "segan[" in line and "-gen[" not in line]
+    assert not stale, stale
