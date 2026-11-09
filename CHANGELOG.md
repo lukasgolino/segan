@@ -19,6 +19,13 @@ check before upgrading. Patch bumps never change existing behaviour. Every relea
 
 ## [Unreleased]
 
+## [0.17.1] - 2026-11-09
+
+### Changed
+
+- Licensed under the Apache License 2.0 instead of MIT (#120). Releases up to 0.17.0 stay
+  available under MIT.
+
 ## [0.17.0] - 2026-11-09
 
 SEGAN is on PyPI as `segan-gen` and in the MCP Registry as `io.github.lukasgolino/segan` (#116). Output is
@@ -475,7 +482,8 @@ First release: milestones 0-7 of PLAN.md.
 - `segan import midi`: standard MIDI files to songs (quantize, snap to the key, GM programs/drums to kit instruments,
   reused patterns, a change report).
 
-[Unreleased]: https://github.com/lukasgolino/segan/compare/v0.17.0...HEAD
+[Unreleased]: https://github.com/lukasgolino/segan/compare/v0.17.1...HEAD
+[0.17.1]: https://github.com/lukasgolino/segan/compare/v0.17.0...v0.17.1
 [0.17.0]: https://github.com/lukasgolino/segan/compare/v0.16.0...v0.17.0
 [0.16.0]: https://github.com/lukasgolino/segan/compare/v0.15.1...v0.16.0
 [0.15.1]: https://github.com/lukasgolino/segan/compare/v0.15.0...v0.15.1

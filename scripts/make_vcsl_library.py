@@ -84,7 +84,7 @@ SPEC = Spec(
     f"https://github.com/{REPO}", "CC0-1.0", [("", REPO, COMMIT)], INSTRUMENTS,
     "The Versilian Community Sample Library samples are by Versilian Studios, released under CC0 1.0 Universal\n"
     f"(https://github.com/{REPO}). SEGAN doesn't ship them: `segan samples fetch vcsl` downloads them.\n"
-    "The .sfz maps in this folder are part of SEGAN (MIT).\n",
+    "The .sfz maps in this folder are part of SEGAN (Apache-2.0).\n",
     "make_vcsl_library.py",
 )
 

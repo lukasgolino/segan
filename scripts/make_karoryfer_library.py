@@ -76,7 +76,7 @@ SPEC = Spec(
     "D. Smolken double bass, Aliexpress Erhu, Swirly Drums), CC0 1.0", "https://github.com/sfzinstruments", "CC0-1.0", SOURCES, INSTRUMENTS,
     "The samples are Karoryfer Lecolds' (https://github.com/sfzinstruments: black-and-green-guitars, emilyguitar, black-and-blue-basses,\n"
     "dsmolken.double-bass, aliexpress-erhu, swirly-drums), each released under CC0 1.0 Universal. SEGAN doesn't ship them:\n"
-    "`segan samples fetch karoryfer` downloads them. The .sfz maps in this folder are part of SEGAN (MIT).\n",
+    "`segan samples fetch karoryfer` downloads them. The .sfz maps in this folder are part of SEGAN (Apache-2.0).\n",
     "make_karoryfer_library.py",
 )
 
