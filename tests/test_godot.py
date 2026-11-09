@@ -254,7 +254,7 @@ def test_director_chains_flow_clips_sample_exactly(flow_game: Path, tmp_path: Pa
     assert np.abs(got[: len(expected)] - expected).max() < 1e-6  # every seam exact: no lost, doubled or late frames
 
 
-@pytest.mark.skipif(not oggio.available(), reason="needs soundfile (segan[ogg])")
+@pytest.mark.skipif(not oggio.available(), reason="needs soundfile (segan-gen[ogg])")
 def test_director_chains_ogg_clips_sample_exactly(tmp_path: Path) -> None:
     game = make_flow_game(tmp_path, ogg=True)  # (the build's --verify-godot check passed: OGG streams load and loop)
     manifest = json.loads((game / "audio" / "manifest.json").read_text())

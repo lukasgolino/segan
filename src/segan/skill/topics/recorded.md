@@ -55,7 +55,7 @@ variations: { count: 3, seed: 1, gain: 1 }
 ```
 
 `sample:` in an SFX layer makes it a **recorded layer** when it is a sound file path (`.wav`, `.ogg`, `.flac`,
-`.mp3`; relative to the project; ogg/flac/mp3 need `pip install "segan[ogg]"`), `freesound:<id>`, or a list of
+`.mp3`; relative to the project; ogg/flac/mp3 need `pip install "segan-gen[ogg]"`), `freesound:<id>`, or a list of
 them (one is picked per variation, from the seed; the same every render). A recorded layer plays its file as
 recorded: one-shot, mixed to mono, peak-normalised (so `gain` is the balance against the other layers, whatever
 level it was recorded at). Its own fields: `trim`, `reverse: true`, `fade: [in, out]`, `shift` (semitones) and

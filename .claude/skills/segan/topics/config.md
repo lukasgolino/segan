@@ -17,7 +17,7 @@ default_kit = "nes"
 output_dir = "build/audio"    # e.g. ../game/assets/generated/audio (apart from PAGAN's output: both write manifest.json)
 preview_dir = "previews"
 export = ["wav"]              # + "godot" (.import loops/compression, randomizer/synchronized .tres), "stems",
-                              #   "ogg" (music as Ogg Vorbis, ~10x smaller; SFX stay WAV; pip install "segan[ogg]"),
+                              #   "ogg" (music as Ogg Vorbis, ~10x smaller; SFX stay WAV; pip install "segan-gen[ogg]"),
                               #   "web" (segan_audio.js, a Web Audio player; not with "godot")
 style_version = 1
 seed = 4417312093             # the project seed (`segan init` picks one): suggestions and rolled kits branch from it; renders don't use it

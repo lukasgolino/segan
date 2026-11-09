@@ -847,7 +847,7 @@ def cmd_preview(args: argparse.Namespace, out: Output) -> int:
         from segan import oggio
 
         if not oggio.available() or (args.format == "mp3" and not oggio.mp3_available()):
-            raise usage_error(f'--format {args.format} needs soundfile with a libsndfile that writes it: pip install "segan[ogg]"'
+            raise usage_error(f'--format {args.format} needs soundfile with a libsndfile that writes it: pip install "segan-gen[ogg]"'
                               + (" (MP3 needs libsndfile 1.1 or newer)" if args.format == "mp3" else ""))
     assets, findings = load_targets(args.assets, project)
     outputs: list[dict[str, Any]] = []
@@ -1309,7 +1309,7 @@ def cmd_mcp(args: argparse.Namespace, out: Output) -> int:
     try:
         from segan.mcp_server import serve
     except ImportError:
-        raise usage_error('the MCP server needs the "mcp" extra: pip install "segan[mcp]"') from None
+        raise usage_error('the MCP server needs the mcp package: pip install --upgrade segan-gen') from None
     return serve(args.project, args.allow_godot)
 
 
@@ -1608,7 +1608,7 @@ def build_parser() -> argparse.ArgumentParser:
     adjust.add_argument("--dry-run", action="store_true", help="show the changes without writing")
     adjust.set_defaults(handler=cmd_mix_adjust)
 
-    mcp_cmd = commands.add_parser("mcp", help="run SEGAN as an MCP server over stdio (needs segan[mcp])")
+    mcp_cmd = commands.add_parser("mcp", help="run SEGAN as an MCP server over stdio")
     mcp_cmd.add_argument("--project", help="SEGAN project directory (default: the one containing the cwd)")
     mcp_cmd.add_argument("--allow-godot", action="store_true", help="let the build tool run a Godot binary (verify_godot)")
     mcp_cmd.set_defaults(handler=cmd_mcp)
