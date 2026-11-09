@@ -44,7 +44,7 @@ def test_timing_jitter_keeps_the_first_layer_at_its_start(project: Project) -> N
 def test_ogg_encodes_long_songs_in_blocks() -> None:
     """#68: one large Vorbis write crashed libsndfile; blocks don't, and the stream is complete."""
     if not oggio.available():
-        pytest.skip("needs segan[ogg]")
+        pytest.skip("needs segan-gen[ogg]")
     rate = 22050
     pcm = (np.random.default_rng(1).random((rate * 75, 2)) - 0.5) * 20000
     data = oggio.encode_ogg(pcm.astype(np.int16), rate, 0.4, "long")

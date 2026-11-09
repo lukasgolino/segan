@@ -19,11 +19,28 @@ check before upgrading. Patch bumps never change existing behaviour. Every relea
 
 ## [Unreleased]
 
+## [0.17.0] - 2026-11-09
+
+SEGAN is on PyPI as `segan-gen` and in the MCP Registry as `io.github.lukasgolino/segan` (#116). Output is
+unchanged apart from the generator string in `manifest.json`.
+
 ### Changed
 
+- **The distribution is `segan-gen`** (`segan` is free on PyPI, but the three tools share one naming scheme): `pip
+  install segan-gen`; the command and the import stay `segan`. Git pins must use the new name from this version on
+  (`segan-gen @ git+...@v0.17.0`).
+- **The MCP server is always installed** (`mcp` is a dependency; the `mcp` extra is kept, empty), so
+  `uvx segan-gen mcp` runs it without an install.
+- **Upgrading from a git-pinned `segan`:** `pip uninstall segan` first, then install `segan-gen`. Both own the same
+  `segan/` files, so uninstalling `segan` after installing `segan-gen` deletes them.
 - CI: lint, types and tests on one Python run on every push. The full Python matrix, the Godot checks and the
   orchestra build run on the PR once it leaves draft, and again only if a commit lands after that, as the last gate
   before merge.
+
+### Added
+
+- Tags publish a GitHub release from the changelog, the package to PyPI (Trusted Publishing) and `server.json` to the
+  MCP Registry.
 
 ## [0.16.0] - 2026-11-04
 
@@ -458,7 +475,14 @@ First release: milestones 0-7 of PLAN.md.
 - `segan import midi`: standard MIDI files to songs (quantize, snap to the key, GM programs/drums to kit instruments,
   reused patterns, a change report).
 
-[Unreleased]: https://github.com/lukasgolino/segan/compare/v0.11.0...HEAD
+[Unreleased]: https://github.com/lukasgolino/segan/compare/v0.17.0...HEAD
+[0.17.0]: https://github.com/lukasgolino/segan/compare/v0.16.0...v0.17.0
+[0.16.0]: https://github.com/lukasgolino/segan/compare/v0.15.1...v0.16.0
+[0.15.1]: https://github.com/lukasgolino/segan/compare/v0.15.0...v0.15.1
+[0.15.0]: https://github.com/lukasgolino/segan/compare/v0.14.0...v0.15.0
+[0.14.0]: https://github.com/lukasgolino/segan/compare/v0.13.0...v0.14.0
+[0.13.0]: https://github.com/lukasgolino/segan/compare/v0.12.0...v0.13.0
+[0.12.0]: https://github.com/lukasgolino/segan/compare/v0.11.0...v0.12.0
 [0.11.0]: https://github.com/lukasgolino/segan/compare/v0.10.0...v0.11.0
 [0.10.0]: https://github.com/lukasgolino/segan/compare/v0.9.0...v0.10.0
 [0.9.0]: https://github.com/lukasgolino/segan/compare/v0.8.0...v0.9.0

@@ -87,7 +87,7 @@ generated text files.
 - Open questions: ask as you go (tight questions, each with a recommended default).
 - Bugs, feature requests and future work live in GitHub issues (`gh issue list --repo lukasgolino/segan`); games
   report through the `agent-report` template. No plan/report files in the repo.
-- Dependencies: numpy, scipy, Pillow, PyYAML; extras `mcp`, `ogg` (soundfile); dev: pytest, mypy, ruff, types-PyYAML, mcp, soundfile.
+- Dependencies: numpy, scipy, Pillow, PyYAML, mcp (the MCP server; core since #116 so `uvx segan-gen mcp` works); extra `ogg` (soundfile); dev: pytest, mypy, ruff, types-PyYAML, soundfile.
 
 ## Decisions log
 
@@ -223,3 +223,8 @@ generated text files.
   and tuning per sample measured with YIN (guitars are written an octave up: measured -12), levels from the plain-
   velocity samples (-20 LUFS, peak at most 0.7). No CC0/CC BY ensemble choir exists on a git host: choirs come from the
   `formant` model or stacked `neosound/voice_oohs`.
+- 2026-11-09: #116: published as `segan-gen` on PyPI (one scheme with pagan-gen and kiln-gen, whose short names are
+  taken; the import and command stay `segan`) and as `io.github.lukasgolino/segan` in the MCP Registry. Tags run a
+  release job (notes from the changelog) and a publish job: PyPI Trusted Publishing (environment `pypi`) and the
+  registry's GitHub OIDC login, no tokens in the repo. `mcp` became a dependency so registry clients can run
+  `uvx segan-gen mcp`. server.json's versions are tested against pyproject.

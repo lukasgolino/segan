@@ -3,28 +3,48 @@ requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "segan"
-version = "0.16.0"
+name = "segan-gen"
+version = "0.17.0"
 description = "SEGAN (Sound Effect Grammar And Notation): write game sound effects and music as text, build them into WAVs and game-ready assets."
 readme = "README.md"
 license = "MIT"
 license-files = ["LICENSE"]
 authors = [{ name = "Lukas Golino" }]
+keywords = ["sound-effects", "music", "audio", "godot", "game-assets", "mcp", "procedural"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Games/Entertainment",
+    "Topic :: Multimedia :: Sound/Audio",
+]
 requires-python = ">=3.11"
 dependencies = [
     "numpy>=1.26",
     "scipy>=1.11",
     "Pillow>=10.1",
     "PyYAML>=6",
+    "mcp>=2.3,<3",
 ]
 
+[project.urls]
+Homepage = "https://segan.top/"
+Source = "https://github.com/lukasgolino/segan"
+Issues = "https://github.com/lukasgolino/segan/issues"
+Changelog = "https://github.com/lukasgolino/segan/blob/main/CHANGELOG.md"
+
 [project.optional-dependencies]
-dev = ["pytest>=8", "mypy>=1.10", "ruff>=0.15", "types-PyYAML", "mcp>=2.3,<3", "soundfile>=0.12"]
-mcp = ["mcp>=2.3,<3"]
+dev = ["pytest>=8", "mypy>=1.10", "ruff>=0.15", "types-PyYAML", "soundfile>=0.12"]
+mcp = []  # kept (empty) so `segan-gen[mcp]` still resolves; the MCP server is always installed now
 ogg = ["soundfile>=0.12"]
 
 [project.scripts]
 segan = "segan.cli:main"
+segan-gen = "segan.cli:main"  # so `uvx segan-gen ...` (the MCP Registry entry) finds a command
 
 [tool.setuptools.packages.find]
 where = ["src"]

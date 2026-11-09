@@ -6,7 +6,7 @@ CLI, the skill and MCP share one contract. Errors are results (`ok: false` + `fi
 Nothing reads or writes outside the project, its output dir and its preview dir. Listen sheets come back as
 images (the model can look at them); WAVs as audio content when asked (for clients and humans).
 
-Needs the optional extra: `pip install "segan[mcp]"`.
+Installed with SEGAN (`pip install segan-gen`); `uvx segan-gen mcp` runs it without an install.
 """
 
 from __future__ import annotations

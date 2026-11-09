@@ -1,0 +1,36 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.lukasgolino/segan",
+  "title": "SEGAN",
+  "description": "Game sound effects and music written as text: lint, listen and build WAVs and Godot resources.",
+  "repository": {
+    "url": "https://github.com/lukasgolino/segan",
+    "source": "github"
+  },
+  "websiteUrl": "https://segan.top/",
+  "version": "0.17.0",
+  "packages": [
+    {
+      "registryType": "pypi",
+      "identifier": "segan-gen",
+      "version": "0.17.0",
+      "runtimeHint": "uvx",
+      "transport": {
+        "type": "stdio"
+      },
+      "packageArguments": [
+        {
+          "type": "positional",
+          "value": "mcp"
+        },
+        {
+          "type": "named",
+          "name": "--project",
+          "description": "Absolute path of the SEGAN project directory (holds segan.toml); without it, the server's working directory",
+          "isRequired": false,
+          "format": "filepath"
+        }
+      ]
+    }
+  ]
+}

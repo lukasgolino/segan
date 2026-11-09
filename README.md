@@ -27,7 +27,7 @@ patterns:
   only), `segan sounds add` records them in `sounds.lock` (fetched into a user cache, checked by sha256, nothing
   copied into the repo), and an SFX layer plays them (`sample: freesound:<id>` or a file) trimmed, reversed,
   faded, pitch-shifted and time-stretched independently, layered with synth sounds. `segan sounds credits`
-  writes the attribution CC BY requires. See [examples/demo/sfx/boss_gong.sfx.yaml](examples/demo/sfx/boss_gong.sfx.yaml).
+  writes the attribution CC BY requires. See [examples/demo/sfx/boss_gong.sfx.yaml](https://github.com/lukasgolino/segan/blob/main/examples/demo/sfx/boss_gong.sfx.yaml).
 - **A wide palette**: band-limited oscillators, instrument models (plucked and bowed strings, sung vowels and choirs,
   struck mallets, bells and metal, additive organs, wavetables, supersaws, 3-4 operator FM), hard sync, sub
   oscillators, brass mutes, 13 drum macros and per-instrument effects (chorus, ensemble, phaser, flanger,
@@ -35,7 +35,7 @@ patterns:
 - **Sampled instruments** in any kit: `sample:` plays WAVs, SFZ maps and SoundFonts (`.sf2`), and four CC0
   libraries download on demand with `segan samples fetch`: `vsco2` (orchestra), `vcsl` (grand piano, electric
   piano, organs, mallets, winds, world and hand percussion), `karoryfer` (guitars, basses, erhu, a drum kit with a
-  brush), `neosound` (voice, steel guitar, bamboo flute). See [examples/orchestra](examples/orchestra).
+  brush), `neosound` (voice, steel guitar, bamboo flute). See [examples/orchestra](https://github.com/lukasgolino/segan/blob/main/examples/orchestra).
 - **Variety by design**: a random project seed, `segan kit roll` (a kit from style words, with a shared `identity`
   group), `segan suggest song` (key, mode, tempo, meter, texture and opening away from the project's songs), and
   sameness checks: lint warns when songs open alike or share their first bars, and `segan similarity` scores every
@@ -46,18 +46,17 @@ patterns:
   drift). Every command takes `--json` and exits non-zero on errors; lint findings carry rule id, file, line
   and a fix hint.
 
-> **Status:** v0.16: the full pipeline works (kits, SFX, songs, lint, listen sheets, build, Godot 4, MIDI
-> import, MCP server, Claude skill), with synth and sampled instruments. See [PLAN.md](PLAN.md) and
-> [CHANGELOG.md](CHANGELOG.md).
+> **Status:** v0.17: the full pipeline works (kits, SFX, songs, lint, listen sheets, build, Godot 4, MIDI
+> import, MCP server, Claude skill), with synth and sampled instruments. See [PLAN.md](https://github.com/lukasgolino/segan/blob/main/PLAN.md) and
+> [CHANGELOG.md](https://github.com/lukasgolino/segan/blob/main/CHANGELOG.md).
 
 ## Install
 
-Requires Python 3.11+. SEGAN isn't on PyPI yet; install a tagged release from GitHub:
+Requires Python 3.11+. The package is `segan-gen` on PyPI; the command and the import are `segan`:
 
 ```sh
-pip install "git+https://github.com/lukasgolino/segan.git@v0.16.0"                 # the CLI + library
-pip install "segan[mcp] @ git+https://github.com/lukasgolino/segan.git@v0.16.0"    # + the MCP server
-pip install "segan[ogg] @ git+https://github.com/lukasgolino/segan.git@v0.16.0"    # + Ogg Vorbis music export, .ogg/.flac/.mp3 recordings
+pip install segan-gen              # the CLI, the library and the MCP server
+pip install "segan-gen[ogg]"       # + Ogg Vorbis music export, .ogg/.flac/.mp3 recordings
 segan --version
 ```
 
@@ -85,8 +84,8 @@ segan gallery                       # every asset side by side + loudness by cat
 segan build                         # WAVs + manifest.json (+ Godot resources) into output_dir
 ```
 
-The demo project in [`examples/demo/`](examples/demo) has three kits (`nes`, `fm_soft`, `arcade_synth`), the
-preset SFX and looping songs with variants; [`examples/godot/`](examples/godot) is the Godot 4.7 project it
+The demo project in [`examples/demo/`](https://github.com/lukasgolino/segan/blob/main/examples/demo) has three kits (`nes`, `fm_soft`, `arcade_synth`), the
+preset SFX and looping songs with variants; [`examples/godot/`](https://github.com/lukasgolino/segan/blob/main/examples/godot) is the Godot 4.7 project it
 builds into (run `segan build` in `examples/demo` first, then open it in Godot and press Play).
 
 ## Listen sheets: how an agent "hears"
@@ -117,7 +116,7 @@ $Coin.play()
 The files are plain WAV (Ogg for music with `"ogg"`), so any engine plays them; `manifest.json` is the
 engine-neutral contract (variations, loop points, buses, playback hints). With `"web"` in `export`, the build also
 writes `segan_audio.js`, a Web Audio player for the manifest. Unity, Unreal and Defold: see "Other engines" in the
-[engines topic](src/segan/skill/topics/engines.md) (`segan docs engines`) for their import settings and what to read from the manifest.
+[engines topic](https://github.com/lukasgolino/segan/blob/main/src/segan/skill/topics/engines.md) (`segan docs engines`) for their import settings and what to read from the manifest.
 
 ## Using SEGAN with Claude
 
@@ -131,9 +130,17 @@ segan skill install          # copies it to <repo>/.claude/skills/segan/
 ## Using SEGAN from any agent (MCP)
 
 ```sh
-pip install "segan[mcp] @ git+https://github.com/lukasgolino/segan.git@v0.16.0"
-segan mcp --project path/to/audio      # stdio MCP server: 26 tools, listen sheets as images, WAVs as audio
+claude mcp add segan -- uvx segan-gen mcp --project /path/to/audio    # no install needed (uv); or `segan mcp` after pip install
 ```
+
+A stdio MCP server: 26 tools, listen sheets as images, WAVs as audio. Other clients take the same command in their
+config:
+
+```json
+{ "mcpServers": { "segan": { "command": "uvx", "args": ["segan-gen", "mcp", "--project", "/path/to/audio"] } } }
+```
+
+SEGAN is listed in the [MCP Registry](https://registry.modelcontextprotocol.io/) as `io.github.lukasgolino/segan`.
 
 ## Generator scripts and MIDI
 
@@ -142,6 +149,8 @@ stable API for scripts that generate many sounds or procedural music. `segan imp
 converts a MIDI file into a song: quantized to the grid, snapped to the key, parts mapped to kit instruments,
 with a report of every change.
 
+<!-- mcp-name: io.github.lukasgolino/segan -->
+
 ## License
 
-MIT. See [LICENSE](LICENSE).
+MIT. See [LICENSE](https://github.com/lukasgolino/segan/blob/main/LICENSE).

@@ -17,7 +17,7 @@ from segan import __version__
 def install_details() -> str | None:
     """e.g. "v0.1.0, ce24ab4" (pip install from git), "editable checkout v0.1.0-3-g1a2b3c4-dirty", or None."""
     try:
-        text = distribution("segan").read_text("direct_url.json")
+        text = distribution("segan-gen").read_text("direct_url.json")
     except PackageNotFoundError:
         return "not installed: running from a source tree"
     if not text:
