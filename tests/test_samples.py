@@ -6,6 +6,7 @@ from typing import Any
 
 import numpy as np
 import pytest
+from conftest import load
 
 from segan import libraries
 from segan.patch import Report, parse_patch
@@ -14,8 +15,6 @@ from segan.render import render_asset
 from segan.samples import SampleSpec, blob_sha1, load_set, parse_sfz, read_sf2, sfz_key, wav_info, zone_audio
 from segan.synth import Context, render_note
 from segan.wavio import wav_bytes
-
-from conftest import load
 
 RATE = 22050
 

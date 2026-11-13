@@ -3,14 +3,12 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+from conftest import CONFIG, make_project, write
+from test_song import SONG
 
 from segan.findings import SeganError
 from segan.lint import WARNING_RULES, lint_paths
 from segan.project import Project, load_project
-
-from conftest import CONFIG, make_project, write
-
-from test_song import SONG
 
 
 def lint_rules(project: Project, kind: str, name: str, text: str) -> list[tuple[str, str | None]]:
@@ -113,9 +111,8 @@ def test_kit_aliasing_warning(tmp_path: Path) -> None:
 
 @pytest.mark.parametrize("rule", sorted(WARNING_RULES))
 def test_every_warning_is_documented(rule: str) -> None:
-    reference = (Path(__file__).parent.parent / "src" / "segan" / "skill" / "reference.md")
-    if reference.exists():
-        assert rule in reference.read_text()
+    lint_topic = Path(__file__).parent.parent / "src" / "segan" / "skill" / "topics" / "lint.md"
+    assert rule in lint_topic.read_text()
 
 
 CLASH = """\

@@ -35,7 +35,7 @@ def _soundfile(path: str):  # type: ignore[no-untyped-def]
     try:
         import soundfile
     except ImportError:
-        raise SampleError(f"{Path(path).name}: decoding {Path(path).suffix} files needs the ogg extra: pip install \"segan[ogg]\"") from None
+        raise SampleError(f"{Path(path).name}: decoding {Path(path).suffix} files needs the ogg extra: pip install \"segan-gen[ogg]\"") from None
     return soundfile
 
 

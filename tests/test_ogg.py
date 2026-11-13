@@ -15,7 +15,7 @@ from segan.build import build
 from segan.project import Project
 from segan.render import render_asset
 
-pytestmark = pytest.mark.skipif(not oggio.available(), reason="needs soundfile (segan[ogg])")
+pytestmark = pytest.mark.skipif(not oggio.available(), reason="needs soundfile (segan-gen[ogg])")
 
 
 def ogg_project(tmp_path: Path, export: str = '["wav", "ogg"]') -> Path:

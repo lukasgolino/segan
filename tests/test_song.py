@@ -5,6 +5,7 @@ from typing import Any
 
 import numpy as np
 import pytest
+from conftest import load, write
 
 from segan.analysis import seam_click
 from segan.project import Project
@@ -12,8 +13,6 @@ from segan.render import render_asset
 from segan.sequence import build_timeline, placed_notes
 from segan.voices import NoteEvent
 from segan.wavio import read_wav
-
-from conftest import load, write
 
 SONG = """\
 name: tune

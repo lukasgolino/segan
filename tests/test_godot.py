@@ -5,6 +5,7 @@ CI downloads Godot 4.7.2, so these run there on every push.
 
 from __future__ import annotations
 
+import itertools
 import json
 import shutil
 import subprocess
@@ -108,7 +109,7 @@ def test_loops_are_seamless_and_the_randomizer_cycles(copies: tuple[Path, Path],
     diff = float(output.split("LOOP_DIFF ")[1].split()[0])
     assert diff < 1e-3, output  # playing across the loop point = playing the loop's start
     picks = json.loads(output.split("PICKS ")[1].split("\n")[0])
-    assert len(set(picks)) >= 2 and all(a != b for a, b in zip(picks, picks[1:]))  # random, no repeats
+    assert len(set(picks)) >= 2 and all(a != b for a, b in itertools.pairwise(picks))  # random, no repeats
 
 
 DIRECTOR_RENDER = """\
@@ -189,9 +190,8 @@ families:
 
 def make_flow_game(tmp_path: Path, ogg: bool = False) -> Path:
     """A Godot project with a flow song, a looping song, a stinger SFX and a soundtrack built into res://audio."""
-    from test_flow import FLOW_SONG, G_SONG, SOUNDTRACK
-
     from conftest import CONFIG, make_project, write
+    from test_flow import FLOW_SONG, G_SONG, SOUNDTRACK
 
     game = tmp_path / "game"
     game.mkdir()
@@ -254,7 +254,7 @@ def test_director_chains_flow_clips_sample_exactly(flow_game: Path, tmp_path: Pa
     assert np.abs(got[: len(expected)] - expected).max() < 1e-6  # every seam exact: no lost, doubled or late frames
 
 
-@pytest.mark.skipif(not oggio.available(), reason="needs soundfile (segan[ogg])")
+@pytest.mark.skipif(not oggio.available(), reason="needs soundfile (segan-gen[ogg])")
 def test_director_chains_ogg_clips_sample_exactly(tmp_path: Path) -> None:
     game = make_flow_game(tmp_path, ogg=True)  # (the build's --verify-godot check passed: OGG streams load and loop)
     manifest = json.loads((game / "audio" / "manifest.json").read_text())

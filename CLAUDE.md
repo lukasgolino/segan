@@ -12,11 +12,12 @@ The reference implementation of every convention is PAGAN at `/home/lgolino/repo
 python3 -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"
 segan --version          # or: python -m segan --version
+ruff check .              # lint (config in pyproject.toml; long lines allowed)
 mypy                     # strict type check (config in pyproject.toml)
 pytest
 ```
 
-CI (`.github/workflows/ci.yml`) runs install + mypy + pytest + `segan lint --warnings-as-errors` on the demo on
+CI (`.github/workflows/ci.yml`) runs install + ruff + mypy + pytest + `segan lint --warnings-as-errors` on the demo on
 Python 3.11-3.13, and a `godot` job that downloads Godot 4.7.2, rebuilds the demo into `examples/godot/`
 (failing if the committed text outputs differ), verifies every stream loads, loops and plays, and runs
 `tests/test_godot.py` (skipped locally unless `GODOT=/path/to/godot` or `godot` on PATH).
@@ -86,7 +87,7 @@ generated text files.
 - Open questions: ask as you go (tight questions, each with a recommended default).
 - Bugs, feature requests and future work live in GitHub issues (`gh issue list --repo lukasgolino/segan`); games
   report through the `agent-report` template. No plan/report files in the repo.
-- Dependencies: numpy, scipy, Pillow, PyYAML; extras `mcp`, `ogg` (soundfile); dev: pytest, mypy, types-PyYAML, mcp, soundfile.
+- Dependencies: numpy, scipy, Pillow, PyYAML, mcp (the MCP server; core since #116 so `uvx segan-gen mcp` works); extra `ogg` (soundfile); dev: pytest, mypy, ruff, types-PyYAML, soundfile.
 
 ## Decisions log
 
@@ -222,3 +223,8 @@ generated text files.
   and tuning per sample measured with YIN (guitars are written an octave up: measured -12), levels from the plain-
   velocity samples (-20 LUFS, peak at most 0.7). No CC0/CC BY ensemble choir exists on a git host: choirs come from the
   `formant` model or stacked `neosound/voice_oohs`.
+- 2026-11-09: #116: published as `segan-gen` on PyPI (one scheme with pagan-gen and kiln-gen, whose short names are
+  taken; the import and command stay `segan`) and as `io.github.lukasgolino/segan` in the MCP Registry. Tags run a
+  release job (notes from the changelog) and a publish job: PyPI Trusted Publishing (environment `pypi`) and the
+  registry's GitHub OIDC login, no tokens in the repo. `mcp` became a dependency so registry clients can run
+  `uvx segan-gen mcp`. server.json's versions are tested against pyproject.

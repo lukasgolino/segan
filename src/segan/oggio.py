@@ -56,7 +56,6 @@ def _fix_serial(raw: bytes, serial: int) -> bytes:
 
 def encode_ogg(pcm: np.ndarray, rate: int, quality: float, name: str) -> bytes:
     """int16 frames -> Ogg Vorbis bytes at `quality` (0-1, Vorbis q0-q10 / 10)."""
-    import soundfile
 
     buffer = io.BytesIO()
     _write_blocks(buffer, pcm, rate, format="OGG", subtype="VORBIS", compression_level=1.0 - quality)
@@ -66,7 +65,6 @@ def encode_ogg(pcm: np.ndarray, rate: int, quality: float, name: str) -> bytes:
 
 def encode_mp3(pcm: np.ndarray, rate: int) -> bytes:
     """int16 frames -> MP3 bytes (libsndfile 1.1+ with LAME), for sharing previews; not used by builds."""
-    import soundfile
 
     buffer = io.BytesIO()
     _write_blocks(buffer, pcm, rate, format="MP3", subtype="MPEG_LAYER_III")

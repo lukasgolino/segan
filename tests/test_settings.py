@@ -4,13 +4,12 @@ import json
 from pathlib import Path
 
 import pytest
+from conftest import make_project, run_json
 
 from segan.cli import template
 from segan.findings import SeganError
 from segan.project import Config, parse_config
 from segan.settings import SETTINGS, describe, parse_value, remove_from_toml, set_in_toml
-
-from conftest import make_project, run_json
 
 
 def test_registry_defaults_match_config_defaults() -> None:

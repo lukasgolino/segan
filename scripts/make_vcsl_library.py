@@ -17,7 +17,7 @@ from library_maps import ROOT, Inst, Spec, build
 REPO = "sgossner/VCSL"
 COMMIT = "c1ea7bcc3c7309650ab0da9d15c9cd1fbc4a4c7e"
 OUT = ROOT / "src" / "segan" / "libraries" / "vcsl"
-C, I, M = "Chordophones", "Idiophones/Struck Idiophones", "Membranophones/Struck Membranophones"
+C, I, M = "Chordophones", "Idiophones/Struck Idiophones", "Membranophones/Struck Membranophones"  # noqa: E741
 
 # kind: sus (held), shot (rings to its end), hit (unpitched)
 INSTRUMENTS: dict[str, Inst] = {
@@ -84,7 +84,7 @@ SPEC = Spec(
     f"https://github.com/{REPO}", "CC0-1.0", [("", REPO, COMMIT)], INSTRUMENTS,
     "The Versilian Community Sample Library samples are by Versilian Studios, released under CC0 1.0 Universal\n"
     f"(https://github.com/{REPO}). SEGAN doesn't ship them: `segan samples fetch vcsl` downloads them.\n"
-    "The .sfz maps in this folder are part of SEGAN (MIT).\n",
+    "The .sfz maps in this folder are part of SEGAN (Apache-2.0).\n",
     "make_vcsl_library.py",
 )
 

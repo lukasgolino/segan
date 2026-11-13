@@ -3,14 +3,13 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+from conftest import load, make_project, run_json, write
+from test_song import SONG
 
 from segan.build import build
 from segan.manage import MixAdjustment, adjust_mix, bump_style, catalogue
 from segan.project import load_project
 from segan.render import render_asset
-
-from conftest import load, make_project, run_json, write
-from test_song import SONG
 
 
 @pytest.fixture

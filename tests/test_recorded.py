@@ -10,6 +10,7 @@ from typing import Any
 
 import numpy as np
 import pytest
+from conftest import CONFIG, load, make_project, run_json, write
 
 from segan.analysis import yin
 from segan.licences import classify
@@ -17,8 +18,6 @@ from segan.project import Project, load_project
 from segan.samples import Processing
 from segan.stretch import stretch
 from segan.wavio import wav_bytes
-
-from conftest import CONFIG, load, make_project, run_json, write
 
 RATE = 22050
 
@@ -139,8 +138,8 @@ def test_recorded_layer_renders_with_synth_layers(rec_project: Project) -> None:
 
 
 def test_recorded_layer_plays_shifted_not_slowed(rec_project: Project) -> None:
-    from segan.sfxrender import dry_mix
     from segan.kitshow import context_for
+    from segan.sfxrender import dry_mix
 
     text = "name: r\nduration: 1.5\nroom: 0\nlayers:\n  - sample: sounds/roar.wav\n    licence: CC0\n    source: x\n    shift: -12\n"
     sfx = sfx_of(rec_project, "r", text)
@@ -165,9 +164,9 @@ def test_processing_trim_reverse_fade(rec_project: Project) -> None:
 
 
 def test_a_list_picks_one_file_per_variation(rec_project: Project) -> None:
-    from segan.sfxrender import render_layer
-    from segan.kitshow import context_for
     from segan.dsp import seed_of
+    from segan.kitshow import context_for
+    from segan.sfxrender import render_layer
 
     text = ("name: pick\nduration: 1.0\nlayers:\n  - sample: [sounds/roar.wav, sounds/other.wav]\n    licence: CC0\n    source: x\n"
             "variations: { count: 8 }\n")  # fmt: skip

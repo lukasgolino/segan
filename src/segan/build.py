@@ -15,7 +15,16 @@ from pathlib import Path
 from typing import Any
 
 from segan import __version__, oggio
-from segan.exporters.godot import bus_layout_tres, edit_import, find_godot_project, import_params, ogg_import_params, randomizer_tres, res_path, synchronized_tres
+from segan.exporters.godot import (
+    bus_layout_tres,
+    edit_import,
+    find_godot_project,
+    import_params,
+    ogg_import_params,
+    randomizer_tres,
+    res_path,
+    synchronized_tres,
+)
 from segan.findings import Finding
 from segan.lint import LintResult, lint_paths
 from segan.project import Project
@@ -85,7 +94,7 @@ def build(project: Project) -> BuildResult:
     compress = project.config.godot.compress
     ogg = "ogg" in exporters
     if ogg and not oggio.available():
-        result.errors.append(Finding("E000", 'export includes "ogg" but soundfile (libsndfile) isn\'t installed: pip install "segan[ogg]"', project.config_path))
+        result.errors.append(Finding("E000", 'export includes "ogg" but soundfile (libsndfile) isn\'t installed: pip install "segan-gen[ogg]"', project.config_path))
         return result
 
     def emit(output: Output, folder: str) -> dict[str, Any]:

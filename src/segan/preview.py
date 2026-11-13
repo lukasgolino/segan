@@ -26,7 +26,7 @@ from segan.analysis import (
     true_peak_db,
     yin,
 )
-from segan.dsp import Signal, midi_to_hz_scalar
+from segan.dsp import midi_to_hz_scalar
 from segan.listen import BAD, DIM, GOOD, TEXT, TRACK_COLOURS, WARN, Block, RollNote, RollTrack, SheetSpec, listen_sheet, seam_sheet
 from segan.project import Project
 from segan.render import Output, Render

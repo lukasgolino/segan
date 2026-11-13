@@ -6,13 +6,12 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from conftest import CONFIG, rules, run_json
+from conftest import make_project as _make_project
 
 from segan import api, similarity
 from segan.lint import lint_paths
 from segan.project import Project, load_project
-
-from conftest import CONFIG, rules, run_json
-from conftest import make_project as _make_project
 
 
 def make_project(root: Path, config: str = CONFIG) -> Project:
@@ -104,7 +103,7 @@ def test_a_song_can_turn_a_warning_off(ship: Project) -> None:
 
 
 def test_shipped_fingerprints_are_current() -> None:
-    """Regenerate with `python scripts/make_fingerprints.py` after changing the demo's songs or reference.md's example."""
+    """Regenerate with `python scripts/make_fingerprints.py` after changing the demo's songs or the api topic's example."""
     stored = json.loads((ROOT / "src" / "segan" / "fingerprints" / "shipped.json").read_text())
     assert stored == json.loads(json.dumps(similarity.make_shipped(ROOT), sort_keys=True))
 

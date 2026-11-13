@@ -7,14 +7,13 @@ import math
 from pathlib import Path
 
 import pytest
+from conftest import CONFIG, load, make_project, run_json
 
 from segan.analysis import MOMENTARY_WINDOW, max_momentary_lufs, peak_db, sfx_window
 from segan.findings import SeganError
 from segan.preview import analyze
 from segan.project import parse_config
 from segan.render import render_asset
-
-from conftest import CONFIG, load, make_project, run_json
 
 CLICK = "name: click\ncategory: ui\nduration: 0.06\nlayers:\n  - { osc: pulse, pitch: C6, env: [0.001, 0.03, 0.0, 0.02] }\n"
 LONG = "name: whoosh\nduration: 0.6\nlayers:\n  - { osc: noise, env: [0.05, 0.3, 0.3, 0.2] }\n"

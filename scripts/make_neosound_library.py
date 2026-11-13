@@ -36,7 +36,7 @@ SPEC = Spec(
     "https://github.com/NeoSoundFonts", "CC0-1.0", SOURCES, INSTRUMENTS,
     "The samples are Simone Piervergili's (https://github.com/NeoSoundFonts: SimonePiervergili-VoiceOohs, SimonePiervergili-OldSteelGuitar,\n"
     "SP-Bamboo-Flute), each released under CC0 1.0 Universal. SEGAN doesn't ship them: `segan samples fetch neosound` downloads them.\n"
-    "The .sfz maps in this folder are part of SEGAN (MIT).\n",
+    "The .sfz maps in this folder are part of SEGAN (Apache-2.0).\n",
     "make_neosound_library.py",
 )
 

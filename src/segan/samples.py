@@ -612,9 +612,9 @@ def read_sf2(path: Path, preset: int | str | None, bank: int = 0) -> SampleSet:
                 continue
 
             def value(op: int, default: int) -> int:
-                v = _s16(gen[op]) if op in gen else default
-                if op in pgen and op not in _ADDITIVE_EXCLUDED:
-                    v += _s16(pgen[op])
+                v = _s16(gen[op]) if op in gen else default  # noqa: B023 (_sf2_zone calls it before returning)
+                if op in pgen and op not in _ADDITIVE_EXCLUDED:  # noqa: B023
+                    v += _s16(pgen[op])  # noqa: B023
                 return v
 
             zones.append(_sf2_zone(t, str(path), gen, value, lokey, hikey, lovel, hivel))

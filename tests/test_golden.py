@@ -13,12 +13,12 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from segan.dsp import seed_of
 from segan.asset import load_asset_or_raise
+from segan.dsp import seed_of
 from segan.kitshow import context_for, render_kit_show
+from segan.project import load_project
 from segan.render import render_asset
 from segan.synth import render_note
-from segan.project import load_project
 from segan.wavio import read_wav, to_pcm16, wav_bytes
 
 GOLDEN = Path(__file__).parent / "fixtures" / "golden"

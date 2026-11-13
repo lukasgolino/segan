@@ -10,13 +10,12 @@ import subprocess
 from pathlib import Path
 
 import pytest
+from conftest import CONFIG, make_project, write
+from test_song import SONG
 
 from segan.build import build
 from segan.findings import SeganError
 from segan.project import load_project
-
-from conftest import CONFIG, make_project, write
-from test_song import SONG
 
 ROOT = Path(__file__).resolve().parent.parent
 PLAYER = ROOT / "src" / "segan" / "templates" / "segan_audio.js"

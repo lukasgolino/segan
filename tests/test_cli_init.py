@@ -3,12 +3,11 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+from conftest import run_json
 
 from segan.cli import main
 from segan.project import load_project
 from segan.wavio import read_wav
-
-from conftest import run_json
 
 
 def test_init_creates_a_working_strict_project(in_tmp: Path, capsys: pytest.CaptureFixture[str]) -> None:

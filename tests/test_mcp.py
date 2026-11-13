@@ -14,14 +14,14 @@ import pytest
 
 pytest.importorskip("mcp")
 
+from conftest import make_project, write  # noqa: E402
 from mcp import Client  # noqa: E402
 from mcp.types import AudioContent, CallToolResult, ImageContent, TextContent  # noqa: E402
 from PIL import Image  # noqa: E402
-
-from conftest import make_project, write  # noqa: E402
-from segan.mcp_server import create_server  # noqa: E402
 from test_midi import song_file  # noqa: E402
 from test_song import SONG  # noqa: E402
+
+from segan.mcp_server import create_server  # noqa: E402
 
 
 def run(root: Path, body: Callable[[Client], Awaitable[Any]], allow_godot: bool = False) -> Any:
@@ -68,11 +68,11 @@ def test_tools_and_resources_are_listed(root: Path) -> None:
         return [t.name for t in tools.tools], [str(r.uri) for r in resources.resources]
 
     tools, resources = run(root, body)
-    for name in ("status", "read_docs", "write_doc", "log_feedback", "config_show", "config_set", "config_unset", "kit_list", "kit_show",
+    for name in ("status", "docs", "read_docs", "write_doc", "log_feedback", "config_show", "config_set", "config_unset", "kit_list", "kit_show",
                  "kit_write", "mix_adjust", "scaffold", "read_asset", "write_asset", "lint", "preview", "gallery", "mark", "style_bump",
                  "import_midi", "build", "manifest", "sounds_search", "sounds_add", "sounds_inspect", "sounds_credits", "similarity", "suggest_song", "kit_roll"):  # fmt: skip
         assert name in tools, name
-    assert {"segan://workflow", "segan://reference", "segan://brief", "segan://sound", "segan://manifest"} <= set(resources)
+    assert {"segan://workflow", "segan://brief", "segan://sound", "segan://manifest"} <= set(resources)
 
 
 def test_status_docs_and_feedback(root: Path) -> None:

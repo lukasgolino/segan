@@ -16,9 +16,9 @@ import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 
 from segan.analysis import PitchTrack, frames_of, momentary_lufs, short_term_lufs
+from segan.dsp import Signal
 
 SHORT_CUE_SECONDS = 6.0  # under this the loudness curve is momentary (400 ms), not short-term (3 s)
-from segan.dsp import Signal
 
 WIDTH = 1200
 LEFT = 74
@@ -500,7 +500,7 @@ def gallery_image(items: Sequence[GalleryItem], title: str) -> Image.Image:
         span = WIDTH - x0 - 200
 
         def px(v: float) -> float:
-            return x0 + (max(lo, min(hi, v)) - lo) / (hi - lo) * span
+            return x0 + (max(lo, min(hi, v)) - lo) / (hi - lo) * span  # noqa: B023 (called in this iteration)
 
         off = abs(item.lufs - item.target) if item.target is not None else 0.0
         colour = GOOD if off <= 1.0 else WARN if off <= 3.0 else BAD

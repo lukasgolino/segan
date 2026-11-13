@@ -1,4 +1,4 @@
-"""Regenerate src/segan/fingerprints/shipped.json: fingerprints of the demo's songs and of reference.md's generator
+"""Regenerate src/segan/fingerprints/shipped.json: fingerprints of the demo's songs and of the api docs topic's generator
 example, so lint (W025) warns any user whose song is close to SEGAN's own examples. Run after changing either;
 tests/test_similarity.py fails while it's stale. Usage: python scripts/make_fingerprints.py
 """

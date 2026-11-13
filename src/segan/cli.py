@@ -7,17 +7,17 @@ import argparse
 import json
 import os
 import re
-from struct import error as struct_error
 from collections.abc import Callable, Sequence
 from importlib.resources import files
 from pathlib import Path
 from string import Template
+from struct import error as struct_error
 from typing import Any
 
 from segan import progress
+from segan.asset import SFX_SUFFIX, SONG_SUFFIX, load_asset_or_raise
 from segan.buildinfo import is_editable, version_string
 from segan.findings import Finding, SeganError, display_path
-from segan.asset import SFX_SUFFIX, SONG_SUFFIX, load_asset_or_raise
 from segan.kit import KIT_SUFFIX, NAME_RE, Kit, load_kit_file
 from segan.lint import lint_paths
 from segan.notes import note_name
@@ -39,11 +39,11 @@ class Output:
 
     def result(self, data: dict[str, Any]) -> None:
         if self.as_json:
-            print(json.dumps({"ok": True, **data}, indent=2))
+            print(json.dumps({"ok": True, **data}, separators=(",", ":")))
 
     def failure(self, findings: list[Finding], data: dict[str, Any] | None = None) -> None:
         if self.as_json:
-            print(json.dumps({"ok": False, **(data or {}), "findings": [f.to_dict() for f in findings]}, indent=2))
+            print(json.dumps({"ok": False, **(data or {}), "findings": [f.to_dict() for f in findings]}, separators=(",", ":")))
         else:
             for finding in findings:
                 print(finding.format())
@@ -664,9 +664,7 @@ def _song_scaffold(name: str, description: str, kit_line: str, kit: Kit | None, 
     steps_per_beat = 2 if meter[1] >= 8 else 4
     beat = steps_per_beat
     length = bars * meter[0] * steps_per_beat
-    melodic = [k for k, i in (kit.instruments.items() if kit else []) if not i.is_drum]
     drums = [k for k, i in (kit.instruments.items() if kit else []) if i.is_drum][:3] or ["k", "s", "h"]
-    lead = melodic[0] if melodic else "p"
     keys_line = ", ".join(f"{k}={i.name or i.describe()}" for k, i in kit.instruments.items()) if kit else "see the kit"
     root = key.root
     lead_low = 60 + root if 60 + root <= 64 else 48 + root + 12
@@ -849,7 +847,7 @@ def cmd_preview(args: argparse.Namespace, out: Output) -> int:
         from segan import oggio
 
         if not oggio.available() or (args.format == "mp3" and not oggio.mp3_available()):
-            raise usage_error(f'--format {args.format} needs soundfile with a libsndfile that writes it: pip install "segan[ogg]"'
+            raise usage_error(f'--format {args.format} needs soundfile with a libsndfile that writes it: pip install "segan-gen[ogg]"'
                               + (" (MP3 needs libsndfile 1.1 or newer)" if args.format == "mp3" else ""))
     assets, findings = load_targets(args.assets, project)
     outputs: list[dict[str, Any]] = []
@@ -873,6 +871,9 @@ def cmd_preview(args: argparse.Namespace, out: Output) -> int:
             target = f" (target {a['target_lufs']:g})" if a.get("target_lufs") is not None else ""
             out.say(f"{entry['output']:>16}: {display_path(entry['sheet'])}  {a['seconds']:.2f}s, {a['lufs']:.1f} LUFS{target}, peak {a['true_peak_dbtp']:.1f} dBTP")
             out.say(f"{'':>16}  listen: {display_path(entry['wav'])}" + (f"  seam: {display_path(entry['seam'])} (click {a['seam_click']:.4f})" if "seam" in entry else ""))
+            checks = _checks_line(a)
+            if checks:
+                out.say(f"{'':>16}  {checks}")
         outputs.append({"asset": asset.name, "kind": asset.kind, "outputs": [
             {"output": e["output"], "wav": display_path(e["wav"]), "sheet": display_path(e["sheet"]),
              **({"seam": display_path(e["seam"])} if "seam" in e else {}), **({k: display_path(e[k]) for k in ("ogg", "mp3") if k in e}),
@@ -889,6 +890,38 @@ def cmd_preview(args: argparse.Namespace, out: Output) -> int:
     return 0
 
 
+def _checks_line(a: dict[str, Any]) -> str:
+    """The numbers an agent checks after a preview, in one line, so the text output answers what `--json` would."""
+    parts: list[str] = []
+    pitch = a.get("pitch_hz")
+    if pitch:
+        parts.append(f"pitch {pitch['start']:g} -> {pitch['end']:g} Hz")
+    if a.get("leading_silence_ms") is not None:
+        parts.append(f"lead-in {a['leading_silence_ms']:g} ms")
+    if a.get("onsets_s") is not None and len(a["onsets_s"]) <= 8:  # a song's dozens of onsets say nothing here
+        onsets = a["onsets_s"]
+        parts.append(f"{len(onsets)} onsets" + (f" ({', '.join(f'{t:g}' for t in onsets[:4])}{', ...' if len(onsets) > 4 else ''} s)" if onsets else ""))
+    if a.get("sounding_at_end"):
+        parts.append(f"cut while sounding: {', '.join(a['sounding_at_end'])}")
+    checked = a.get("pitch_check") or {}
+    if checked:
+        notes = sum(t.get("notes_checked", 0) for t in checked.values())
+        off = [f"{name} {len(t['off'])} off" for name, t in checked.items() if t.get("off")]
+        worst = max((t.get("max_abs_cents") or 0 for t in checked.values()), default=0)
+        skipped = sum(t.get("notes_skipped", 0) for t in checked.values())
+        parts.append(f"pitch check {notes} notes, max {worst:g} cents" + (f", {'; '.join(off)}" if off else ", none off")
+                     + (f" ({skipped} unmeasured)" if skipped else ""))  # fmt: skip
+    per_pattern = a.get("notes_per_pattern") or {}
+    if per_pattern:
+        parts.append("notes/pattern " + ", ".join(f"{name} {sum(tracks.values())}" for name, tracks in per_pattern.items()))
+    closest = (a.get("closest_song") or {}).get("project")
+    if closest:
+        parts.append(f"closest song {closest['song']} {closest['overall']:g}" + (" (same opening)" if closest.get("same_opening") else ""))
+    if a.get("clipped_samples"):
+        parts.append(f"{a['clipped_samples']} clipped samples")
+    return "; ".join(parts)
+
+
 def _summary_table(rows: list[dict[str, Any]]) -> str:
     """`segan preview --summary`: asset, output, seconds, dry seconds, LUFS (target), peaks as aligned columns."""
 
@@ -899,7 +932,7 @@ def _summary_table(rows: list[dict[str, Any]]) -> str:
     table += [(r["asset"], r["output"], num(r["seconds"], 3), num(r["dry_s"], 3), num(r["lufs"], 1), num(r["target_lufs"], 1),
                num(r["peak_dbfs"], 1), num(r["true_peak_dbtp"], 1)) for r in rows]  # fmt: skip
     widths = [max(len(row[i]) for row in table) for i in range(len(table[0]))]
-    return "\n".join("  ".join(c.ljust(w) if i < 2 else c.rjust(w) for i, (c, w) in enumerate(zip(row, widths))).rstrip() for row in table)
+    return "\n".join("  ".join(c.ljust(w) if i < 2 else c.rjust(w) for i, (c, w) in enumerate(zip(row, widths, strict=True))).rstrip() for row in table)
 
 
 def cmd_gallery(args: argparse.Namespace, out: Output) -> int:
@@ -975,7 +1008,7 @@ def cmd_lint(args: argparse.Namespace, out: Output) -> int:
     failed = bool(result.errors) or (args.warnings_as_errors and bool(result.warnings))
     if out.as_json:
         print(json.dumps({"ok": not failed, "files": [display_path(f) for f in result.files], "errors": len(result.errors),
-                          "warnings": len(result.warnings), "findings": [f.to_dict() for f in result.findings]}, indent=2))  # fmt: skip
+                          "warnings": len(result.warnings), "findings": [f.to_dict() for f in result.findings]}, separators=(",", ":")))  # fmt: skip
     else:
         for finding in result.findings:
             print(finding.format())
@@ -1177,10 +1210,10 @@ def cmd_status(args: argparse.Namespace, out: Output) -> int:
                 kits[name] = None
         print(json.dumps({"ok": True, "project": display_path(project.root), "style_version": current, "default_kit": project.config.default_kit,
                           "kits": kits, "missing_docs": missing_docs(project), "segan": version_string(),
-                          "assets": [{"name": e.name, "kind": e.kind, "path": display_path(e.path), "description": e.description, "status": e.status,
+                          "assets": [{"name": e.name, "kind": e.kind, "path": display_path(e.path), **({"description": e.description} if args.verbose else {}), "status": e.status,
                                       "style_version": e.style_version, "category": e.category, "seconds": e.seconds, "outputs": e.outputs,
                                       "errors": e.errors, "warnings": e.warnings, "tags": list(e.tags), "template": e.template,
-                                      "needs": e.needs(current)} for e in entries]}, indent=2))  # fmt: skip
+                                      "needs": e.needs(current)} for e in entries]}, separators=(",", ":")))  # fmt: skip
         return 0
     kit = project.config.default_kit or ("open mode" if project.config.mode == "open" else "none")
     print(f"{display_path(project.root)}: {len(entries)} assets, default kit {kit}, style v{current}  [{version_string()}]")
@@ -1196,13 +1229,22 @@ def cmd_status(args: argparse.Namespace, out: Output) -> int:
         print(f"  missing {doc}: write one (`segan init` templates: what the game needs / how it must sound) and ask the owner to fill the gaps")
     if is_editable():
         print("  note: SEGAN is an editable dev checkout; if this project pins a release, install that instead")
-    for e in entries:
-        length = f"{e.seconds:.2f}s" if e.seconds is not None else "?"
-        flags = ", ".join(e.needs(current)) or "ok"
-        print(f"  {e.name:<20} {e.kind:<5} {e.category:<8} {length:>8}  {e.status:<8} v{e.style_version}  [{flags}]")
-        if e.description:
-            description = e.description.replace("\n", " ")
-            print(f"      {description[:100]}{'...' if len(description) > 100 else ''}")
+    if args.verbose:
+        for e in entries:
+            length = f"{e.seconds:.2f}s" if e.seconds is not None else "?"
+            flags = ", ".join(e.needs(current)) or "ok"
+            print(f"  {e.name:<20} {e.kind:<5} {e.category:<8} {length:>8}  {e.status:<8} v{e.style_version}  [{flags}]")
+            if e.description:
+                description = e.description.replace("\n", " ")
+                print(f"      {description[:100]}{'...' if len(description) > 100 else ''}")
+    else:  # one line per state: what needs doing, and to which assets
+        groups: dict[str, list[str]] = {}
+        for e in entries:
+            groups.setdefault(", ".join(e.needs(current)) or "ok", []).append(e.name)
+        for flags, names in sorted(groups.items(), key=lambda g: (g[0] == "ok", -len(g[1]))):
+            print(f"  [{flags}] ({len(names)}): {', '.join(names)}")
+        if entries:
+            print("  (`segan status -v`: one line per asset with kind, category, length and description)")
     stale = [e for e in entries if e.style_version < current]
     if stale:
         print(f"{len(stale)} assets predate style v{current}: see SOUND.md's changelog, update them, then `segan mark --current <asset>`")
@@ -1267,11 +1309,17 @@ def cmd_mcp(args: argparse.Namespace, out: Output) -> int:
     try:
         from segan.mcp_server import serve
     except ImportError:
-        raise usage_error('the MCP server needs the "mcp" extra: pip install "segan[mcp]"') from None
+        raise usage_error('the MCP server needs the mcp package: pip install --upgrade segan-gen') from None
     return serve(args.project, args.allow_godot)
 
 
-SKILL_FILES = ("SKILL.md", "reference.md")
+def _skill_files() -> list[str]:
+    """The skill's files, relative to the skill folder: SKILL.md and every topic."""
+    folder = files("segan").joinpath("skill", "topics")
+    return ["SKILL.md", *sorted(f"topics/{e.name}" for e in folder.iterdir() if e.name.endswith(".md"))]
+
+
+STALE_SKILL_FILES = ("reference.md",)  # written by SEGAN < 0.16, replaced by topics/
 
 
 def _git_root(start: Path) -> Path | None:
@@ -1286,15 +1334,55 @@ def cmd_skill_install(args: argparse.Namespace, out: Output) -> int:
     target = base / ".claude" / "skills" / "segan"
     target.mkdir(parents=True, exist_ok=True)
     written: list[str] = []
-    for name in SKILL_FILES:
-        text = files("segan").joinpath("skill", name).read_text(encoding="utf-8")
+    for name in _skill_files():
+        text = files("segan").joinpath("skill", *name.split("/")).read_text(encoding="utf-8")
         path = target / name
         if path.exists() and path.read_text(encoding="utf-8") == text:
             continue
+        path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(text, encoding="utf-8")
         written.append(display_path(path))
+    for name in STALE_SKILL_FILES:
+        if (target / name).is_file():
+            (target / name).unlink()
+            written.append(f"{display_path(target / name)} (removed)")
     out.say(f"SEGAN skill {'installed' if written else 'already up to date'} in {display_path(target)}")
     out.result({"skill_dir": display_path(target), "written": written})
+    return 0
+
+
+# --- segan docs -------------------------------------------------------------------------------
+
+
+def cmd_docs(args: argparse.Namespace, out: Output) -> int:
+    from segan import docs
+
+    if args.search:
+        hits = docs.search(" ".join([*(args.topic or []), *args.search]), limit=args.limit)
+        for hit in hits:
+            out.say(f"--- {hit.topic} > {hit.heading}\n{hit.text}")
+        if not hits:
+            out.say("no matches; `segan docs` lists the topics")
+        out.result({"hits": [{"topic": h.topic, "heading": h.heading, "text": h.text} for h in hits]})
+        return 0
+    if not args.topic:
+        listed = docs.topics()
+        width = max(len(t.name) for t in listed)
+        for t in listed:
+            out.say(f"{t.name:<{width}}  ~{t.tokens / 1000:.1f}k tokens  {t.summary}")
+        out.say("`segan docs <topic>` prints one; `segan docs --search <words>` finds paragraphs.")
+        out.result({"topics": [{"name": t.name, "summary": t.summary, "tokens": t.tokens} for t in listed]})
+        return 0
+    texts = []
+    for name in args.topic:
+        topic = docs.find(name)
+        if topic is None:
+            near = docs.close_matches(name)
+            hint = f" (did you mean {', '.join(near)}?)" if near else ""
+            raise usage_error(f"no docs topic {name!r}{hint}; `segan docs` lists them, `segan docs --search {name}` searches")
+        texts.append(topic.text)
+        out.say(topic.text)
+    out.result({"topics": [{"name": n.lower(), "text": t} for n, t in zip(args.topic, texts, strict=True)]})
     return 0
 
 
@@ -1351,7 +1439,7 @@ def cmd_config_show(args: argparse.Namespace, out: Output) -> int:
     project = require_project()
     rows = describe(project.config)
     if out.as_json:
-        print(json.dumps({"ok": True, "config": display_path(project.config_path or project.root), "settings": rows}, indent=2))
+        print(json.dumps({"ok": True, "config": display_path(project.config_path or project.root), "settings": rows}, separators=(",", ":")))
         return 0
     print(f"{display_path(project.config_path or project.root)}  (change with `segan config set <key> <value>`)")
     for row in rows:
@@ -1455,7 +1543,7 @@ def build_parser() -> argparse.ArgumentParser:
     preview.add_argument("assets", nargs="+", help="asset files or names")
     preview.add_argument("--from", dest="start", help="start of the shown window: bar number (songs) or seconds (2.5s)")
     preview.add_argument("--to", dest="end", help="end of the shown window")
-    preview.add_argument("--format", choices=("ogg", "mp3"), help="also write each preview as .ogg or .mp3 (to share; needs segan[ogg])")
+    preview.add_argument("--format", choices=("ogg", "mp3"), help="also write each preview as .ogg or .mp3 (to share; needs segan-gen[ogg])")
     preview.add_argument("--output", action="append", help="only this output (repeat for several; one render): main, variant:<name>, variation:<n>, "
                          "take:<k>, take:<k>:variation:<n>, phase:<name>, stem:<name>, mix:<name>, flow:<clip>, walk (a flow song: a seeded walk through its sections; walk:<seed>), "
                          "reel (an SFX: the main sound, every variation and every take back to back)")  # fmt: skip
@@ -1491,6 +1579,7 @@ def build_parser() -> argparse.ArgumentParser:
     build_cmd.set_defaults(handler=cmd_build)
 
     status = commands.add_parser("status", parents=[common], help="catalogue of every song and SFX and what needs attention")
+    status.add_argument("-v", "--verbose", action="store_true", help="one line per asset (kind, category, length, status) with its description")
     status.add_argument("project", nargs="?", help="project directory (default: the one containing the cwd)")
     status.add_argument("--fast", action="store_true", help="don't render (no lengths, no audio warnings)")
     status.set_defaults(handler=cmd_status)
@@ -1519,10 +1608,16 @@ def build_parser() -> argparse.ArgumentParser:
     adjust.add_argument("--dry-run", action="store_true", help="show the changes without writing")
     adjust.set_defaults(handler=cmd_mix_adjust)
 
-    mcp_cmd = commands.add_parser("mcp", help="run SEGAN as an MCP server over stdio (needs segan[mcp])")
+    mcp_cmd = commands.add_parser("mcp", help="run SEGAN as an MCP server over stdio")
     mcp_cmd.add_argument("--project", help="SEGAN project directory (default: the one containing the cwd)")
     mcp_cmd.add_argument("--allow-godot", action="store_true", help="let the build tool run a Godot binary (verify_godot)")
     mcp_cmd.set_defaults(handler=cmd_mcp)
+
+    docs_cmd = commands.add_parser("docs", parents=[common], help="the documentation, one topic at a time (list, print, search)")
+    docs_cmd.add_argument("topic", nargs="*", help="topic name(s); none = list the topics")
+    docs_cmd.add_argument("--search", "-s", nargs="+", metavar="WORD", help="print the paragraphs that match these words")
+    docs_cmd.add_argument("--limit", type=int, default=5, help="most paragraphs --search prints (default 5)")
+    docs_cmd.set_defaults(handler=cmd_docs)
 
     skill = commands.add_parser("skill", help="the Claude skill that teaches agents to use SEGAN")
     skill_cmds = skill.add_subparsers(title="skill commands", metavar="<command>")

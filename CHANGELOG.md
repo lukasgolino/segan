@@ -25,6 +25,59 @@ check before upgrading. Patch bumps never change existing behaviour. Every relea
   repr, which Godot rewrote in the last digit for some values, so a looping stem's `.ogg.import` changed on every
   build + import with no real change. The loop point is unchanged (still a quarter frame past the loop start) (#105).
 
+## [0.17.1] - 2026-11-09
+
+### Changed
+
+- Licensed under the Apache License 2.0 instead of MIT (#120). Releases up to 0.17.0 stay
+  available under MIT.
+
+## [0.17.0] - 2026-11-09
+
+SEGAN is on PyPI as `segan-gen` and in the MCP Registry as `io.github.lukasgolino/segan` (#116). Output is
+unchanged apart from the generator string in `manifest.json`.
+
+### Changed
+
+- **The distribution is `segan-gen`** (`segan` is free on PyPI, but the three tools share one naming scheme): `pip
+  install segan-gen`; the command and the import stay `segan`. Git pins must use the new name from this version on
+  (`segan-gen @ git+...@v0.17.0`).
+- **The MCP server is always installed** (`mcp` is a dependency; the `mcp` extra is kept, empty), so
+  `uvx segan-gen mcp` runs it without an install.
+- **Upgrading from a git-pinned `segan`:** `pip uninstall segan` first, then install `segan-gen`. Both own the same
+  `segan/` files, so uninstalling `segan` after installing `segan-gen` deletes them.
+- CI: lint, types and tests on one Python run on every push. The full Python matrix, the Godot checks and the
+  orchestra build run on the PR once it leaves draft, and again only if a commit lands after that, as the last gate
+  before merge.
+
+### Added
+
+- Tags publish a GitHub release from the changelog, the package to PyPI (Trusted Publishing) and `server.json` to the
+  MCP Registry.
+
+## [0.16.0] - 2026-11-04
+
+### Changed
+
+- **The skill is split for agents that pay per token** (#104). `SKILL.md` is a 5.5 KB core (was 30.8 KB) that is
+  loaded whenever the skill triggers; the rest of the old SKILL.md and all of `reference.md` (67 KB) moved, unchanged,
+  into 19 topic files (`skill/topics/*.md`). `segan skill install` writes them and removes an installed
+  `reference.md`. The MCP resource `segan://reference` became `segan://docs/{topic}`.
+- **`--json` prints compact JSON** (one line, no indentation): 40-57% fewer characters. Pipe through
+  `python -m json.tool` to read it by eye.
+- `segan status` lists assets grouped by what they need (one line per group) instead of two lines per asset;
+  `-v` / `--verbose` (MCP: `verbose`) gives the old per-asset listing with descriptions. `--json` leaves out
+  descriptions unless `--verbose`. The demo: 3.6k -> 0.8k characters (text), 9.4k -> 4.6k (JSON).
+- `segan preview` text output adds a checks line per output (SFX: pitch start -> end, lead-in, onsets; songs:
+  pitch check, notes per pattern, closest song), so an agent needn't parse `--json` for them.
+
+### Added
+
+- `segan docs [topic...] [--search words]` (MCP tool `docs`): lists the topics with their size, prints one, or
+  prints the few paragraphs that match. Budget tests keep `SKILL.md`, its description and each topic under a size.
+
+## [0.15.1] - 2026-11-04
+
 ## [0.15.0] - 2026-10-28
 
 ### Added
@@ -435,7 +488,15 @@ First release: milestones 0-7 of PLAN.md.
 - `segan import midi`: standard MIDI files to songs (quantize, snap to the key, GM programs/drums to kit instruments,
   reused patterns, a change report).
 
-[Unreleased]: https://github.com/lukasgolino/segan/compare/v0.11.0...HEAD
+[Unreleased]: https://github.com/lukasgolino/segan/compare/v0.17.1...HEAD
+[0.17.1]: https://github.com/lukasgolino/segan/compare/v0.17.0...v0.17.1
+[0.17.0]: https://github.com/lukasgolino/segan/compare/v0.16.0...v0.17.0
+[0.16.0]: https://github.com/lukasgolino/segan/compare/v0.15.1...v0.16.0
+[0.15.1]: https://github.com/lukasgolino/segan/compare/v0.15.0...v0.15.1
+[0.15.0]: https://github.com/lukasgolino/segan/compare/v0.14.0...v0.15.0
+[0.14.0]: https://github.com/lukasgolino/segan/compare/v0.13.0...v0.14.0
+[0.13.0]: https://github.com/lukasgolino/segan/compare/v0.12.0...v0.13.0
+[0.12.0]: https://github.com/lukasgolino/segan/compare/v0.11.0...v0.12.0
 [0.11.0]: https://github.com/lukasgolino/segan/compare/v0.10.0...v0.11.0
 [0.10.0]: https://github.com/lukasgolino/segan/compare/v0.9.0...v0.10.0
 [0.9.0]: https://github.com/lukasgolino/segan/compare/v0.8.0...v0.9.0
