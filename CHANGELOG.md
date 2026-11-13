@@ -19,6 +19,8 @@ check before upgrading. Patch bumps never change existing behaviour. Every relea
 
 ## [Unreleased]
 
+## [0.17.2] - 2026-11-13
+
 ### Fixed
 
 - Godot export: an Ogg Vorbis loop's `loop_offset` is written with 9 decimals instead of Python's full-precision
@@ -490,7 +492,8 @@ First release: milestones 0-7 of PLAN.md.
 - `segan import midi`: standard MIDI files to songs (quantize, snap to the key, GM programs/drums to kit instruments,
   reused patterns, a change report).
 
-[Unreleased]: https://github.com/lukasgolino/segan/compare/v0.17.1...HEAD
+[Unreleased]: https://github.com/lukasgolino/segan/compare/v0.17.2...HEAD
+[0.17.2]: https://github.com/lukasgolino/segan/compare/v0.17.1...v0.17.2
 [0.17.1]: https://github.com/lukasgolino/segan/compare/v0.17.0...v0.17.1
 [0.17.0]: https://github.com/lukasgolino/segan/compare/v0.16.0...v0.17.0
 [0.16.0]: https://github.com/lukasgolino/segan/compare/v0.15.1...v0.16.0
