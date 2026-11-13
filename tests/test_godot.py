@@ -351,3 +351,29 @@ def test_sfx_helper_honours_buses_and_hints(tmp_path: Path) -> None:
     assert lines["THIRD"] == ["-5.0", "PLAYING", "2", "false"]  # max_instances 2: the oldest stopped
     assert lines["HIT"] == ["Master", "0.0"] and lines["UNKNOWN"] == ["true"]
     assert lines["LAYOUT"] == ["2", "SFX", "Master"]
+
+
+@pytest.mark.skipif(not oggio.available(), reason="needs soundfile (segan[ogg])")
+def test_ogg_loop_offsets_survive_a_godot_import(tmp_path: Path) -> None:
+    from segan.exporters.godot import edit_import, ogg_import_params
+
+    (tmp_path / "project.godot").write_text('config_version=5\n\n[application]\n\nconfig/name="t"\n')
+    data = oggio.encode_ogg(np.zeros((4410, 2), dtype=np.float32), 44100, 0.4, "t")
+    rng = np.random.default_rng(7)
+    sidecars, params = [], []
+    for i in range(40):  # (several of these offsets came back changed when written as a full-precision repr)
+        rate = int(rng.choice([22050, 32000, 44100, 48000]))
+        start = int(rng.integers(1, rate * 600))
+        ogg = tmp_path / f"s{i}.ogg"
+        ogg.write_bytes(data)
+        params.append(ogg_import_params((start, start + 1000), rate))
+        edit_import(ogg, params[-1])
+        sidecars.append(ogg.with_name(ogg.name + ".import"))
+    before = [s.read_text() for s in sidecars]
+    assert GODOT is not None
+    subprocess.run([GODOT, "--headless", "--path", str(tmp_path), "--import"], capture_output=True, timeout=300)
+    after = [s.read_text() for s in sidecars]
+    assert all("uid=" in text for text in after)  # Godot did import them
+    offsets = [text.split("loop_offset=")[1].split("\n")[0] for text in before]
+    assert offsets == [text.split("loop_offset=")[1].split("\n")[0] for text in after]
+    assert [edit_import(s.with_suffix(""), p) for s, p in zip(sidecars, params, strict=True)] == [None] * 40  # rebuild: no change

@@ -84,3 +84,15 @@ def test_preview_writes_a_compressed_copy(fmt: str, project: Project, monkeypatc
     entry = data["outputs"][0]["outputs"][0]
     copy = Path(entry[fmt])
     assert copy.suffix == f".{fmt}" and copy.stat().st_size > 100 and Path(entry["wav"]).is_file()
+
+
+def test_ogg_loop_offset_is_a_short_decimal_inside_the_loop_start_frame() -> None:
+    import math
+
+    from segan.exporters.godot import ogg_import_params
+
+    for rate in (22050, 32000, 44100, 48000):
+        for start in (1, 7, 12345, rate * 37 + 11, rate * 900 - 3):
+            text = ogg_import_params((start, start + 10), rate)["loop_offset"]
+            assert len(text.split(".")[1]) <= 9 and not text.endswith("0")
+            assert math.floor(float(text) * rate) == start
